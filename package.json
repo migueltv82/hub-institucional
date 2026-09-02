@@ -1,0 +1,62 @@
+{
+  "name": "examenes",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "npm run dev",
+    "dev": "vite --host 127.0.0.1 --port 4173",
+    "dev:strict": "vite --host 127.0.0.1 --port 4173 --strictPort --clearScreen false",
+    "build": "vite build && npm run audit:prod",
+    "audit:prod": "node scripts/auditProductionBuild.mjs",
+    "audit:repo": "node scripts/auditRepositorySecurity.mjs",
+    "lint": "eslint .",
+    "test": "vitest run --config vitest.config.js",
+    "test:watch": "vitest --config vitest.config.js",
+    "check": "npm run audit:repo && npm run lint && npm test && npm run build",
+    "preview": "vite preview --host 127.0.0.1 --port 4174"
+  },
+  "dependencies": {
+    "@fontsource/baloo-2": "^5.3.0",
+    "@fontsource/nunito": "^5.3.0",
+    "@fontsource/plus-jakarta-sans": "^5.2.8",
+    "@supabase/supabase-js": "^2.104.0",
+    "@tanstack/react-query": "^5.100.1",
+    "exceljs": "^4.4.0",
+    "framer-motion": "^12.42.2",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.8.0",
+    "mammoth": "^1.12.0",
+    "papaparse": "^5.5.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-hook-form": "^7.75.0",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^7.14.1",
+    "zustand": "^5.0.13"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@tailwindcss/vite": "^4.2.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.5.0",
+    "jsdom": "^29.1.0",
+    "node-html-parser": "^9.0.2",
+    "playwright": "^1.62.1",
+    "supabase": "^2.109.1",
+    "tailwindcss": "^4.2.2",
+    "vite": "^8.0.9",
+    "vitest": "^4.1.5"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^9.0.1"
+    }
+  }
+}

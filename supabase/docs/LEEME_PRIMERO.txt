@@ -1,0 +1,19 @@
+MOTOR V2 DEFINITIVO - BASE TÉCNICA
+
+IMPORTANTE:
+Esta entrega NO reemplaza todavía el motor actual de producción.
+Sirve como base limpia para construir el nuevo motor por etapas.
+
+Qué copiar ahora:
+- Podés copiar la carpeta src/utils/cronogramaEngineV2 dentro de tu proyecto.
+- No borres todavía cronogramaInteligente.js.
+- No conectes todavía la UI a este motor hasta validar los tests y la salida mínima.
+
+Próxima etapa recomendada:
+1. Copiar carpeta cronogramaEngineV2.
+2. Agregar/importar el test cronogramaEngineV2.test.js.
+3. Ejecutar tests.
+4. Recién después crear un adaptador desde cronogramaInteligente.js hacia cronogramaEngineV2/index.js.
+
+Objetivo:
+Dejar reglas institucionales ordenadas y testeables antes de reemplazar el motor viejo.

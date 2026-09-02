@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Institutional Hub</title>
+  <desc id="desc">Favicon de Institutional Hub basado en el simbolo de marca.</desc>
+  <rect width="64" height="64" rx="16" fill="#eef6ff"/>
+  <circle cx="30" cy="32" r="26" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+  <circle cx="34" cy="32" r="23" fill="none" stroke="#1d4ed8" stroke-width="1.6" opacity="0.65"/>
+  <path d="M14 10h16v44H14z" fill="#2563eb"/>
+  <path d="M30 10h16v44H30z" fill="#4f6f78"/>
+  <path d="M19 27h22v10H19z" fill="#2f6fed"/>
+  <path d="M30 27h11v10H30z" fill="#d8e3e8" opacity="0.45"/>
+</svg>

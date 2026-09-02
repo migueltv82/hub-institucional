@@ -1,0 +1,365 @@
+function docente(overrides = {}) {
+  return {
+    activo: true,
+    diasAsistencia: ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'],
+    turnosDisponibles: ['NOCHE'],
+    ...overrides,
+  }
+}
+
+function materia(overrides = {}) {
+  return {
+    requiereMesa: true,
+    turno: 'NOCHE',
+    ...overrides,
+  }
+}
+
+function fecha(fechaIso, llamado, diaSemana, turno = 'NOCHE') {
+  return {
+    fecha: fechaIso,
+    diaSemana,
+    llamado,
+    turno,
+    disponible: true,
+  }
+}
+
+export const regularPreviewInstitutionalCareers = [
+  'Profesorado de Ingles',
+  'Profesorado de Informatica',
+  'Profesorado de Lengua',
+  'Tecnicatura Superior en Desarrollo de Software',
+  'Tecnicatura Superior en Turismo',
+  'Profesorado de Filosofia',
+]
+
+export function buildRegularPreviewInstitutionalFixture({ cantidadLlamados = 2 } = {}) {
+  const docentes = [
+    docente({
+      id: 'doc-ing-1',
+      nombre: 'Ana Ingles I',
+      carrera: 'Profesorado de Ingles',
+      nombreMateria: 'Lengua Inglesa I',
+      especialidad: 'Ingles',
+    }),
+    docente({
+      id: 'doc-ing-2',
+      nombre: 'Bruno Ingles II',
+      carrera: 'Profesorado de Ingles',
+      nombreMateria: 'Lengua Inglesa II',
+      especialidad: 'Ingles',
+    }),
+    docente({
+      id: 'doc-ing-transversal',
+      nombre: 'Carla Ingles Transversal',
+      carrera: 'Traductorado de Ingles',
+      nombreMateria: 'Practicas Discursivas en Ingles',
+      especialidad: 'Ingles',
+    }),
+    docente({
+      id: 'doc-info-1',
+      nombre: 'Diego Informatica',
+      carrera: 'Profesorado de Informatica',
+      nombreMateria: 'Informatica Educativa',
+      especialidad: 'Informatica TIC',
+    }),
+    docente({
+      id: 'doc-info-2',
+      nombre: 'Elena Programacion',
+      carrera: 'Tecnicatura Superior en Desarrollo de Software',
+      nombreMateria: 'Programacion I',
+      especialidad: 'Programacion TIC',
+    }),
+    docente({
+      id: 'doc-tic-multicarrera',
+      nombre: 'Fabian TIC Multicarrera',
+      carrera: 'Profesorado de Informatica',
+      nombreMateria: 'Tecnologia de la Informacion',
+      especialidad: 'Informatica TIC',
+      idoneidadAcademica: true,
+    }),
+    docente({
+      id: 'doc-lengua-1',
+      nombre: 'Gabriela Lengua',
+      carrera: 'Profesorado de Lengua',
+      nombreMateria: 'Lengua y Literatura I',
+      especialidad: 'Lengua Literatura',
+    }),
+    docente({
+      id: 'doc-lengua-2',
+      nombre: 'Hector Discursivas',
+      carrera: 'Profesorado de Lengua',
+      nombreMateria: 'Practicas Discursivas',
+      especialidad: 'Lengua Practicas Discursivas',
+    }),
+    docente({
+      id: 'doc-pedagogia-1',
+      nombre: 'Irene Pedagogia',
+      carrera: 'Profesorado de Ingles',
+      nombreMateria: 'Practica Docente I',
+      especialidad: 'Practica pedagogica',
+    }),
+    docente({
+      id: 'doc-pedagogia-2',
+      nombre: 'Jorge Residencia',
+      carrera: 'Profesorado de Lengua',
+      nombreMateria: 'Residencia Pedagogica',
+      especialidad: 'Practica pedagogica',
+      diasAsistencia: ['lunes', 'miercoles', 'viernes'],
+    }),
+    docente({
+      id: 'doc-soft-1',
+      nombre: 'Karina Software',
+      carrera: 'Tecnicatura Superior en Desarrollo de Software',
+      nombreMateria: 'Practica Profesionalizante I',
+      especialidad: 'Practica profesionalizante software',
+      diasAsistencia: ['martes', 'jueves', 'viernes'],
+    }),
+    docente({
+      id: 'doc-soft-2',
+      nombre: 'Luis Base de Datos',
+      carrera: 'Tecnicatura Superior en Desarrollo de Software',
+      nombreMateria: 'Base de Datos',
+      especialidad: 'Programacion Base de Datos TIC',
+    }),
+    docente({
+      id: 'doc-turismo-1',
+      nombre: 'Marta Turismo',
+      carrera: 'Tecnicatura Superior en Turismo',
+      nombreMateria: 'Practica Profesionalizante Turismo',
+      especialidad: 'Practica profesionalizante turismo',
+      diasAsistencia: ['lunes', 'martes'],
+    }),
+    docente({
+      id: 'doc-turismo-2',
+      nombre: 'Nicolas Gestion Turistica',
+      carrera: 'Tecnicatura Superior en Turismo',
+      nombreMateria: 'Gestion Turistica',
+      especialidad: 'Turismo Gestion',
+      diasAsistencia: ['lunes', 'martes', 'miercoles'],
+    }),
+    docente({
+      id: 'doc-filo-titular',
+      nombre: 'Olivia Filosofia',
+      carrera: 'Profesorado de Filosofia',
+      nombreMateria: 'Filosofia de la Educacion',
+      especialidad: 'Filosofia',
+      diasAsistencia: ['martes'],
+    }),
+  ]
+
+  const materias = [
+    materia({
+      id: 'ING1',
+      materia: 'ING1',
+      nombreMateria: 'Lengua Inglesa I',
+      carreraId: 'prof-ingles',
+      carrera: 'Profesorado de Ingles',
+      anio: 1,
+      titular_id: 'doc-ing-1',
+    }),
+    materia({
+      id: 'ING2',
+      materia: 'ING2',
+      nombreMateria: 'Lengua Inglesa II',
+      carreraId: 'prof-ingles',
+      carrera: 'Profesorado de Ingles',
+      anio: 2,
+      titular_id: 'doc-ing-2',
+    }),
+    materia({
+      id: 'ING-TRANS',
+      materia: 'ING-TRANS',
+      nombreMateria: 'Ingles Tecnico Transversal',
+      carreraId: 'soft',
+      carrera: 'Tecnicatura Superior en Desarrollo de Software',
+      anio: 3,
+      titular_id: 'doc-ing-transversal',
+    }),
+    materia({
+      id: 'INFO1',
+      materia: 'INFO1',
+      nombreMateria: 'Informatica Educativa',
+      carreraId: 'prof-info',
+      carrera: 'Profesorado de Informatica',
+      anio: 1,
+      titular_id: 'doc-info-1',
+    }),
+    materia({
+      id: 'TIC2',
+      materia: 'TIC2',
+      nombreMateria: 'Tecnologia de la Informacion y Comunicacion',
+      carreraId: 'prof-info',
+      carrera: 'Profesorado de Informatica',
+      anio: 2,
+      titular_id: 'doc-tic-multicarrera',
+    }),
+    materia({
+      id: 'PRG1',
+      materia: 'PRG1',
+      nombreMateria: 'Programacion I',
+      carreraId: 'soft',
+      carrera: 'Tecnicatura Superior en Desarrollo de Software',
+      anio: 1,
+      titular_id: 'doc-info-2',
+    }),
+    materia({
+      id: 'BD2',
+      materia: 'BD2',
+      nombreMateria: 'Base de Datos II',
+      carreraId: 'soft',
+      carrera: 'Tecnicatura Superior en Desarrollo de Software',
+      anio: 2,
+      titular_id: 'doc-soft-2',
+    }),
+    materia({
+      id: 'PPS4',
+      materia: 'PPS4',
+      nombreMateria: 'Practica Profesionalizante IV',
+      carreraId: 'soft',
+      carrera: 'Tecnicatura Superior en Desarrollo de Software',
+      anio: 4,
+      titular_id: 'doc-soft-1',
+    }),
+    materia({
+      id: 'TUR1',
+      materia: 'TUR1',
+      nombreMateria: 'Gestion Turistica I',
+      carreraId: 'turismo',
+      carrera: 'Tecnicatura Superior en Turismo',
+      anio: 1,
+      titular_id: 'doc-turismo-2',
+    }),
+    materia({
+      id: 'PPT4',
+      materia: 'PPT4',
+      nombreMateria: 'Practica Profesionalizante Turismo IV',
+      carreraId: 'turismo',
+      carrera: 'Tecnicatura Superior en Turismo',
+      anio: 4,
+      titular_id: 'doc-turismo-1',
+    }),
+    materia({
+      id: 'LEN1',
+      materia: 'LEN1',
+      nombreMateria: 'Lengua y Literatura I',
+      carreraId: 'prof-lengua',
+      carrera: 'Profesorado de Lengua',
+      anio: 1,
+      titular_id: 'doc-lengua-1',
+    }),
+    materia({
+      id: 'PD3',
+      materia: 'PD3',
+      nombreMateria: 'Practicas Discursivas III',
+      carreraId: 'prof-lengua',
+      carrera: 'Profesorado de Lengua',
+      anio: 3,
+      titular_id: 'doc-lengua-2',
+    }),
+    materia({
+      id: 'PD4',
+      materia: 'PD4',
+      nombreMateria: 'Practicas Discursivas IV',
+      carreraId: 'prof-lengua',
+      carrera: 'Profesorado de Lengua',
+      anio: 4,
+      titular_id: 'doc-lengua-2',
+    }),
+    materia({
+      id: 'PDI3',
+      materia: 'PDI3',
+      nombreMateria: 'Practica Docente III',
+      carreraId: 'prof-ingles',
+      carrera: 'Profesorado de Ingles',
+      anio: 3,
+      titular_id: 'doc-pedagogia-1',
+    }),
+    materia({
+      id: 'RES4',
+      materia: 'RES4',
+      nombreMateria: 'Residencia Pedagogica IV',
+      carreraId: 'prof-lengua',
+      carrera: 'Profesorado de Lengua',
+      anio: 4,
+      titular_id: 'doc-pedagogia-2',
+    }),
+    materia({
+      id: 'FIL2',
+      materia: 'FIL2',
+      nombreMateria: 'Filosofia de la Educacion',
+      carreraId: 'prof-filo',
+      carrera: 'Profesorado de Filosofia',
+      anio: 2,
+      titular_id: 'doc-filo-titular',
+    }),
+  ]
+
+  const correlatividades = [
+    {
+      carreraId: 'prof-ingles',
+      carrera: 'Profesorado de Ingles',
+      materia: 'ING2',
+      nombreMateria: 'Lengua Inglesa II',
+      correlativas: ['ING1'],
+    },
+    {
+      carreraId: 'soft',
+      carrera: 'Tecnicatura Superior en Desarrollo de Software',
+      materia: 'BD2',
+      nombreMateria: 'Base de Datos II',
+      correlativas: ['PRG1'],
+    },
+    {
+      carreraId: 'soft',
+      carrera: 'Tecnicatura Superior en Desarrollo de Software',
+      materia: 'PPS4',
+      nombreMateria: 'Practica Profesionalizante IV',
+      correlativas: ['BD2'],
+    },
+    {
+      carreraId: 'prof-lengua',
+      carrera: 'Profesorado de Lengua',
+      materia: 'PD4',
+      nombreMateria: 'Practicas Discursivas IV',
+      correlativas: ['PD3'],
+    },
+    {
+      carreraId: 'prof-lengua',
+      carrera: 'Profesorado de Lengua',
+      materia: 'RES4',
+      nombreMateria: 'Residencia Pedagogica IV',
+      correlativas: ['PDI3'],
+    },
+  ]
+
+  const fechasDisponibles = [
+    fecha('2026-07-27', 'PRIMER_LLAMADO', 'LUNES'),
+    fecha('2026-07-28', 'PRIMER_LLAMADO', 'MARTES'),
+    fecha('2026-07-29', 'PRIMER_LLAMADO', 'MIERCOLES'),
+    fecha('2026-07-30', 'PRIMER_LLAMADO', 'JUEVES'),
+    fecha('2026-07-31', 'PRIMER_LLAMADO', 'VIERNES'),
+    fecha('2026-08-03', 'SEGUNDO_LLAMADO', 'LUNES'),
+    fecha('2026-08-04', 'SEGUNDO_LLAMADO', 'MARTES'),
+    fecha('2026-08-05', 'SEGUNDO_LLAMADO', 'MIERCOLES'),
+    fecha('2026-08-06', 'SEGUNDO_LLAMADO', 'JUEVES'),
+    fecha('2026-08-07', 'SEGUNDO_LLAMADO', 'VIERNES'),
+  ]
+
+  return {
+    docentes,
+    materias,
+    correlatividades,
+    fechasDisponibles,
+    config: {
+      tipoPeriodo: 'REGULAR',
+      cantidadLlamados,
+      fechaInicio: '2026-07-27',
+      fechaFin: '2026-08-07',
+    },
+    options: {
+      compact: 'safe',
+    },
+  }
+}
