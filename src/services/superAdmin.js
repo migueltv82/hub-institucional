@@ -205,7 +205,7 @@ function getAdminUsersErrorHint(detail) {
   const lowerDetail = normalizedDetail.toLowerCase()
 
   if (lowerDetail.includes('failed to send a request') || lowerDetail.includes('404')) {
-    return 'La Edge Function no esta disponible en este proyecto. Revisa que `admin-users` este desplegada y que `.env` apunte al project-ref correcto.'
+    return 'No llego respuesta de la Edge Function (puede ser un corte de red transitorio entre el navegador y Supabase). Antes de asumir que algo esta mal configurado, reintenta la accion y revisa `admin_audit_logs` para confirmar si de verdad no se ejecuto. Si el problema persiste en varios intentos, ahi si revisa que `admin-users` este desplegada y que `.env` apunte al project-ref correcto.'
   }
 
   if (lowerDetail.includes('service_role_key') || lowerDetail.includes('service_role') || lowerDetail.includes('service_role_key')) {
