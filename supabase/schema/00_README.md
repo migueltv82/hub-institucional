@@ -14,9 +14,11 @@ Ejecutar en el SQL Editor del dashboard, en este orden:
 
 1. **`01_foundation.sql`** — extensiones, identidad (`profiles`), multi-tenancy (`institutions`, `memberships`), auditoria (`admin_audit_logs`), configuracion (`app_settings`), funciones de login publico (`get_public_app_status`, `list_active_login_institutions`), RLS de estas 5 tablas, y el seed del primer superadmin. Antes de correr el bloque de seed (al final del archivo), crear el usuario en **Authentication > Users** del dashboard con el email que figura en `target_email` dentro del archivo.
 
-Proximos bloques (todavia no escritos, quedan para cuando se encare la carga de planillas de docentes/alumnos):
+2. **`02_academic_relational_schema.sql`** — carreras, planes, materias, correlatividades, equivalencias, docentes, horarios, alumnos y trayectoria academica, todos aislados por `institution_id`.
 
-- Catalogo academico y datos operativos: `student_records`, `teacher_records`, `workspace_snapshots`, `workspace_source_files`, `subject_enrollments`, `exam_enrollments`, `student_grades`, etc. — lo que hoy vive disperso en `examenes/supabase/setup_multi_tenant/01` en adelante.
+Proximos bloques (todavia no escritos, quedan para completar la operacion academica):
+
+- Datos operativos: `workspace_snapshots`, `workspace_source_files`, `subject_enrollments`, `exam_enrollments`, `student_grades`, asistencia, actas y RPCs transaccionales.
 - Storage: bucket `workspace-source-files` + `storage_object_institution_id()` + policies de storage, necesario recien cuando exista carga de archivos.
 
 ## Por que existe esta carpeta
