@@ -37,6 +37,16 @@ function writeCsv(filename, headers, rows) {
   fs.writeFileSync(path.join(outputDir, filename), `${content.join('\n')}\n`, 'utf8')
 }
 
+function planDisplayName(row) {
+  const explicitName = clean(row.plan_nombre)
+  if (explicitName) return explicitName
+
+  const year = clean(row.anio_plan)
+  if (year) return `Plan ${year}`
+
+  return clean(row.estado_plan).toUpperCase() === 'VIGENTE' ? 'Plan vigente' : clean(row.plan_id)
+}
+
 async function loadWorkbook(filename) {
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.readFile(path.join(sourceDir, filename))
@@ -73,7 +83,7 @@ writeCsv('planes_estudio.csv', ['plan_codigo', 'carrera_codigo', 'plan_nombre', 
 ).map((row) => ({
   plan_codigo: row.plan_id,
   carrera_codigo: row.carrera_id,
-  plan_nombre: row.plan_nombre,
+  plan_nombre: planDisplayName(row),
   anio_plan: row.anio_plan,
   resolucion: row.resolucion,
   estado_plan: row.estado_plan,

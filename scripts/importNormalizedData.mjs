@@ -164,10 +164,19 @@ const planSubjectRows = data.subjects.map((row) => ({
   notes: clean(row.observaciones) || null,
 }))
 const planSubjects = await upsert('study_plan_subjects', planSubjectRows, 'institution_id,plan_id,subject_id')
-const planSubjectByCode = new Map(planSubjects.map((row) => {
-  const source = data.subjects.find((item) => clean(item.plan_codigo) === clean(planByCode.get(clean(item.plan_codigo))?.external_code) && clean(item.materia_codigo) === clean(subjects.find((subject) => subject.id === row.subject_id)?.code))
-  return [key(source?.plan_codigo, source?.materia_codigo), row]
-}))
+const planSubjectByPlanAndSubject = new Map(
+  planSubjects.map((row) => [key(row.plan_id, row.subject_id), row]),
+)
+const planSubjectByCode = new Map(
+  data.subjects.map((row) => {
+    const planId = planByCode.get(clean(row.plan_codigo))?.id
+    const subjectId = subjectByCode.get(clean(row.materia_codigo))?.id
+    return [
+      key(row.plan_codigo, row.materia_codigo),
+      planSubjectByPlanAndSubject.get(key(planId, subjectId)),
+    ]
+  }).filter(([, row]) => row),
+)
 
 const getPlanSubject = (planCode, subjectCode) => planSubjectByCode.get(key(planCode, subjectCode))
 
