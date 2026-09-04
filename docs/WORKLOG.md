@@ -259,6 +259,17 @@ Registro de trabajo del producto para estimar costo, esfuerzo y velocidad real.
   - verificacion: `npm run check` en verde -- 254 test files, 2048 tests, lint limpio, build OK. Probado en vivo contra Instituto jim (sesion real de alumno) en mobile (375px) y desktop, claro y oscuro: hero, stats, tarjetas de materia, botones e input funcionan correctamente en los 4 casos. Confirmado por diff que ningun archivo de admin ni de docente se toco, y que cada selector CSS modificado en `globals.css` contiene "student" (scoping verificado)
   - pendiente: aplicar la misma direccion a panel admin y portal docente, si a Miguel le sigue gustando en uso real. El plan de este trabajo (`spicy-noodling-beaver.md`) documenta el detalle completo
 
+### 2026-09-04
+
+- Horas reales: pendiente de completar
+- Trabajo principal:
+  - primera carga de datos reales al schema relacional nuevo (`supabase/schema/02_academic_relational_schema.sql`, proyecto Supabase separado `qwrwwansdblcixkjmibx`, institucion "Instituto San Miguel"): 6 carreras, 7 planes, 226 materias, 243 correlatividades, 24 equivalencias, 65 docentes, 189 asignaciones docente-materia, 273 horarios, 307 alumnos y 307 trayectorias academicas, via `scripts/normalizeImportedTemplates.mjs` + `scripts/validateNormalizedImport.mjs` + `scripts/importNormalizedData.mjs --apply --confirm`
+  - `estado_academico_alumno.csv` quedo vacio a proposito: la planilla de alumnos recibida no trae notas ni materias cursadas, no se inventaron datos
+  - corregido a mano un error de carga en `planes_estudio.csv`: un buscar-y-reemplazar habia pisado el encabezado `plan_nombre` y cambiado los codigos de plan de 5 carreras (`GEO-PLAN` etc. a `GEO-2015` etc.), lo que hubiera roto 986 referencias ya cargadas en `materias_plan.csv`, `correlatividades.csv`, `docente_materias.csv`, `horarios_cursada.csv` y `alumno_carrera_plan.csv`; se revirtieron los codigos y se dejo solo el nombre de plan corregido
+  - **bug real encontrado en produccion**: `teacher_subject_assignments` tenia 945 filas en vez de las 189 esperadas (multiplo exacto x5). Causa: la unique constraint `(institution_id, plan_subject_id, teacher_id, valid_from)` no atrapaba duplicados cuando `valid_from` viene vacio, porque en Postgres `NULL <> NULL` para efectos de `unique`/`ON CONFLICT` -- cada corrida repetida del importador insertaba de nuevo las mismas 189 asignaciones en vez de actualizarlas. Confirmado con Miguel que las 5 copias por grupo eran identicas (mismo `role`/`status`/`notes`) antes de tocar nada
+  - fix aplicado en dos partes: el schema (`unique nulls not distinct` en la definicion de la tabla, para instalaciones nuevas) y la base ya viva (`DELETE` con `row_number()` para quedarse con la fila mas antigua de cada grupo + `ALTER TABLE` para reemplazar la constraint vieja por la corregida). Verificado en 189 filas exactas despues del fix
+  - pendiente: `disponibilidad_docentes.csv` y `llamados_examen.csv` no las genera ningun script todavia; conectar la app para que lea progresivamente estas tablas relacionales nuevas (todavia lee del modelo viejo)
+
 ## Como usar este archivo
 
 - Valor del producto:

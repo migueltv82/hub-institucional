@@ -168,7 +168,7 @@ create table if not exists public.teacher_subject_assignments (
   exam_required boolean,
   notes text,
   created_at timestamptz not null default timezone('utc', now()),
-  unique (institution_id, plan_subject_id, teacher_id, valid_from),
+  unique nulls not distinct (institution_id, plan_subject_id, teacher_id, valid_from),
   foreign key (institution_id, plan_subject_id) references public.study_plan_subjects(institution_id, id) on delete cascade,
   foreign key (institution_id, teacher_id) references public.teacher_records(institution_id, id) on delete restrict,
   foreign key (institution_id, replaced_teacher_id) references public.teacher_records(institution_id, id) on delete restrict,
