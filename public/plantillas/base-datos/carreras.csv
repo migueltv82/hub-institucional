@@ -1,0 +1,7 @@
+carrera_codigo,carrera_nombre,duracion_anios,estado,observaciones
+GEO,PROFESORADO DE GEOGRAFIA,4,ACTIVA,Precargado desde snapshot local pre-Laboratorio.
+ING,PROFESORADO DE INGLES,4,ACTIVA,Precargado desde snapshot local pre-Laboratorio.
+QUI,PROFESORADO DE QUIMICA,4,ACTIVA,Precargado desde snapshot local pre-Laboratorio.
+LAB,TECNICO SUPERIOR EN LABORATORIO,3,ACTIVA,Plan vigente para los alumnos actuales de Laboratorio.
+TRA,TECNICO SUP EN TRADUCTORADO,3,ACTIVA,Precargado desde snapshot local pre-Laboratorio.
+TUR,TECNICO SUP EN TURISMO,3,ACTIVA,Precargado desde snapshot local pre-Laboratorio.
