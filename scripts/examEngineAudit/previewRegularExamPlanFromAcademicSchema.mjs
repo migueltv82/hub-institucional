@@ -4,12 +4,20 @@
 // sin escribir nada. Distinto de los scripts *WorkspaceSnapshot*/*RelationalEfficiency*
 // existentes en esta carpeta, que asumen el schema relacional viejo de `examenes`.
 //
-// Uso:
+// Uso (respeta RLS, requiere sesion logueada como miembro de la institucion o
+// devuelve 0 filas -- eso es RLS funcionando bien, no un bug):
 //   node scripts/examEngineAudit/previewRegularExamPlanFromAcademicSchema.mjs \
 //     --institution-id=<uuid> --fecha-inicio=2026-11-01 --fecha-fin=2026-11-30
 //
 // Requiere VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY (o VITE_SUPABASE_ANON_KEY)
 // en el entorno o en .env.local/.env -- nunca service_role, se bloquea si lo detecta.
+//
+// Uso con --admin (bypasea RLS via SUPABASE_SECRET_KEY, igual que
+// scripts/importNormalizedData.mjs -- solo para chequear datos reales sin
+// depender de un login; segui escribiendo la key solo en tu propia terminal,
+// nunca la pegues en el chat):
+//   node scripts/examEngineAudit/previewRegularExamPlanFromAcademicSchema.mjs \
+//     --admin --institution-id=<uuid> --fecha-inicio=2026-11-01 --fecha-fin=2026-11-30
 
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -90,16 +98,27 @@ function parseArgs(argv = []) {
 
 function buildSafeSummary({ diagnostics, input, result }) {
   const report = result?.report ?? {}
+  // code/entityType/entityId son identificadores de materia (carrera::codigo) o de
+  // config, no datos personales -- seguros para imprimir. Se lee result.diagnosis.errors
+  // (forma cruda de feasibility.js) en vez de report.criticalErrors porque
+  // buildPipelineReport() renormaliza a otro shape (materia/carrera/docenteId/
+  // docenteNombre) que puede traer datos de docente -- por eso NO se imprime report.*
+  // directamente, para no arriesgar filtrar nombres.
+  const safeIssue = ({ code, entityType, entityId } = {}) => ({ code, entityType, entityId })
+  const diagnosisErrors = Array.isArray(result?.diagnosis?.errors) ? result.diagnosis.errors.map(safeIssue) : []
+  const diagnosisWarnings = Array.isArray(result?.diagnosis?.warnings) ? result.diagnosis.warnings.map(safeIssue) : []
 
   return {
     source: diagnostics.source,
     counts: diagnostics.counts,
     canRunPreview: diagnostics.canRunPreview,
     inputCounts: input.metadata?.counts ?? {},
-    totalMesasPlanificadas: Array.isArray(result?.plannedMesas) ? result.plannedMesas.length : 0,
-    totalMesasNoAsignadas: Array.isArray(result?.unassignedMesas) ? result.unassignedMesas.length : 0,
-    totalErrores: Array.isArray(report.errors) ? report.errors.length : 0,
-    totalAdvertencias: Array.isArray(report.warnings) ? report.warnings.length : 0,
+    reportStatus: report.status ?? null,
+    executiveSummary: report.executiveSummary ?? null,
+    totalCandidatosMateria: Array.isArray(result?.candidates) ? result.candidates.length : 0,
+    diagnosisCanGenerate: result?.diagnosis?.canGenerate ?? null,
+    diagnosisErrors,
+    diagnosisWarnings,
   }
 }
 
@@ -121,18 +140,33 @@ async function main() {
     return
   }
 
-  const envValidation = validateSupabaseReadOnlyEnv(process.env)
-  if (!envValidation.valid) {
-    fail('Variables de entorno invalidas para lectura read-only.', {
-      errors: envValidation.errors,
-      warnings: envValidation.warnings,
-      config: envValidation.config,
-    })
-    return
+  // Modo admin explicito (--admin): usa SUPABASE_SECRET_KEY para bypasear RLS,
+  // igual que scripts/importNormalizedData.mjs. Sin --admin, la clave anon/publishable
+  // respeta RLS -- si no hay sesion logueada como miembro de la institucion, las
+  // queries devuelven 0 filas (comportamiento correcto de RLS, no un bug).
+  const adminMode = args.admin !== undefined
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  let supabaseKey
+
+  if (adminMode) {
+    supabaseKey = process.env.SUPABASE_SECRET_KEY
+    if (!supabaseUrl || !supabaseKey) {
+      fail('Modo --admin requiere VITE_SUPABASE_URL y SUPABASE_SECRET_KEY en el entorno.')
+      return
+    }
+  } else {
+    const envValidation = validateSupabaseReadOnlyEnv(process.env)
+    if (!envValidation.valid) {
+      fail('Variables de entorno invalidas para lectura read-only.', {
+        errors: envValidation.errors,
+        warnings: envValidation.warnings,
+        config: envValidation.config,
+      })
+      return
+    }
+    supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
   }
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL
-  const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: {
       persistSession: false,
