@@ -6,7 +6,7 @@ No hay migraciones incrementales que dependan de un orden historico de aplicacio
 
 ## Proyecto Supabase
 
-`qwrwwansdblcixkjmibx` (`https://qwrwwansdblcixkjmibx.supabase.co`). Proyecto nuevo y vacio, sin relacion con la base de `examenes` en produccion.
+`TU_PROJECT_REF` (`https://TU_PROJECT_REF.supabase.co`) -- ver variable local o `.env.local`, no commitear el ref real. Proyecto nuevo y vacio, sin relacion con la base de `examenes` en produccion.
 
 ## Orden de aplicacion
 
@@ -16,9 +16,16 @@ Ejecutar en el SQL Editor del dashboard, en este orden:
 
 2. **`02_academic_relational_schema.sql`** — carreras, planes, materias, correlatividades, equivalencias, docentes, horarios, alumnos y trayectoria academica, todos aislados por `institution_id`.
 
+3. **`03_workspace_data.sql`** — `workspace_snapshots`: el snapshot unico por `institution_id` + `workspace_key` que usa `src/services/workspaceSnapshot.js` para guardar/leer todo el estado operativo del generador de mesas (docentes, alumnos, horarios, cronograma, notas). Lectura para cualquier miembro de la institucion; escritura (insert/update, nunca delete desde el cliente) restringida a roles `owner`/`admin`/`editor`. Este bloque **no** incluye el resto de la capa operativa legacy (`workspace_source_files`, `subject_enrollments`, `exam_enrollments`, `student_grades`, asistencia, tribunal de mesas, `legacy_*`) -- ver el analisis de compatibilidad de shapes antes de portar esas tablas, algunas colisionan de nombre con tablas ya creadas en el bloque 2 (`student_records`, `teacher_records`, `subject_teacher_assignments` vs `teacher_subject_assignments`) con columnas incompatibles.
+
+   **Decision posterior**: para el motor de mesas se descarto portar el resto de la capa legacy detras de `workspace_snapshots` (dual-write, hybrid-read, etc. — ese mecanismo protege produccion viva en `examenes`, acá no aplica todavia). En su lugar, el motor lee directo el schema relacional del bloque 2 -- ver bloque 4.
+
+4. **`04_teacher_exam_date_exclusions.sql`** — `teacher_exam_date_exclusions`: fechas puntuales en que un docente no puede tomar examen aunque sea su dia habitual de clase (licencia, ausencia puntual). Complementa a `course_schedules` (bloque 2), que ya resuelve los dias habituales del docente. Usado por `src/utils/examEngine/relationalSource/`, el lector que arma la entrada del motor de mesas (`docentes`, `horariosDocentes`, `docenteMateria`, `planesEstudio`, `correlatividades`, `alumnos`) directamente desde el schema relacional del bloque 2, sin pasar por `workspace_snapshots`. Mismas politicas de lectura/escritura que el bloque 3.
+
 Proximos bloques (todavia no escritos, quedan para completar la operacion academica):
 
-- Datos operativos: `workspace_snapshots`, `workspace_source_files`, `subject_enrollments`, `exam_enrollments`, `student_grades`, asistencia, actas y RPCs transaccionales.
+- Persistencia del cronograma generado por el motor de mesas (tablas de "mesas"/tribunal, todavia no existen).
+- Resto de datos operativos no relacionados al motor: `workspace_source_files`, `subject_enrollments`, `exam_enrollments`, `student_grades`, asistencia, actas. Requiere antes decidir si se reconcilian con tablas ya existentes del bloque 2 (`student_academic_statuses` vs `student_grades`) o se portan aparte.
 - Storage: bucket `workspace-source-files` + `storage_object_institution_id()` + policies de storage, necesario recien cuando exista carga de archivos.
 
 ## Por que existe esta carpeta
