@@ -32,6 +32,8 @@ docs/date-strategy-comparisons/*.md
 .vite-dev.err
 .vite-*.log
 .vite-*.err
+public/plantillas/importacion/
+public/plantillas/base-datos/
 
 
 # Editor directories and files

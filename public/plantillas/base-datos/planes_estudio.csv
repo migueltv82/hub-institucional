@@ -1,8 +1,0 @@
-plan_codigo,carrera_codigo,plan_nombre,anio_plan,resolucion,estado_plan,vigente_desde,vigente_hasta,convive_con_plan_codigo,observaciones
-GEO-PLAN,GEO,Plan 2015,,,VIGENTE,,,,Precargado desde snapshot local pre-Laboratorio.
-ING-PLAN,ING,Plan 2015,,,VIGENTE,,,,Precargado desde snapshot local pre-Laboratorio.
-QUI-PLAN,QUI,Plan 2015,,,VIGENTE,,,,Precargado desde snapshot local pre-Laboratorio.
-LAB-2015,LAB,Plan 2015,2015,,CONVIVIENTE,2015-03-01,,LAB-2024,Plan cargado para mesas de examen de cohortes anteriores.
-LAB-2024,LAB,Plan 2024,2024,,VIGENTE,2024-03-01,,LAB-2015,Plan vigente para los alumnos actuales de Laboratorio.
-TRA-PLAN,TRA,Plan 2015,,,VIGENTE,,,,Precargado desde snapshot local pre-Laboratorio.
-TUR-PLAN,TUR,Plan 2015,,,VIGENTE,,,,Precargado desde snapshot local pre-Laboratorio.

@@ -1,4 +1,0 @@
-docente_codigo,dia,turno,hora_desde,hora_hasta,disponible_mesa,motivo_no_disponible,observaciones
-DOC-0001,LUNES,MANANA,08:00,12:00,true,,Datos demo sinteticos
-DOC-0002,MIERCOLES,TARDE,14:00,18:00,true,,Datos demo sinteticos
-DOC-0003,VIERNES,MANANA,08:00,12:00,false,Otro compromiso,Datos demo sinteticos
