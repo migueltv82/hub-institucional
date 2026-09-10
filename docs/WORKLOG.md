@@ -283,6 +283,7 @@ Registro de trabajo del producto para estimar costo, esfuerzo y velocidad real.
   - pendiente, decision de Miguel no de codigo: asignar docente a las 12 materias sin titular (las va a cargar el desde el front)
   - **segundo hallazgo de seguridad, corregido**: al escribir el doc de handoff (`docs/codex-continuar-motor-relacional-fase-2.md`), un `git add` de ese unico archivo volvio a subir los 17 archivos con datos personales (commit `592864a`) -- las 2 lineas de `.gitignore` que los excluian habian desaparecido sin edicion deliberada de por medio (causa exacta no determinada). Corregido de nuevo en `0786e6d`: lineas restauradas, archivos sacados del tracking otra vez, verificado con `git status` que quedan ocultos. Anotado en el doc de handoff como alerta para no repetirlo: chequear `.gitignore` antes de cualquier commit, no asumir que sigue como se dejo
 
+<<<<<<< HEAD
 ### 2026-09-05
 
 - Trabajo principal: Fase 3, previsualizacion relacional de mesas en una ruta independiente para varias instituciones, habilitable desde Superadmin.
@@ -293,6 +294,43 @@ Registro de trabajo del producto para estimar costo, esfuerzo y velocidad real.
 - Verificacion final: `npm.cmd run check` en verde, 268 archivos y 2120 tests; lint, build y auditorias aprobados. Playwright 1440/390 px completo (habilitar, generar, autocompletar, resultado y reinicio), cero escrituras academicas; corregida tabla comprimida en movil y verificada la captura final. `.gitignore` conserva las dos exclusiones de planillas privadas.
 - Revision posterior del prompt de Fase 1: el lector relacional ya estaba implementado, pero el script manual conservaba el modo historico `--admin`. Se removio esa via para que `scripts/examEngineAudit/previewRegularExamPlanFromAcademicSchema.mjs` use solo publishable/anon key, respete RLS y bloquee cualquier variable o valor `service_role`, alineado con el contrato original de solo lectura.
 - Auditoria A-J de seguridad Supabase armada como artefactos revisables, sin ejecutar SQL: reporte en `docs/SECURITY_AUDIT_AJ_2026-09-05.md`, diagnosticos read-only y SQL separado en `supabase/security/` para bajo riesgo, RLS/permisos y constraints de revision manual. Se incluyo `teacher_exam_date_exclusions` en la lista auditada.
+=======
+### 2026-09-08
+
+- Horas reales: pendiente de completar
+- Trabajo principal:
+  - Etapa 0 de adaptacion DB-UI: creado `docs/db-ui-contract.md` como contrato operativo entre la UI actual y Supabase, con tablas, columnas, RPCs, prioridades P0/P1/P2, inventario manual y criterios de listo por etapa
+  - Etapa 1 preparada localmente: `supabase/schema/01_foundation.sql` ahora incluye las RPCs P0 que la UI de superadmin usa para cambiar roles, quitar membresias, bloquear/desbloquear usuarios y quitar acceso de usuarios institucionales
+  - guardas de seguridad en RPCs P0: solo superadmin activo puede ejecutarlas; no se puede bloquear/eliminar un superadmin global; no se puede dejar una institucion sin owner/admin activo
+  - decision de seguridad: `delete_institution_user` quita acceso del hub eliminando membresias y perfil, pero no borra `auth.users` desde SQL directo
+  - actualizado `supabase/schema/00_README.md` para reflejar que el bloque foundation incluye las RPCs base de superadmin
+  - verificacion local: `npm.cmd test -- src/services/superAdmin.test.js src/services/institutions.test.js src/services/auth.test.js` en verde, 3 archivos y 9 tests pasados
+  - Miguel informo que `01_foundation.sql` ya fue ejecutado en Supabase; agregado `supabase/docs/verify_01_foundation_p0.sql` para verificar RPCs, grants, RLS, perfiles, membresias y auditoria sin modificar datos
+  - verificacion remota parcial: Miguel compartio salida de `pg_policies`; aparecen las policies esperadas de foundation para `admin_audit_logs`, `app_settings`, `institutions`, `memberships` y `profiles`, sin policies extra permisivas
+  - verificacion remota parcial: Miguel compartio salida de `information_schema.routines`; aparecen las 6 RPCs P0 esperadas (`get_public_app_status`, `list_active_login_institutions`, `update_membership_role`, `remove_user_membership`, `set_user_access_status`, `delete_institution_user`)
+  - verificacion remota parcial: Miguel compartio salida de `information_schema.routine_privileges`; las 4 RPCs administrativas tienen `EXECUTE` para `authenticated`, `postgres` y `service_role`, sin grants para `anon` ni `public`
+  - smoke test negativo real: al intentar bloquear un usuario que era unico `owner/admin` activo de una institucion, la RPC respondio `INSTITUTION_REQUIRES_ACTIVE_ADMIN`; comportamiento esperado por la guarda de seguridad
+  - smoke test UI positivo: Miguel confirmo que los flujos P0 funcionan correctamente; `admin_audit_logs` registra acciones reales `set_user_access_status` y `update_membership_role` ejecutadas por el superadmin
+  - **Etapa 1 cerrada:** foundation queda aplicado y verificado en remoto; siguiente bloque recomendado: etapa 2, compatibilidad de `student_records` y `teacher_records`
+  - Etapa 2 preparada localmente: `supabase/schema/02_academic_relational_schema.sql` extiende `student_records` y `teacher_records` con columnas esperadas por la UI (`workspace_key`, `profile_id`, `full_name`, `dni`, `login_email`, `career`, `academic_year`, `legajo`, `raw_payload`, `updated_at`), defaults, backfill no destructivo, FKs a `profiles`, claves de upsert y triggers de sincronizacion canonico/UI
+  - policies de escritura agregadas para padrones: superadmin u `owner`/`admin`/`editor` institucional pueden insertar/actualizar/borrar; viewers, docentes y alumnos quedan fuera de escritura directa
+  - mapper del motor relacional actualizado para leer padrones creados desde la UI (`dni`, `login_email`, `full_name`, `status='activo'`) sin perder compatibilidad con el schema canonico (`national_id`, `email`, `status='active'`)
+  - agregado `supabase/docs/verify_02_roster_records_ui_compat.sql` para verificar columnas, constraints, triggers, grants, policies y duplicados sin modificar datos
+  - agregado `supabase/docs/verify_02_roster_records_ui_compat_summary.sql` para devolver una sola grilla resumen en Supabase SQL Editor y evitar perder resultados entre pestañas
+  - agregado `supabase/docs/repair_02_student_records_duplicate_upsert_keys.sql` para el caso real detectado en remoto: filas duplicadas de `student_records` con la misma clave de upsert UI (`institution_id`, `workspace_key`, `email`, `career`) que impiden crear `student_records_workspace_email_career_key`
+  - verificacion remota parcial etapa 2: Miguel confirmo `student_records` sin faltantes en campos UI requeridos; duplicados de `student_records` resueltos; constraint `student_records_workspace_email_career_key` creada en remoto como `UNIQUE (institution_id, workspace_key, email, career)`
+  - verificacion remota completa etapa 2: resumen `verify_02_roster_records_ui_compat_summary.sql` en 11/11 OK para columnas, campos requeridos, duplicados, constraints, triggers, RLS policies y grants de `student_records`/`teacher_records`
+  - verificacion local etapa 2: tests focales en verde (`rosterRecords`, `studentAccess`, `teacherAccess`, `teacherProfileIdentityService`, `mapAcademicRelationalRowsToSnapshot`, `buildExamEngineSnapshotFromAcademicSchema`), 6 archivos y 36 tests pasados
+  - verificacion local etapa 2: `npm.cmd run build` en verde, incluido `audit:prod`; Vite mantiene warnings conocidos de chunks grandes
+  - Etapa 3 preparada localmente: `supabase/schema/05_workspace_operational_compat.sql` agrega `workspace_source_files`, bucket privado `workspace-source-files`, helper/policies de Storage, `teacher_availability_records`, `teacher_workload_records`, `legacy_subjects_catalog`, `legacy_subject_prerequisites` y `legacy_exam_sessions`
+  - decision etapa 3: `legacy_exam_sessions.exam_date` queda como `text` porque la UI puede mandar timestamps completos desde `buildExams()`; se tipara de forma estricta en la futura tabla canonica de mesas
+  - agregado `supabase/docs/verify_03_workspace_operational_compat_summary.sql` para verificar Etapa 3 en una sola grilla: columnas, constraints, triggers, RLS, grants, bucket, policies de Storage y duplicados
+  - verificacion local etapa 3: tests focales en verde (`sourceFiles`, `teacherAcademicRecords`, `workspaceSnapshotTeacherAcademicRecords`, `legacySubjectPrerequisites`, `studentPortalData`), 5 archivos y 37 tests pasados
+  - verificacion local etapa 3: `npm.cmd run build` en verde, incluido `audit:prod`; Vite mantiene warnings conocidos de chunks grandes
+  - verificacion remota completa etapa 3: resumen `verify_03_workspace_operational_compat_summary.sql` en 19/19 OK para columnas, constraints, triggers, campos requeridos, duplicados, RLS policies, grants, bucket privado, policies de Storage, helper `storage_object_institution_id(text)` y tipo `legacy_exam_sessions.exam_date = text`
+  - pendiente funcional etapa 2: probar autosave/padrones/accesos desde la UI real
+  - pendiente funcional etapa 3: probar carga/descarga de fuentes + sync de disponibilidad/carga docente/legacy al guardar workspace desde la UI real
+>>>>>>> 9ff66de244baf6061807125c68219a731cfa7be8
 
 ## Como usar este archivo
 

@@ -35,7 +35,21 @@ function truncateToHm(value) {
 }
 
 function fullName(row = {}) {
-  return clean(`${clean(row.first_name)} ${clean(row.last_name)}`)
+  return clean(row.full_name) || clean(`${clean(row.first_name)} ${clean(row.last_name)}`)
+}
+
+function recordDni(row = {}) {
+  return clean(row.national_id) || clean(row.dni)
+}
+
+function recordEmail(row = {}) {
+  return clean(row.email) || clean(row.login_email)
+}
+
+function isActiveStatus(value) {
+  const normalized = clean(value).toLowerCase()
+  if (!normalized) return true
+  return ['active', 'activo', 'activa', 'alta', 'enabled'].includes(normalized)
 }
 
 function indexById(rows = []) {
@@ -72,10 +86,10 @@ function buildTeachers({ teacherRecords, exclusionsByTeacherId }) {
     docenteId: row.id,
     nombre: fullName(row) || row.id,
     full_name: fullName(row) || row.id,
-    dni: row.national_id ?? '',
-    email: row.email ?? '',
+    dni: recordDni(row),
+    email: recordEmail(row),
     especialidad: row.specialty ?? '',
-    activo: row.status === 'active',
+    activo: isActiveStatus(row.status),
     bloqueos: exclusionsByTeacherId.get(row.id) ?? [],
     ...(row.teaching_hours !== null && row.teaching_hours !== undefined
       ? { horasCatedra: row.teaching_hours }
@@ -124,7 +138,7 @@ function buildDocenteMateria({ teacherSubjectAssignments, teachersById, planSubj
       materia_nombre: planSubject?.name ?? '',
       nombreMateria: planSubject?.name ?? '',
       carrera: planSubject?.careerName ?? '',
-      estado_asignacion: row.status === 'active' ? 'ACTIVO' : 'BAJA',
+      estado_asignacion: isActiveStatus(row.status) ? 'ACTIVO' : 'BAJA',
       vigencia_desde: row.valid_from ?? null,
       vigencia_hasta: row.valid_until ?? null,
       ...(row.role ? { rol_en_materia: row.role } : {}),
@@ -198,12 +212,12 @@ function buildAlumnos({ studentRecords, studentCareerPlans, careersById }) {
       nombre: row.first_name ?? '',
       apellido: row.last_name ?? '',
       full_name: fullName(row) || row.id,
-      dni: row.national_id ?? '',
-      email: row.email ?? '',
+      dni: recordDni(row),
+      email: recordEmail(row),
       telefono: row.phone ?? '',
       estado: row.status ?? '',
-      carrera: career?.name ?? '',
-      anio: plan?.current_year ?? '',
+      carrera: career?.name ?? row.career ?? '',
+      anio: plan?.current_year ?? row.academic_year ?? '',
       materias: [],
     }
   })

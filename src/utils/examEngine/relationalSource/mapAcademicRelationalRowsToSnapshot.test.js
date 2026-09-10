@@ -86,6 +86,62 @@ describe('mapAcademicRelationalRowsToSnapshot', () => {
     expect(ing01.titularId).toBe('teacher-1')
   })
 
+  it('acepta columnas compatibles con la UI para docentes y alumnos', () => {
+    const { snapshot } = mapAcademicRelationalRowsToSnapshot({
+      ...academicRelationalSchemaFixture,
+      teacher_records: [{
+        id: 'teacher-ui',
+        institution_id: 'inst-1',
+        external_code: 'DOC-UI',
+        first_name: '',
+        last_name: '',
+        full_name: 'Docente UI',
+        dni: '30999111',
+        login_email: '30999111@docentes.inst-1.local',
+        status: 'activo',
+      }],
+      teacher_subject_assignments: [{
+        id: 'tsa-ui',
+        institution_id: 'inst-1',
+        plan_subject_id: 'sps-ing01',
+        teacher_id: 'teacher-ui',
+        role: 'titular',
+        status: 'activo',
+      }],
+      student_records: [{
+        id: 'student-ui',
+        institution_id: 'inst-1',
+        external_code: 'AL-UI',
+        first_name: '',
+        last_name: '',
+        full_name: 'Alumno UI',
+        dni: '40999111',
+        email: 'alumno.ui@example.com',
+        status: 'activo',
+        career: 'Tecnicatura UI',
+        academic_year: '2',
+      }],
+      student_career_plans: [],
+    })
+
+    expect(snapshot.docentes[0]).toEqual(expect.objectContaining({
+      nombre: 'Docente UI',
+      dni: '30999111',
+      email: '30999111@docentes.inst-1.local',
+      activo: true,
+    }))
+    expect(snapshot.docenteMateria[0]).toEqual(expect.objectContaining({
+      docente: 'Docente UI',
+      estado_asignacion: 'ACTIVO',
+    }))
+    expect(snapshot.alumnos[0]).toEqual(expect.objectContaining({
+      full_name: 'Alumno UI',
+      dni: '40999111',
+      carrera: 'Tecnicatura UI',
+      anio: '2',
+    }))
+  })
+
   it('alumno sin student_career_plans no lanza y queda con carrera/anio vacios', () => {
     const { snapshot } = mapAcademicRelationalRowsToSnapshot(academicRelationalSchemaFixture)
     const student2 = snapshot.alumnos.find((alumno) => alumno.id === 'student-2')
