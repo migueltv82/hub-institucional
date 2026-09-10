@@ -310,6 +310,382 @@ $$;
 grant execute on function public.list_active_login_institutions() to anon, authenticated;
 
 -- ============================================================
+-- Administracion base desde la UI de superadmin
+-- ============================================================
+
+create or replace function public.foundation_require_super_admin()
+returns uuid
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  actor_user_id uuid := auth.uid();
+begin
+  if actor_user_id is null then
+    raise exception 'SUPER_ADMIN_REQUIRED'
+      using errcode = '42501';
+  end if;
+
+  if not exists (
+    select 1
+    from public.profiles profile
+    where profile.user_id = actor_user_id
+      and profile.is_global_admin = true
+      and profile.is_blocked = false
+  ) then
+    raise exception 'SUPER_ADMIN_REQUIRED'
+      using errcode = '42501';
+  end if;
+
+  return actor_user_id;
+end;
+$$;
+
+create or replace function public.foundation_active_institution_admin_count(
+  target_institution_id uuid,
+  excluded_user_id uuid default null
+)
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)::integer
+  from public.memberships membership
+  join public.profiles profile on profile.user_id = membership.user_id
+  where membership.institution_id = target_institution_id
+    and membership.role in ('owner', 'admin')
+    and profile.is_blocked = false
+    and (
+      excluded_user_id is null
+      or membership.user_id <> excluded_user_id
+    );
+$$;
+
+create or replace function public.update_membership_role(
+  target_user_id uuid,
+  target_institution_id uuid,
+  new_role text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_user_id uuid;
+  actor_email text;
+  previous_role text;
+  normalized_role text := lower(btrim(coalesce(new_role, '')));
+begin
+  actor_user_id := public.foundation_require_super_admin();
+
+  if normalized_role not in ('owner', 'admin', 'editor', 'viewer') then
+    raise exception 'INVALID_MEMBERSHIP_ROLE'
+      using errcode = '22023';
+  end if;
+
+  select membership.role
+  into previous_role
+  from public.memberships membership
+  where membership.user_id = target_user_id
+    and membership.institution_id = target_institution_id
+  for update;
+
+  if previous_role is null then
+    raise exception 'MEMBERSHIP_NOT_FOUND'
+      using errcode = 'P0002';
+  end if;
+
+  if previous_role in ('owner', 'admin')
+    and normalized_role not in ('owner', 'admin')
+    and public.foundation_active_institution_admin_count(target_institution_id, target_user_id) = 0
+  then
+    raise exception 'INSTITUTION_REQUIRES_ACTIVE_ADMIN'
+      using errcode = '23514';
+  end if;
+
+  update public.memberships
+  set role = normalized_role
+  where user_id = target_user_id
+    and institution_id = target_institution_id;
+
+  select profile.email
+  into actor_email
+  from public.profiles profile
+  where profile.user_id = actor_user_id;
+
+  insert into public.admin_audit_logs (
+    actor_user_id,
+    actor_email,
+    action,
+    target_type,
+    target_id,
+    metadata
+  )
+  values (
+    actor_user_id,
+    actor_email,
+    'update_membership_role',
+    'membership',
+    target_institution_id::text || ':' || target_user_id::text,
+    jsonb_build_object(
+      'target_user_id', target_user_id,
+      'target_institution_id', target_institution_id,
+      'previous_role', previous_role,
+      'new_role', normalized_role
+    )
+  );
+end;
+$$;
+
+create or replace function public.remove_user_membership(
+  target_user_id uuid,
+  target_institution_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_user_id uuid;
+  actor_email text;
+  previous_role text;
+begin
+  actor_user_id := public.foundation_require_super_admin();
+
+  select membership.role
+  into previous_role
+  from public.memberships membership
+  where membership.user_id = target_user_id
+    and membership.institution_id = target_institution_id
+  for update;
+
+  if previous_role is null then
+    raise exception 'MEMBERSHIP_NOT_FOUND'
+      using errcode = 'P0002';
+  end if;
+
+  if previous_role in ('owner', 'admin')
+    and public.foundation_active_institution_admin_count(target_institution_id, target_user_id) = 0
+  then
+    raise exception 'INSTITUTION_REQUIRES_ACTIVE_ADMIN'
+      using errcode = '23514';
+  end if;
+
+  delete from public.memberships
+  where user_id = target_user_id
+    and institution_id = target_institution_id;
+
+  select profile.email
+  into actor_email
+  from public.profiles profile
+  where profile.user_id = actor_user_id;
+
+  insert into public.admin_audit_logs (
+    actor_user_id,
+    actor_email,
+    action,
+    target_type,
+    target_id,
+    metadata
+  )
+  values (
+    actor_user_id,
+    actor_email,
+    'remove_user_membership',
+    'membership',
+    target_institution_id::text || ':' || target_user_id::text,
+    jsonb_build_object(
+      'target_user_id', target_user_id,
+      'target_institution_id', target_institution_id,
+      'previous_role', previous_role
+    )
+  );
+end;
+$$;
+
+create or replace function public.set_user_access_status(
+  target_user_id uuid,
+  blocked boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_user_id uuid;
+  actor_email text;
+  target_profile public.profiles%rowtype;
+  membership_row record;
+  next_blocked boolean := coalesce(blocked, false);
+begin
+  actor_user_id := public.foundation_require_super_admin();
+
+  select *
+  into target_profile
+  from public.profiles profile
+  where profile.user_id = target_user_id
+  for update;
+
+  if target_profile.user_id is null then
+    raise exception 'PROFILE_NOT_FOUND'
+      using errcode = 'P0002';
+  end if;
+
+  if target_profile.is_global_admin = true and next_blocked = true then
+    raise exception 'CANNOT_BLOCK_GLOBAL_ADMIN'
+      using errcode = '42501';
+  end if;
+
+  if next_blocked = true and coalesce(target_profile.is_blocked, false) = false then
+    for membership_row in
+      select membership.institution_id, membership.role
+      from public.memberships membership
+      where membership.user_id = target_user_id
+        and membership.role in ('owner', 'admin')
+    loop
+      if public.foundation_active_institution_admin_count(membership_row.institution_id, target_user_id) = 0 then
+        raise exception 'INSTITUTION_REQUIRES_ACTIVE_ADMIN'
+          using errcode = '23514';
+      end if;
+    end loop;
+  end if;
+
+  update public.profiles
+  set
+    is_blocked = next_blocked,
+    updated_at = timezone('utc', now())
+  where user_id = target_user_id;
+
+  select profile.email
+  into actor_email
+  from public.profiles profile
+  where profile.user_id = actor_user_id;
+
+  insert into public.admin_audit_logs (
+    actor_user_id,
+    actor_email,
+    action,
+    target_type,
+    target_id,
+    metadata
+  )
+  values (
+    actor_user_id,
+    actor_email,
+    'set_user_access_status',
+    'profile',
+    target_user_id::text,
+    jsonb_build_object(
+      'target_user_id', target_user_id,
+      'previous_blocked', target_profile.is_blocked,
+      'blocked', next_blocked
+    )
+  );
+end;
+$$;
+
+create or replace function public.delete_institution_user(
+  target_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_user_id uuid;
+  actor_email text;
+  target_profile public.profiles%rowtype;
+  membership_row record;
+  removed_memberships integer := 0;
+begin
+  actor_user_id := public.foundation_require_super_admin();
+
+  select *
+  into target_profile
+  from public.profiles profile
+  where profile.user_id = target_user_id
+  for update;
+
+  if target_profile.user_id is null then
+    raise exception 'PROFILE_NOT_FOUND'
+      using errcode = 'P0002';
+  end if;
+
+  if target_profile.is_global_admin = true then
+    raise exception 'CANNOT_DELETE_GLOBAL_ADMIN'
+      using errcode = '42501';
+  end if;
+
+  for membership_row in
+    select membership.institution_id, membership.role
+    from public.memberships membership
+    where membership.user_id = target_user_id
+      and membership.role in ('owner', 'admin')
+  loop
+    if public.foundation_active_institution_admin_count(membership_row.institution_id, target_user_id) = 0 then
+      raise exception 'INSTITUTION_REQUIRES_ACTIVE_ADMIN'
+        using errcode = '23514';
+    end if;
+  end loop;
+
+  delete from public.memberships
+  where user_id = target_user_id;
+
+  get diagnostics removed_memberships = row_count;
+
+  delete from public.profiles
+  where user_id = target_user_id;
+
+  select profile.email
+  into actor_email
+  from public.profiles profile
+  where profile.user_id = actor_user_id;
+
+  insert into public.admin_audit_logs (
+    actor_user_id,
+    actor_email,
+    action,
+    target_type,
+    target_id,
+    metadata
+  )
+  values (
+    actor_user_id,
+    actor_email,
+    'delete_institution_user',
+    'profile',
+    target_user_id::text,
+    jsonb_build_object(
+      'target_user_id', target_user_id,
+      'target_email', target_profile.email,
+      'removed_memberships', removed_memberships
+    )
+  );
+end;
+$$;
+
+revoke execute on function public.foundation_require_super_admin() from public, anon, authenticated;
+revoke execute on function public.foundation_active_institution_admin_count(uuid, uuid) from public, anon, authenticated;
+
+revoke execute on function public.update_membership_role(uuid, uuid, text) from public, anon;
+revoke execute on function public.remove_user_membership(uuid, uuid) from public, anon;
+revoke execute on function public.set_user_access_status(uuid, boolean) from public, anon;
+revoke execute on function public.delete_institution_user(uuid) from public, anon;
+
+grant execute on function public.update_membership_role(uuid, uuid, text) to authenticated;
+grant execute on function public.remove_user_membership(uuid, uuid) to authenticated;
+grant execute on function public.set_user_access_status(uuid, boolean) to authenticated;
+grant execute on function public.delete_institution_user(uuid) to authenticated;
+
+-- ============================================================
 -- RLS
 -- ============================================================
 
