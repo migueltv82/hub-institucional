@@ -52,6 +52,7 @@ function StudentSubjectEnrollmentSection({
   activeInstitution,
   alumnos = [],
   canEditWorkspace = false,
+  isRelationalWorkspaceSource = false,
   planesEstudio = [],
   workspaceKey = 'main',
 }) {
@@ -78,6 +79,13 @@ function StudentSubjectEnrollmentSection({
     let cancelled = false
 
     async function loadEnrollments() {
+      if (isRelationalWorkspaceSource) {
+        setEnrollments([])
+        setError('')
+        setIsLoading(false)
+        return
+      }
+
       if (!institutionId) {
         setEnrollments([])
         return
@@ -99,12 +107,17 @@ function StudentSubjectEnrollmentSection({
     return () => {
       cancelled = true
     }
-  }, [institutionId, workspaceKey])
+  }, [institutionId, isRelationalWorkspaceSource, workspaceKey])
 
   useEffect(() => {
     let cancelled = false
 
     async function resolveStudentLabels() {
+      if (isRelationalWorkspaceSource) {
+        setStudentLabels(new Map())
+        return
+      }
+
       if (!institutionId || alumnos.length === 0) return
 
       const entries = await Promise.all(alumnos.map(async (student) => {
@@ -127,7 +140,7 @@ function StudentSubjectEnrollmentSection({
     return () => {
       cancelled = true
     }
-  }, [institutionId, workspaceKey, alumnos])
+  }, [institutionId, isRelationalWorkspaceSource, workspaceKey, alumnos])
 
   function updateDraft(field) {
     return (event) => {
@@ -141,6 +154,11 @@ function StudentSubjectEnrollmentSection({
 
   async function submit() {
     setError('')
+
+    if (isRelationalWorkspaceSource) {
+      setError('Las inscripciones materia por materia todavia no estan conectadas al schema relacional nuevo.')
+      return
+    }
 
     if (!institutionId) {
       setError('No hay una institucion activa.')
@@ -211,6 +229,7 @@ function StudentSubjectEnrollmentSection({
   }
 
   async function handleDrop(id) {
+    if (isRelationalWorkspaceSource) return
     if (!canEditWorkspace) return
 
     const result = await dropSubjectEnrollment(id)
@@ -236,6 +255,8 @@ function StudentSubjectEnrollmentSection({
     return studentLabels.get(studentId) || studentId
   }
 
+  if (isRelationalWorkspaceSource) return null
+
   return (
     <section className="rise-in soft-card soft-card--tint-sky border-l-4 border-l-sky-500 space-y-4">
       <div className="flex items-center gap-2">
@@ -256,7 +277,7 @@ function StudentSubjectEnrollmentSection({
               value={draft.materiaLabel}
               onChange={updateDraft('materiaLabel')}
               placeholder="Buscar materia por nombre"
-              disabled={!canEditWorkspace || planOptions.length === 0}
+              disabled={isRelationalWorkspaceSource || !canEditWorkspace || planOptions.length === 0}
             />
           </label>
           <label className="block">
@@ -266,7 +287,7 @@ function StudentSubjectEnrollmentSection({
               list="subject-enrollment-student-options"
               value={draft.alumnoNombre}
               onChange={updateDraft('alumnoNombre')}
-              disabled={!canEditWorkspace}
+              disabled={isRelationalWorkspaceSource || !canEditWorkspace}
             />
           </label>
         </div>
@@ -274,7 +295,7 @@ function StudentSubjectEnrollmentSection({
         {error && <p className="mt-3 text-sm font-semibold text-amber-700">{error}</p>}
 
         <div className="mt-4 flex justify-end">
-          <button type="button" className="btn-primary" onClick={submit} disabled={!canEditWorkspace || !canSubmit || isSaving}>
+          <button type="button" className="btn-primary" onClick={submit} disabled={isRelationalWorkspaceSource || !canEditWorkspace || !canSubmit || isSaving}>
             {isSaving ? 'Guardando...' : 'Inscribir alumno'}
           </button>
         </div>
@@ -316,7 +337,7 @@ function StudentSubjectEnrollmentSection({
                         type="button"
                         className="btn-secondary px-3 py-2 text-red-700"
                         onClick={() => handleDrop(enrollment.id)}
-                        disabled={!canEditWorkspace}
+                        disabled={isRelationalWorkspaceSource || !canEditWorkspace}
                         title="Dar de baja inscripcion"
                       >
                         <Trash2 className="h-4 w-4" />

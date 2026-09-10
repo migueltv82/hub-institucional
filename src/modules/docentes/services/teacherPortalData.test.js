@@ -1,9 +1,50 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  fetchTeacherPortalData,
   mapWorkspaceSnapshotToTeacherPortal,
 } from './teacherPortalData.js'
 
+const mocks = vi.hoisted(() => ({
+  fetchRelationalPreviewSetting: vi.fn(),
+  fetchRelationalExamSnapshot: vi.fn(),
+  fetchWorkspaceSnapshot: vi.fn(),
+  fetchTeacherRecords: vi.fn(),
+  fetchStudentRecords: vi.fn(),
+}))
+
+vi.mock('../../../services/relationalExamPreview.js', () => ({
+  fetchRelationalPreviewSetting: mocks.fetchRelationalPreviewSetting,
+  fetchRelationalExamSnapshot: mocks.fetchRelationalExamSnapshot,
+}))
+
+vi.mock('../../../services/workspaceSnapshot.js', () => ({
+  createEmptyWorkspaceSnapshot: () => ({
+    horariosDocentes: [],
+    docenteMateria: [],
+    disponibilidadDocente: [],
+    cargaHorariaDocente: [],
+    docentes: [],
+    planesEstudio: [],
+    correlatividades: [],
+    alumnos: [],
+    students: [],
+    cronograma: [],
+  }),
+  fetchWorkspaceSnapshot: mocks.fetchWorkspaceSnapshot,
+}))
+
+vi.mock('../../../services/rosterRecords.js', () => ({
+  fetchTeacherRecords: mocks.fetchTeacherRecords,
+  fetchStudentRecords: mocks.fetchStudentRecords,
+  mapTeacherRecordToSnapshotRow: (row) => row,
+  mapStudentRecordToSnapshotRow: (row) => row,
+}))
+
 describe('teacherPortalData', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('usa teacherRows y studentRows normalizados cuando existen', () => {
     const result = mapWorkspaceSnapshotToTeacherPortal({
       snapshot: {
@@ -101,6 +142,43 @@ describe('teacherPortalData', () => {
     expect(result.stats.subjectStudents).toBe(0)
     expect(result.developmentWarnings).toEqual([])
     expect(result.developmentWarningDetails).toEqual([])
+  })
+
+  it('carga el snapshot relacional para instituciones habilitadas', async () => {
+    mocks.fetchRelationalPreviewSetting.mockResolvedValue(true)
+    mocks.fetchRelationalExamSnapshot.mockResolvedValue({
+      snapshot: {
+        docentes: [{ record_id: 'teacher-1', full_name: 'Ana Diaz', email: 'ana@docentes.local' }],
+        horariosDocentes: [{
+          docenteId: 'teacher-1',
+          docente: 'Ana Diaz',
+          carrera: 'Profesorado',
+          materia: 'ING1',
+          nombreMateria: 'Ingles I',
+          dia: 'lunes',
+          inicio: '08:00',
+          fin: '10:00',
+        }],
+        planesEstudio: [{ carrera: 'Profesorado', materia: 'ING1', nombreMateria: 'Ingles I' }],
+        alumnos: [{ full_name: 'Alumno Uno', carrera: 'Profesorado', email: 'alumno@example.com' }],
+      },
+    })
+    mocks.fetchTeacherRecords.mockResolvedValue([{ record_id: 'teacher-1', full_name: 'Ana Diaz', email: 'ana@docentes.local' }])
+    mocks.fetchStudentRecords.mockResolvedValue([{ full_name: 'Alumno Uno', carrera: 'Profesorado', email: 'alumno@example.com' }])
+
+    const result = await fetchTeacherPortalData({
+      user: { id: 'user-1', email: 'ana@docentes.local', nombre: 'Ana Diaz' },
+      isRemoteSession: true,
+      isSuperAdmin: false,
+      activeInstitution: { id: 'inst-1', name: 'Instituto' },
+    })
+
+    expect(mocks.fetchWorkspaceSnapshot).not.toHaveBeenCalled()
+    expect(mocks.fetchRelationalExamSnapshot).toHaveBeenCalledWith({ institutionId: 'inst-1' })
+    expect(result.schedules).toEqual([
+      expect.objectContaining({ materia: 'ING1', nombreMateria: 'Ingles I' }),
+    ])
+    expect(result.workspaceSnapshot.workspaceSource).toBe('academic-relational-schema')
   })
 
   it('muestra mesas finales del motor nuevo cuando el docente figura como titular', () => {

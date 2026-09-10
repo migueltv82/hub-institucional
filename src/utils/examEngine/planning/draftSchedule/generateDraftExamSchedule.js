@@ -240,7 +240,7 @@ function getCareerExceptions(materia = {}, config = {}) {
   return exceptions.filter((exception) => careerExceptionApplies(exception, materia))
 }
 
-function materiaAlcanzadaPorConfig(materia = {}, config = {}) {
+export function materiaAlcanzadaPorConfig(materia = {}, config = {}) {
   if (!materiaRequiereMesa(materia)) {
     return {
       included: false,

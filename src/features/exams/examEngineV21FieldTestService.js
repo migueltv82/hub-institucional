@@ -10,6 +10,9 @@ import {
   importReviewedDraftSchedule,
 } from '../../utils/examEngine/index.js'
 import { buildRegularExamInputFromWorkspaceSnapshot } from '../../utils/examEngine/comparison/buildRegularExamInputFromWorkspaceSnapshot.js'
+import { buildFeasibilityDiagnosis } from '../../utils/examEngine/diagnostics/feasibility.js'
+import { teacherIsAvailableOnDate } from '../../utils/examEngine/rules/availability.js'
+import { materiaAlcanzadaPorConfig } from '../../utils/examEngine/planning/draftSchedule/generateDraftExamSchedule.js'
 
 // Estados realmente alcanzables por la UI (ver ExamEngineV21FieldTestPage.jsx).
 // DRAFT_GENERATED, WAITING_TEACHER_REVIEW_IMPORT y TRIBUNALS_GENERATED se
@@ -277,13 +280,13 @@ function resolveMesaTeacherId(mesa = {}, fields = [], teacherNameToId = {}) {
   return ''
 }
 
-export function createDefaultExamCallConfigForm(seed = {}) {
+export function createDefaultExamCallConfigForm(seed = {}, { requireExplicitDates = false } = {}) {
   return {
     ...clonePlain(DEFAULT_EXAM_CALL_FORM),
     tipoPeriodo: clean(seed.examType).toLowerCase() === 'special' ? 'ESPECIAL' : 'REGULAR',
     cantidadLlamados: Number(seed.regularCallRanges?.callCount) === 2 ? 2 : 1,
-    fechaInicio: clean(seed.regularCallRanges?.first?.start ?? seed.fechaInicio) || DEFAULT_EXAM_CALL_FORM.fechaInicio,
-    fechaFin: clean(seed.regularCallRanges?.first?.end ?? seed.fechaFin) || DEFAULT_EXAM_CALL_FORM.fechaFin,
+    fechaInicio: clean(seed.regularCallRanges?.first?.start ?? seed.fechaInicio) || (requireExplicitDates ? '' : DEFAULT_EXAM_CALL_FORM.fechaInicio),
+    fechaFin: clean(seed.regularCallRanges?.first?.end ?? seed.fechaFin) || (requireExplicitDates ? '' : DEFAULT_EXAM_CALL_FORM.fechaFin),
     fechaInicioSegundoLlamado: clean(seed.regularCallRanges?.second?.start),
     fechaFinSegundoLlamado: clean(seed.regularCallRanges?.second?.end),
   }
@@ -468,6 +471,28 @@ export function buildDataWarnings({ docentes = [], materias = [], draftResult = 
   if (blockingFinalAlerts > 0) warnings.push(`Hay ${blockingFinalAlerts} alertas finales bloqueantes.`)
 
   return warnings
+}
+
+// The relational preview fails closed and reports raw issues per subject.
+// The operational workflow retains its existing incremental draft behavior.
+export function runRelationalPreviewDraftStep({ data, examCallConfig, generatedAt }) {
+  const diagnosis = buildFeasibilityDiagnosis({
+    ...data,
+    materias: data.materias.filter((materia) => materiaAlcanzadaPorConfig(materia, examCallConfig).included),
+    config: examCallConfig,
+  })
+  if (!diagnosis.canGenerate) return { errors: diagnosis.errors }
+  const result = runDraftScheduleStep({ ...data, examCallConfig, generatedAt })
+  const teachers = new Map(data.docentes.map((teacher) => [teacher.id, teacher]))
+  const availabilityErrors = result.draftResult.draftSchedule.flatMap((mesa) => {
+    const teacher = teachers.get(mesa.titularId)
+    return teacher && teacherIsAvailableOnDate(teacher, mesa.fecha) ? [] : [{
+      code: 'PREVIEW_TITULAR_NO_DISPONIBLE',
+      entityId: mesa.materiaId,
+      message: `${mesa.materiaMesa}: el titular no tiene disponibilidad para ${mesa.fecha || 'el periodo elegido'}.`,
+    }]
+  })
+  return { ...result, errors: [...result.draftResult.errors, ...availabilityErrors] }
 }
 
 export function buildUnresolvedTitularRows(materias = [], draftResult = null) {

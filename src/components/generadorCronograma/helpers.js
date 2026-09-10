@@ -24,9 +24,11 @@ export function getPersistenceHeading({
   isLoadingInstitutions,
   isRemoteSession,
   useRemoteWorkspace,
+  workspaceSource,
 }) {
   if (isLoadingInstitutions) return 'Inicializando'
   if (!isSupabaseConfigured) return 'Config pendiente'
+  if (workspaceSource === 'academic-relational-schema') return 'Schema relacional'
   if (useRemoteWorkspace) return 'Supabase seguro'
   if (!isRemoteSession) return 'Demo local'
   return 'Config pendiente'
@@ -40,6 +42,7 @@ export function getPersistenceMessage({
   lastSyncedAt,
   syncStatus,
   useRemoteWorkspace,
+  workspaceSource,
 }) {
   if (isLoadingInstitutions) {
     return 'Estamos cargando el contexto institucional antes de recuperar el workspace.'
@@ -66,6 +69,10 @@ export function getPersistenceMessage({
   }
 
   if (syncStatus === 'read-only') {
+    if (workspaceSource === 'academic-relational-schema') {
+      return 'Datos leidos desde careers, subjects, teacher_records y student_records. Escritura de padrones pendiente de conectar al schema relacional.'
+    }
+
     return 'Tu rol institucional es de solo lectura. Pide rol editor, admin u owner para guardar cambios.'
   }
 

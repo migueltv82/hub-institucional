@@ -105,6 +105,24 @@ describe('derivedState', () => {
     })
   })
 
+  it('nombra como relacional la fuente de horarios cuando el workspace viene del schema nuevo', () => {
+    const readiness = getTeacherSourceReadiness({
+      workspaceSource: 'academic-relational-schema',
+      docentes: [],
+      disponibilidadDocente: [],
+      cargaHorariaDocente: [],
+      horariosDocentes: [{ profesor: 'Ana Diaz', carrera: 'Profesorado', materia: 'ING1' }],
+    })
+
+    expect(readiness).toMatchObject({
+      source: 'relational-schedules',
+      hasStructuredTeacherSource: false,
+      hasLegacyTeacherScheduleSource: true,
+      hasValidTeacherSource: true,
+      message: 'Fuente docente relacional activa: horarios de cursada.',
+    })
+  })
+
   it('readiness bloquea si no hay ninguna fuente docente', () => {
     const viewState = getCronogramaViewState({
       cronograma: [],

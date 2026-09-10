@@ -254,6 +254,32 @@ describe('resolveDocenteMateriaAssignment', () => {
     })
   })
 
+  it('infiere titular en practica profesional multidocente aunque no haya rol explicito', () => {
+    const practicePlan = plan({
+      materia_codigo: 'PRA1',
+      materia_nombre: 'Practica Profesional I',
+    })
+    const result = resolve({
+      plan: practicePlan,
+      assignments: [
+        assignment({ materia_codigo: 'PRA1', materia_nombre: 'Practica Profesional I', docente: 'Docente A', rol_en_materia: '' }),
+        assignment({ materia_codigo: 'PRA1', materia_nombre: 'Practica Profesional I', docente: 'Docente B', rol_en_materia: '' }),
+      ],
+      teacherNameToId: {
+        'docente a': 'doc-a',
+        'docente b': 'doc-b',
+      },
+    })
+
+    expect(isProfessionalPracticeSubject(practicePlan)).toBe(true)
+    expect(result).toMatchObject({
+      status: DOCENTE_MATERIA_RESOLUTION_STATUS.TITULAR_INFERIDO,
+      titularId: 'doc-a',
+      source: 'inferido_practica_profesional_cotitular',
+      match: 'practica_profesional_multidocente',
+    })
+  })
+
   it('no trata practicas discursivas iii/iv como practica profesional multidocente', () => {
     const discursivePlan = plan({
       materia_codigo: 'DIS3',

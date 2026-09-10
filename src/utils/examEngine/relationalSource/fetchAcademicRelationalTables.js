@@ -17,19 +17,28 @@ const TABLES = [
   'teacher_exam_date_exclusions',
 ]
 
-async function fetchTable(supabase, table, institutionId) {
-  let query = supabase.from(table).select('*').eq('institution_id', institutionId)
-  if (table === 'subject_prerequisites') query = query.eq('status', 'active')
+const PAGE_SIZE = 500
 
-  const { data, error } = await query
-  if (error) throw new Error(`${table}: ${error.message}`)
-  return { table, rows: Array.isArray(data) ? data : [] }
+async function fetchTable(supabase, table, institutionId, signal) {
+  const rows = []
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    signal?.throwIfAborted()
+    let query = supabase.from(table).select('*').eq('institution_id', institutionId)
+      .order('id').range(offset, offset + PAGE_SIZE - 1)
+    if (table === 'subject_prerequisites') query = query.eq('status', 'active')
+    if (signal) query = query.abortSignal(signal)
+    const { data, error } = await query
+    if (error) throw new Error(`${table}: ${error.message}`)
+    const page = Array.isArray(data) ? data : []
+    rows.push(...page)
+    if (page.length < PAGE_SIZE) return { table, rows }
+  }
 }
 
-export async function fetchAcademicRelationalTables({ supabase, institutionId }) {
+export async function fetchAcademicRelationalTables({ supabase, institutionId, signal }) {
   if (!supabase) throw new Error('Falta el cliente Supabase.')
   if (!institutionId) throw new Error('Falta institutionId.')
 
-  const results = await Promise.all(TABLES.map((table) => fetchTable(supabase, table, institutionId)))
+  const results = await Promise.all(TABLES.map((table) => fetchTable(supabase, table, institutionId, signal)))
   return Object.fromEntries(results.map(({ table, rows }) => [table, rows]))
 }

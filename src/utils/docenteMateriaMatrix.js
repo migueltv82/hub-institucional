@@ -1,3 +1,5 @@
+import { isProfessionalPracticeSubject } from './examEngine/comparison/resolveDocenteMateriaAssignment.js'
+
 const TRIBUNAL_ROLES = {
   TITULAR: 'TITULAR',
   VOCAL_AFIN: 'VOCAL_AFIN',
@@ -95,6 +97,34 @@ function buildRowsBySubject(docenteMateria = []) {
   }, new Map())
 }
 
+function buildAutomaticTitularRowsFromSchedules(horariosDocentes = []) {
+  const groups = horariosDocentes.reduce((map, row, index) => {
+    const subjectKey = subjectKeys(row)[0] || compactKey(getSubjectName(row))
+    const teacherKey = getTeacherKey(row)
+    if (!subjectKey || !teacherKey) return map
+
+    const group = map.get(subjectKey) ?? { row, teachers: new Map() }
+    if (!group.teachers.has(teacherKey)) {
+      group.teachers.set(teacherKey, {
+        index,
+        row: {
+          ...row,
+          id: row.id ?? `titular-horario-${index}`,
+          rol_en_materia: 'TITULAR',
+          source: 'course_schedules',
+        },
+      })
+    }
+    map.set(subjectKey, group)
+    return map
+  }, new Map())
+
+  return [...groups.values()].flatMap(({ row, teachers }) => {
+    if (teachers.size > 1 && !isProfessionalPracticeSubject(row)) return []
+    return [...teachers.values()].map(({ row: teacherRow }) => teacherRow)
+  })
+}
+
 function getRowsForSubject(map, subject = {}) {
   const collected = subjectKeys(subject).flatMap((key) => map.get(key) ?? [])
   return uniqueBy(collected, (row) => `${row.docenteKey}::${row.rolEnMateria}`)
@@ -107,8 +137,16 @@ function getSubjectStatus({ titulares, vocales }) {
   return 'COMPLETA'
 }
 
-export function buildDocenteMateriaTribunalDiagnosis({ planesEstudio = [], docenteMateria = [] } = {}) {
-  const rowsBySubject = buildRowsBySubject(docenteMateria)
+export function buildDocenteMateriaTribunalDiagnosis({
+  planesEstudio = [],
+  docenteMateria = [],
+  horariosDocentes = [],
+} = {}) {
+  const automaticTitularRows = buildAutomaticTitularRowsFromSchedules(horariosDocentes)
+  const rowsBySubject = buildRowsBySubject([
+    ...docenteMateria,
+    ...automaticTitularRows,
+  ])
   const subjects = planesEstudio.length ? planesEstudio : docenteMateria
 
   const subjectsDiagnosis = subjects.map((subject) => {
@@ -157,6 +195,7 @@ export function buildDocenteMateriaTribunalDiagnosis({ planesEstudio = [], docen
     vocalesInsuficientes: subjectsDiagnosis.filter((subject) => subject.status === 'VOCALES_INSUFICIENTES').length,
     sinTitularYVocales: subjectsDiagnosis.filter((subject) => subject.status === 'SIN_TITULAR_Y_VOCALES').length,
     relacionesCargadas: docenteMateria.length,
+    titularesAutomaticosDesdeHorarios: automaticTitularRows.length,
   }
 
   return {

@@ -11,6 +11,7 @@ import { mapAcademicRelationalRowsToSnapshot } from './mapAcademicRelationalRows
 export async function buildExamEngineSnapshotFromAcademicSchema({
   supabase,
   institutionId,
+  signal,
   fechaInicio,
   fechaFin,
   examType = 'regular',
@@ -18,7 +19,7 @@ export async function buildExamEngineSnapshotFromAcademicSchema({
   regularCallRanges = null,
   selectedSpecialSubjectKeys = [],
 } = {}) {
-  const tables = await fetchAcademicRelationalTables({ supabase, institutionId })
+  const tables = await fetchAcademicRelationalTables({ supabase, institutionId, signal })
   const { snapshot, counts } = mapAcademicRelationalRowsToSnapshot(tables)
 
   return {

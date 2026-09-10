@@ -13,6 +13,10 @@ create table if not exists public.workspace_snapshots (
   primary key (institution_id, workspace_key)
 );
 
+create index if not exists idx_workspace_snapshots_owner_user_id
+  on public.workspace_snapshots (owner_user_id)
+  where owner_user_id is not null;
+
 alter table public.workspace_snapshots enable row level security;
 
 drop policy if exists "workspace_snapshots members read" on public.workspace_snapshots;
@@ -37,3 +41,5 @@ for update
 to authenticated
 using (public.is_super_admin() or public.is_member_of_institution(institution_id, array['owner', 'admin', 'editor']))
 with check (public.is_super_admin() or public.is_member_of_institution(institution_id, array['owner', 'admin', 'editor']));
+
+grant select, insert, update on public.workspace_snapshots to authenticated;

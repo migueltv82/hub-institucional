@@ -9,6 +9,49 @@ vi.mock('../lib/supabase.js', () => ({
 
 const LOCAL_SUPER_ADMIN_KEY = 'mesaflow.superadmin.store'
 
+function createFakeRelationalClient(store, { errorTable } = {}) {
+  const calls = []
+
+  return {
+    calls,
+    from(table) {
+      const query = {
+        filters: [],
+        from: 0,
+        to: 499,
+        select(columns) {
+          calls.push({ table, columns })
+          return this
+        },
+        eq(column, value) {
+          this.filters.push({ column, value })
+          return this
+        },
+        order() {
+          return this
+        },
+        range(from, to) {
+          this.from = from
+          this.to = to
+          return this
+        },
+        then(resolve) {
+          if (errorTable === table) {
+            return resolve({ data: null, error: { message: 'tabla no disponible' } })
+          }
+
+          const rows = (store[table] ?? []).filter((row) => (
+            this.filters.every((filter) => row[filter.column] === filter.value)
+          ))
+
+          return resolve({ data: rows.slice(this.from, this.to + 1), error: null })
+        },
+      }
+      return query
+    },
+  }
+}
+
 describe('superAdminDashboard service', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -224,5 +267,101 @@ describe('superAdminDashboard service', () => {
         phone: '3815550000',
       }),
     ])
+  })
+
+  it('prioriza student_records relacional para el directorio remoto de alumnos', async () => {
+    const client = createFakeRelationalClient({
+      careers: [{ id: 'career-1', institution_id: 'inst-1', name: 'Profesorado de Ingles' }],
+      student_records: [{
+        id: 'student-1',
+        institution_id: 'inst-1',
+        external_code: 'A-001',
+        first_name: 'Ana',
+        last_name: 'Perez',
+        national_id: '30111222',
+        email: 'ana@example.com',
+        phone: '3815550000',
+        status: 'active',
+      }],
+      student_career_plans: [{
+        id: 'plan-1',
+        institution_id: 'inst-1',
+        student_id: 'student-1',
+        career_id: 'career-1',
+        current_year: 2,
+        status: 'active',
+      }],
+    })
+
+    const directory = await fetchInstitutionRosterDirectory({
+      institutionId: 'inst-1',
+      audience: 'students',
+      useRemote: true,
+      client,
+    })
+
+    expect(directory).toMatchObject({
+      source: 'academic-relational-schema',
+      total: 1,
+    })
+    expect(directory.items).toEqual([
+      expect.objectContaining({
+        full_name: 'Ana Perez',
+        email: 'ana@example.com',
+        career: 'Profesorado de Ingles',
+        academic_year: '2',
+        dni: '30111222',
+        legajo: 'A-001',
+      }),
+    ])
+    expect(client.calls.map((call) => call.table)).not.toContain('workspace_snapshots')
+  })
+
+  it('prioriza teacher_records relacional y deriva carreras desde titularidades', async () => {
+    const client = createFakeRelationalClient({
+      careers: [{ id: 'career-1', institution_id: 'inst-1', name: 'Profesorado de Ingles' }],
+      study_plans: [{ id: 'plan-1', institution_id: 'inst-1', career_id: 'career-1' }],
+      study_plan_subjects: [{ id: 'subject-1', institution_id: 'inst-1', plan_id: 'plan-1' }],
+      teacher_records: [{
+        id: 'teacher-1',
+        institution_id: 'inst-1',
+        first_name: 'Carla',
+        last_name: 'Ruiz',
+        national_id: '33444555',
+        email: 'carla@example.com',
+        phone: '3815551111',
+        status: 'active',
+      }],
+      teacher_subject_assignments: [{
+        id: 'assignment-1',
+        institution_id: 'inst-1',
+        teacher_id: 'teacher-1',
+        plan_subject_id: 'subject-1',
+        role: 'titular',
+        status: 'active',
+      }],
+    })
+
+    const directory = await fetchInstitutionRosterDirectory({
+      institutionId: 'inst-1',
+      audience: 'teachers',
+      useRemote: true,
+      client,
+    })
+
+    expect(directory).toMatchObject({
+      source: 'academic-relational-schema',
+      total: 1,
+    })
+    expect(directory.items).toEqual([
+      expect.objectContaining({
+        full_name: 'Carla Ruiz',
+        email: 'carla@example.com',
+        dni: '33444555',
+        careers_label: 'Profesorado de Ingles',
+        phone: '3815551111',
+      }),
+    ])
+    expect(client.calls.map((call) => call.table)).not.toContain('workspace_snapshots')
   })
 })

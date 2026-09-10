@@ -264,6 +264,7 @@ function CombinedMesaControls({
 }
 
 function InteractiveVocalSelectionPanel({
+  confirmLabel = 'Guardar cambios y preparar envio',
   isBusy = false,
   onConfirm,
   session,
@@ -357,7 +358,7 @@ function InteractiveVocalSelectionPanel({
               type="button"
             >
               <CheckCircle2 className="h-4 w-4" />
-              Guardar cambios y preparar envio
+              {confirmLabel}
             </button>
           </div>
         </div>

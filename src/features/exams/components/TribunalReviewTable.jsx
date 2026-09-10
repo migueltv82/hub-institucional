@@ -14,6 +14,7 @@ function getCareer(row = {}) {
 }
 
 function TribunalReviewTable({
+  previewOnly = false,
   onExport,
   onExportPdf,
   onPublishForReview,
@@ -31,35 +32,34 @@ function TribunalReviewTable({
     <section className="soft-card">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="soft-title">Envio a docentes</p>
+          <p className="soft-title">{previewOnly ? 'Resultado de la previsualizacion' : 'Envio a docentes'}</p>
           <h3 className="mt-2 text-2xl font-extrabold text-slate-950">
             Precronograma completo
           </h3>
           <p className="mt-2 text-sm font-bold text-slate-600">
-            Incluye fechas, agrupaciones, titular y vocales. Si un docente solicita un cambio,
-            vuelve a la mesa correspondiente, editala y guarda nuevamente.
+            {previewOnly ? 'Borrador con fechas, agrupaciones, titular y vocales. Podes volver al armado para seguir probando.' : 'Incluye fechas, agrupaciones, titular y vocales. Si un docente solicita un cambio, vuelve a la mesa correspondiente, editala y guarda nuevamente.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-primary" disabled={!rows.length} onClick={onPublishForReview} type="button">
+          {!previewOnly && <button className="btn-primary" disabled={!rows.length} onClick={onPublishForReview} type="button">
             <Send className="h-4 w-4" />
             Publicar para revision docente
-          </button>
-          <button className="btn-secondary" disabled={!rows.length} onClick={onExportPdf} type="button">
+          </button>}
+          {!previewOnly && <button className="btn-secondary" disabled={!rows.length} onClick={onExportPdf} type="button">
             <FileText className="h-4 w-4" />
             PDF para docentes
-          </button>
+          </button>}
           <button className="btn-secondary" disabled={!rows.length} onClick={onExport} type="button">
             <Download className="h-4 w-4" />
-            Planilla editable
+            {previewOnly ? 'Descargar borrador' : 'Planilla editable'}
           </button>
         </div>
       </div>
-      <p className="mt-3 rounded-md bg-sky-50 px-3 py-2 text-xs font-bold text-sky-900">
+      {!previewOnly && <p className="mt-3 rounded-md bg-sky-50 px-3 py-2 text-xs font-bold text-sky-900">
         &quot;Publicar para revision docente&quot; solo llega a los docentes que ya tienen cuenta de
         portal creada con el mismo email cargado en la planilla de docentes. Al resto seguí
         enviándoles el PDF por fuera.
-      </p>
+      </p>}
 
       {rows.length ? (
         <div className="my-4 flex gap-2 overflow-x-auto pb-1" aria-label="Carreras del precronograma completo">
@@ -77,8 +77,9 @@ function TribunalReviewTable({
       ) : null}
 
       <div className="mt-4 overflow-hidden rounded-md border border-slate-200">
-        <div className="max-h-[420px] overflow-auto">
-          <table className="min-w-full divide-y divide-slate-200 bg-white">
+        {previewOnly && <p className="bg-slate-50 px-3 py-2 text-xs text-slate-600 md:hidden">Desplaza la tabla hacia los lados para ver todo el tribunal.</p>}
+        <div className="max-h-[420px] overflow-auto" tabIndex={previewOnly ? 0 : undefined} role={previewOnly ? 'region' : undefined} aria-label={previewOnly ? 'Resultado de mesas, tabla desplazable' : undefined}>
+          <table className="min-w-full divide-y divide-slate-200 bg-white" style={previewOnly ? { minWidth: '60rem', overflowWrap: 'normal' } : undefined}>
             <thead className="sticky top-0 bg-slate-50">
               <tr>
                 {['Fecha', 'Carrera', 'Anio', 'Materia/Mesa', 'Titular', 'Vocal 1', 'Vocal 2', 'Estado', 'Alertas'].map((label) => (

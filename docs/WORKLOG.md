@@ -283,6 +283,17 @@ Registro de trabajo del producto para estimar costo, esfuerzo y velocidad real.
   - pendiente, decision de Miguel no de codigo: asignar docente a las 12 materias sin titular (las va a cargar el desde el front)
   - **segundo hallazgo de seguridad, corregido**: al escribir el doc de handoff (`docs/codex-continuar-motor-relacional-fase-2.md`), un `git add` de ese unico archivo volvio a subir los 17 archivos con datos personales (commit `592864a`) -- las 2 lineas de `.gitignore` que los excluian habian desaparecido sin edicion deliberada de por medio (causa exacta no determinada). Corregido de nuevo en `0786e6d`: lineas restauradas, archivos sacados del tracking otra vez, verificado con `git status` que quedan ocultos. Anotado en el doc de handoff como alerta para no repetirlo: chequear `.gitignore` antes de cualquier commit, no asumir que sigue como se dejo
 
+### 2026-09-05
+
+- Trabajo principal: Fase 3, previsualizacion relacional de mesas en una ruta independiente para varias instituciones, habilitable desde Superadmin.
+- Se reutiliza `app_settings` para la opcion por institucion (publica, sin datos personales; escritura protegida por la RLS de superadmin existente), sin cambios SQL.
+- Lectura mediante el constructor relacional existente, paginada y cancelable; estado por usuario/institucion. El preview no monta el contenedor con autoguardado ni permite publicar, oficializar o reiniciar datos remotos.
+- Fechas explicitas, diagnostico por alcance y detalle de materias faltantes. Corregida perdida de `docentes[].bloqueos` en el adaptador, con pruebas de titular y vocales; se rechaza el fallback a fechas no disponibles en preview.
+- Documentacion de uso y limites: `docs/PREVISUALIZACION_MESAS_RELACIONAL.md`. Verificacion con tests y Playwright en escritorio/mobile con datos ficticios; sin acceso al proyecto remoto ni despliegue en esta sesion.
+- Verificacion final: `npm.cmd run check` en verde, 268 archivos y 2120 tests; lint, build y auditorias aprobados. Playwright 1440/390 px completo (habilitar, generar, autocompletar, resultado y reinicio), cero escrituras academicas; corregida tabla comprimida en movil y verificada la captura final. `.gitignore` conserva las dos exclusiones de planillas privadas.
+- Revision posterior del prompt de Fase 1: el lector relacional ya estaba implementado, pero el script manual conservaba el modo historico `--admin`. Se removio esa via para que `scripts/examEngineAudit/previewRegularExamPlanFromAcademicSchema.mjs` use solo publishable/anon key, respete RLS y bloquee cualquier variable o valor `service_role`, alineado con el contrato original de solo lectura.
+- Auditoria A-J de seguridad Supabase armada como artefactos revisables, sin ejecutar SQL: reporte en `docs/SECURITY_AUDIT_AJ_2026-09-05.md`, diagnosticos read-only y SQL separado en `supabase/security/` para bajo riesgo, RLS/permisos y constraints de revision manual. Se incluyo `teacher_exam_date_exclusions` en la lista auditada.
+
 ## Como usar este archivo
 
 - Valor del producto:

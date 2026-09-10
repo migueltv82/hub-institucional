@@ -152,7 +152,7 @@ create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
 begin
   insert into public.profiles (
@@ -193,6 +193,8 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
 
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
 -- ============================================================
 -- Funciones helper de autorizacion (usadas por RLS)
 -- ============================================================
@@ -202,12 +204,12 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select exists (
     select 1
     from public.profiles profile
-    where profile.user_id = auth.uid()
+    where profile.user_id = (select auth.uid())
       and profile.is_global_admin = true
       and profile.is_blocked = false
   );
@@ -221,14 +223,14 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select exists (
     select 1
     from public.memberships membership
     join public.profiles profile on profile.user_id = membership.user_id
     where membership.institution_id = target_institution_id
-      and membership.user_id = auth.uid()
+      and membership.user_id = (select auth.uid())
       and profile.is_blocked = false
       and (
         allowed_roles is null
@@ -255,7 +257,7 @@ returns table (
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
 declare
   setting_row public.app_settings%rowtype;
@@ -292,7 +294,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select
     institutions.id,
@@ -307,6 +309,7 @@ as $$
   order by institutions.name asc;
 $$;
 
+revoke execute on function public.list_active_login_institutions() from public;
 grant execute on function public.list_active_login_institutions() to anon, authenticated;
 
 -- ============================================================
@@ -328,7 +331,7 @@ create policy "profiles can read themselves"
 on public.profiles
 for select
 to authenticated
-using (user_id = auth.uid());
+using (user_id = (select auth.uid()));
 
 create policy "super admins can read profiles"
 on public.profiles
@@ -377,7 +380,7 @@ for select
 to authenticated
 using (
   public.is_super_admin()
-  or user_id = auth.uid()
+  or user_id = (select auth.uid())
   or public.is_member_of_institution(institution_id, array['owner', 'admin'])
 );
 
@@ -412,7 +415,9 @@ to authenticated
 using (public.is_super_admin())
 with check (public.is_super_admin());
 
+revoke delete, truncate, references, trigger on public.app_settings from authenticated;
 grant select on public.app_settings to anon, authenticated;
+grant insert, update on public.app_settings to authenticated;
 
 -- ============================================================
 -- Configuracion inicial

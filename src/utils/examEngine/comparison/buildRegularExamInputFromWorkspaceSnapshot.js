@@ -8,6 +8,7 @@ import {
 import {
   DOCENTE_MATERIA_RESOLUTION_STATUS,
   buildDocenteMateriaAssignmentSummary,
+  isProfessionalPracticeSubject,
   resolveDocenteMateriaAssignment,
 } from './resolveDocenteMateriaAssignment.js'
 import { buildTeacherExamSourceContext } from '../teacherExamSourceContext.js'
@@ -691,6 +692,7 @@ function upsertTeacher(registry, teacher = {}, { source = 'docentes', index = 0 
     diasDisponibles: days,
     turnosDisponibles: turnos,
     availability,
+    bloqueos: uniqueValues([...asArray(existing.bloqueos), ...asArray(teacher.bloqueos)]),
     horasCatedraDeclaradas: existing.horasCatedraDeclaradas ??
       (explicitTeachingHours.valid ? explicitTeachingHours.value : null),
   }
@@ -865,12 +867,30 @@ function firstFromSet(values) {
   return values?.values().next().value ?? ''
 }
 
+function resolveScheduleTitularCandidates({ candidates, plan, match }) {
+  if (!candidates?.size) return null
+
+  if (candidates.size === 1) {
+    return { titularId: firstFromSet(candidates), source: 'horariosDocentes', match }
+  }
+
+  if (isProfessionalPracticeSubject(plan)) {
+    return {
+      titularId: firstFromSet(candidates),
+      source: 'horariosDocentes',
+      match: `${match}:cotitular-practica-profesional`,
+      cotitularIds: [...candidates],
+    }
+  }
+
+  return null
+}
+
 function resolveTitularForPlan(plan = {}, titularIndex) {
   for (const key of subjectMatchKeys(plan)) {
     const candidates = titularIndex.byCareerAndSubject.get(key)
-    if (candidates?.size === 1) {
-      return { titularId: firstFromSet(candidates), source: 'horariosDocentes', match: 'career+subject' }
-    }
+    const resolution = resolveScheduleTitularCandidates({ candidates, plan, match: 'career+subject' })
+    if (resolution) return resolution
   }
 
   const planAliases = new Set(subjectAliasKeys(plan))
@@ -878,13 +898,12 @@ function resolveTitularForPlan(plan = {}, titularIndex) {
     .filter((entry) => careersAreCompatible(subjectCareer(plan), entry.carrera))
     .filter((entry) => entry.subjectAliases.some((alias) => planAliases.has(alias)))
     .map((entry) => entry.titularId))
-  if (compatibleCandidates.size === 1) {
-    return {
-      titularId: firstFromSet(compatibleCandidates),
-      source: 'horariosDocentes',
-      match: 'compatible-career+subject',
-    }
-  }
+  const compatibleResolution = resolveScheduleTitularCandidates({
+    candidates: compatibleCandidates,
+    plan,
+    match: 'compatible-career+subject',
+  })
+  if (compatibleResolution) return compatibleResolution
 
   const planSubjectValues = subjectAliasValues(plan)
   const compatibleNameCandidates = new Set(titularIndex.entries
@@ -893,19 +912,17 @@ function resolveTitularForPlan(plan = {}, titularIndex) {
       planSubjectValues.some((planValue) => subjectNamesAreCompatible(planValue, scheduleValue))
     )))
     .map((entry) => entry.titularId))
-  if (compatibleNameCandidates.size === 1) {
-    return {
-      titularId: firstFromSet(compatibleNameCandidates),
-      source: 'horariosDocentes',
-      match: 'compatible-career+subject-name',
-    }
-  }
+  const compatibleNameResolution = resolveScheduleTitularCandidates({
+    candidates: compatibleNameCandidates,
+    plan,
+    match: 'compatible-career+subject-name',
+  })
+  if (compatibleNameResolution) return compatibleNameResolution
 
   for (const key of subjectAliasKeys(plan)) {
     const candidates = titularIndex.bySubjectOnly.get(key)
-    if (candidates?.size === 1) {
-      return { titularId: firstFromSet(candidates), source: 'horariosDocentes', match: 'unique-subject' }
-    }
+    const resolution = resolveScheduleTitularCandidates({ candidates, plan, match: 'unique-subject' })
+    if (resolution) return resolution
   }
 
   return { titularId: '', source: '', match: '' }
@@ -928,6 +945,7 @@ function buildSubjects({
   cargaHorariaDocente,
   teacherNameToId,
   referenceDate,
+  preferScheduleTitular = false,
 }) {
   const titularIndex = buildTitularIndex(horariosDocentes, teacherNameToId)
   const normalizedAssignments = buildNormalizedDocenteMateriaAssignments({
@@ -958,13 +976,15 @@ function buildSubjects({
           Boolean(scheduleTitular.titularId)
         )
       )
-    const titular = !shouldUseFallback
-      ? {
-          titularId: docenteMateriaResolution.titularId,
-          source: docenteMateriaResolution.source,
-          match: docenteMateriaResolution.match,
-        }
-      : scheduleTitular
+    const titular = preferScheduleTitular && scheduleTitular.titularId
+      ? scheduleTitular
+      : !shouldUseFallback
+        ? {
+            titularId: docenteMateriaResolution.titularId,
+            source: docenteMateriaResolution.source,
+            match: docenteMateriaResolution.match,
+          }
+        : scheduleTitular
     const allowsMesa = planAllowsMesa(plan) && docenteMateriaResolution?.requiresMesa !== false
     const titularExiste = Boolean(lookupTeacherId(teacherNameToId, titular.titularId))
     const requiereMesa = allowsMesa
@@ -1367,6 +1387,7 @@ export function buildRegularExamInputFromWorkspaceSnapshot(snapshot = {}) {
     cargaHorariaDocente: cargaHorariaDocenteForInput,
     teacherNameToId,
     referenceDate: safeSnapshot.fechaInicio,
+    preferScheduleTitular: safeSnapshot.workspaceSource === 'academic-relational-schema',
   })
   const materias = filterMateriasForGenerationScope(allMaterias, safeSnapshot)
   const docentes = enrichTeacherAffinitiesFromSubjects(adaptedDocentes, allMaterias)

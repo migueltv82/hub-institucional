@@ -582,6 +582,59 @@ describe('buildRegularExamInputFromWorkspaceSnapshot', () => {
     })
   })
 
+  it('en fuente relacional prioriza como titular al docente que figura en horarios', () => {
+    const input = buildInput({
+      workspaceSource: 'academic-relational-schema',
+      docentes: [
+        {
+          id: 'doc-canonico',
+          nombre: 'Docente Canonico',
+        },
+        {
+          id: 'doc-horario',
+          nombre: 'Docente Horario',
+        },
+      ],
+      docenteMateria: [
+        {
+          carrera: 'Tecnicatura en Gestion',
+          materia_codigo: 'Gestion I',
+          materia_nombre: 'Gestion I',
+          docente: 'Docente Canonico',
+          rol_en_materia: 'TITULAR',
+          estado_asignacion: 'ACTIVO',
+        },
+      ],
+      horariosDocentes: [
+        {
+          profesor: 'Docente Horario',
+          carrera: 'Tecnicatura en Gestion',
+          materia: 'Gestion I',
+          dia: 'Lunes',
+          turno: 'NOCHE',
+        },
+      ],
+      planesEstudio: [
+        {
+          id: 'plan-gestion',
+          carrera: 'Tecnicatura en Gestion',
+          materia: 'Gestion I',
+          nombreMateria: 'Gestion I',
+        },
+      ],
+      fechaInicio: '2026-07-27',
+      fechaFin: '2026-07-31',
+    })
+
+    expect(input.materias[0]).toMatchObject({
+      titularId: 'doc-horario',
+      titularSource: 'horariosDocentes',
+      titularMatch: 'career+subject',
+      requiereMesa: true,
+      requiereMesaSource: 'horariosDocentes',
+    })
+  })
+
   it('recupera desde horarios al unico docente cuando docenteMateria conserva una inferencia anterior', () => {
     const input = buildInput({
       docentes: [
@@ -637,7 +690,7 @@ describe('buildRegularExamInputFromWorkspaceSnapshot', () => {
     })
   })
 
-  it('no elige titular desde horarios cuando hay mas de un docente para la misma materia', () => {
+  it('elige titular desde horarios en practica profesional multidocente', () => {
     const input = buildInput({
       docentes: [
         { id: 'doc-a', nombre: 'Docente A' },
@@ -659,9 +712,34 @@ describe('buildRegularExamInputFromWorkspaceSnapshot', () => {
     })
 
     expect(input.materias[0]).toMatchObject({
+      titularId: 'doc-a',
+      titularSource: 'horariosDocentes',
+      titularMatch: 'career+subject:cotitular-practica-profesional',
+      requiereMesaSource: 'horariosDocentes',
+    })
+  })
+
+  it('no elige titular desde horarios cuando una materia comun tiene mas de un docente', () => {
+    const input = buildInput({
+      docentes: [
+        { id: 'doc-a', nombre: 'Docente A' },
+        { id: 'doc-b', nombre: 'Docente B' },
+      ],
+      horariosDocentes: [
+        { profesor: 'Docente A', carrera: 'Profesorado de Ingles', materia: 'ING2', nombreMateria: 'Lengua Inglesa II', dia: 'Lunes' },
+        { profesor: 'Docente B', carrera: 'Profesorado de Ingles', materia: 'ING2', nombreMateria: 'Lengua Inglesa II', dia: 'Martes' },
+      ],
+      planesEstudio: [
+        { id: 'plan-ing2', carrera: 'Profesorado de Ingles', materia: 'ING2', nombreMateria: 'Lengua Inglesa II' },
+      ],
+      fechaInicio: '2026-07-27',
+      fechaFin: '2026-07-31',
+    })
+
+    expect(input.materias[0]).toMatchObject({
       titularId: '',
-      titularSource: 'requiere_revision',
-      requiereMesaSource: 'requiere_revision',
+      titularSource: '',
+      requiereMesaSource: 'sinHorarioDocente',
     })
   })
 

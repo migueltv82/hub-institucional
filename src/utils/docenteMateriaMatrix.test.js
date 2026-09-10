@@ -76,4 +76,84 @@ describe('buildDocenteMateriaTribunalDiagnosis', () => {
     expect(diagnosis.subjects[0].titulares).toHaveLength(1)
     expect(diagnosis.subjects[0].vocales).toHaveLength(1)
   })
+
+  it('toma automaticamente como titular al docente que figura en horarios', () => {
+    const diagnosis = buildDocenteMateriaTribunalDiagnosis({
+      planesEstudio: [{
+        carrera: 'Profesorado de Ingles',
+        materia: 'ING1',
+        nombre: 'Gramatica I',
+      }],
+      docenteMateria: [],
+      horariosDocentes: [{
+        carrera: 'Profesorado de Ingles',
+        materia: 'ING1',
+        nombreMateria: 'Gramatica I',
+        docente: 'Ana Diaz',
+        docenteId: 'D1',
+      }],
+    })
+
+    expect(diagnosis.summary.sinTitular + diagnosis.summary.sinTitularYVocales).toBe(0)
+    expect(diagnosis.summary.titularesAutomaticosDesdeHorarios).toBe(1)
+    expect(diagnosis.subjects[0].titulares).toEqual([
+      expect.objectContaining({
+        docente: 'Ana Diaz',
+        docenteKey: 'd1',
+        rolEnMateria: 'TITULAR',
+      }),
+    ])
+  })
+
+  it('deduplica bloques de horario del mismo docente para la misma materia', () => {
+    const diagnosis = buildDocenteMateriaTribunalDiagnosis({
+      planesEstudio: [{
+        carrera: 'Profesorado de Ingles',
+        materia: 'ING1',
+        nombre: 'Gramatica I',
+      }],
+      horariosDocentes: [
+        { carrera: 'Profesorado de Ingles', materia: 'ING1', docente: 'Ana Diaz', docenteId: 'D1', dia: 'lunes' },
+        { carrera: 'Profesorado de Ingles', materia: 'ING1', docente: 'Ana Diaz', docenteId: 'D1', dia: 'martes' },
+      ],
+    })
+
+    expect(diagnosis.subjects[0].titulares).toHaveLength(1)
+    expect(diagnosis.summary.titularesAutomaticosDesdeHorarios).toBe(1)
+  })
+
+  it('acepta co-titulares por horario solo en practicas profesionales de profesorados', () => {
+    const diagnosis = buildDocenteMateriaTribunalDiagnosis({
+      planesEstudio: [{
+        carrera: 'Profesorado de Ingles',
+        materia: 'PRA1',
+        nombre: 'Practica Profesional Docente I',
+      }],
+      horariosDocentes: [
+        { carrera: 'Profesorado de Ingles', materia: 'PRA1', nombreMateria: 'Practica Profesional Docente I', docente: 'Ana Diaz', docenteId: 'D1' },
+        { carrera: 'Profesorado de Ingles', materia: 'PRA1', nombreMateria: 'Practica Profesional Docente I', docente: 'Luis Gomez', docenteId: 'D2' },
+      ],
+    })
+
+    expect(diagnosis.subjects[0].titulares).toHaveLength(2)
+    expect(diagnosis.summary.titularesAutomaticosDesdeHorarios).toBe(2)
+  })
+
+  it('no asume co-titularidad por horario en materias comunes', () => {
+    const diagnosis = buildDocenteMateriaTribunalDiagnosis({
+      planesEstudio: [{
+        carrera: 'Profesorado de Ingles',
+        materia: 'ING1',
+        nombre: 'Gramatica I',
+      }],
+      horariosDocentes: [
+        { carrera: 'Profesorado de Ingles', materia: 'ING1', nombreMateria: 'Gramatica I', docente: 'Ana Diaz', docenteId: 'D1' },
+        { carrera: 'Profesorado de Ingles', materia: 'ING1', nombreMateria: 'Gramatica I', docente: 'Luis Gomez', docenteId: 'D2' },
+      ],
+    })
+
+    expect(diagnosis.subjects[0].titulares).toHaveLength(0)
+    expect(diagnosis.subjects[0].status).toBe('SIN_TITULAR_Y_VOCALES')
+    expect(diagnosis.summary.titularesAutomaticosDesdeHorarios).toBe(0)
+  })
 })

@@ -25,6 +25,8 @@ const ALLOWED_DIRECT_WRITE_FILES = new Set([
   'src/services/examTeacherAssignments.js',
   'src/services/legacySyncCommon.js',
   'src/services/rosterRecords.js',
+  // Public feature switch only; app_settings RLS requires a superadmin to write.
+  'src/services/relationalExamPreview.js',
   'src/services/sourceFiles.js',
   'src/services/studentFinancialStatus.js',
   'src/services/subjectEnrollments.js',

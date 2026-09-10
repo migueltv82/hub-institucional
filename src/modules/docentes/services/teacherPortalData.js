@@ -9,9 +9,14 @@ import {
   mapTeacherRecordToSnapshotRow,
 } from '../../../services/rosterRecords.js'
 import { getCareerValues, resolveCareerDisplayName } from '../../../services/careerCatalog.js'
-import { fetchWorkspaceSnapshot } from '../../../services/workspaceSnapshot.js'
+import { createEmptyWorkspaceSnapshot, fetchWorkspaceSnapshot } from '../../../services/workspaceSnapshot.js'
+import {
+  fetchRelationalExamSnapshot,
+  fetchRelationalPreviewSetting,
+} from '../../../services/relationalExamPreview.js'
 
 export const TEACHER_WORKSPACE_KEY = 'main'
+const RELATIONAL_WORKSPACE_SOURCE = 'academic-relational-schema'
 export const LEGACY_TEACHER_ROSTER_WARNING = 'LEGACY_STUDENT_ROSTER_BY_CAREER_YEAR'
 export const LEGACY_TEACHER_ROSTER_WARNING_METADATA = Object.freeze({
   code: LEGACY_TEACHER_ROSTER_WARNING,
@@ -909,12 +914,27 @@ export async function fetchTeacherPortalData({ user, isRemoteSession, isSuperAdm
     })
   }
 
+  const relationalEnabled = Boolean(isRemoteSession) && await fetchRelationalPreviewSetting({
+    institutionId: activeInstitution.id,
+  }).catch(() => false)
+  const snapshotRequest = relationalEnabled
+    ? fetchRelationalExamSnapshot({ institutionId: activeInstitution.id })
+      .then(({ snapshot }) => ({
+        snapshot: {
+          ...createEmptyWorkspaceSnapshot(),
+          ...snapshot,
+          workspaceSource: RELATIONAL_WORKSPACE_SOURCE,
+          cronograma: [],
+        },
+      }))
+    : fetchWorkspaceSnapshot({
+        institutionId: activeInstitution.id,
+        workspaceKey: TEACHER_WORKSPACE_KEY,
+        useRemote: Boolean(isRemoteSession),
+      })
+
   const [{ snapshot }, teacherRecords, studentRecords] = await Promise.all([
-    fetchWorkspaceSnapshot({
-      institutionId: activeInstitution.id,
-      workspaceKey: TEACHER_WORKSPACE_KEY,
-      useRemote: Boolean(isRemoteSession),
-    }),
+    snapshotRequest,
     fetchTeacherRecords({
       institutionId: activeInstitution.id,
       workspaceKey: TEACHER_WORKSPACE_KEY,

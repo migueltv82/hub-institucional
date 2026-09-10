@@ -7,14 +7,31 @@ import {
 } from '../services/institutions.js'
 import {
   clearWorkspaceData,
+  createEmptyWorkspaceSnapshot,
   fetchWorkspaceSnapshot,
   saveWorkspaceSnapshot,
 } from '../services/workspaceSnapshot.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
+import {
+  fetchRelationalExamSnapshot,
+  fetchRelationalPreviewSetting,
+} from '../services/relationalExamPreview.js'
 
 const WORKSPACE_KEY = 'main'
 const WRITABLE_REMOTE_ROLES = new Set(['owner', 'admin', 'editor', 'superadmin'])
 const DEBUG_WORKSPACE_PERSISTENCE = import.meta.env.DEV
+const RELATIONAL_WORKSPACE_SOURCE = 'academic-relational-schema'
+const RELATIONAL_UPLOADED_FILES = {
+  masterWorkbook: 'schema-relacional',
+  docentesWorkbook: 'schema-relacional',
+  alumnosWorkbook: 'schema-relacional',
+  horarios: 'schema-relacional',
+  planes: 'schema-relacional',
+  correlatividades: 'schema-relacional',
+  alumnos: 'schema-relacional',
+  docentes: 'schema-relacional',
+  docenteMateria: 'schema-relacional',
+}
 
 function getSnapshotCounts(snapshotPayload) {
   return {
@@ -41,6 +58,21 @@ function logWorkspacePersistenceDiagnostic(level, event, details = {}) {
   logger(`[workspace-persistence] ${event}`, details)
 }
 
+function buildWorkspaceSnapshotFromRelationalSnapshot(snapshot = {}) {
+  const emptySnapshot = createEmptyWorkspaceSnapshot()
+  return {
+    ...emptySnapshot,
+    ...snapshot,
+    workspaceSource: RELATIONAL_WORKSPACE_SOURCE,
+    uploadedFiles: {
+      ...emptySnapshot.uploadedFiles,
+      ...RELATIONAL_UPLOADED_FILES,
+    },
+    cronograma: [],
+    requiereRegeneracion: false,
+  }
+}
+
 export function useWorkspacePersistence({
   isRemoteSession,
   isSuperAdmin,
@@ -58,6 +90,7 @@ export function useWorkspacePersistence({
   const [isHydrating, setIsHydrating] = useState(true)
   const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'syncing' : 'local-only')
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
+  const [workspaceSource, setWorkspaceSource] = useState('workspace-snapshot')
   const skipAutoSaveRef = useRef(true)
   const dirtySnapshotRef = useRef(false)
   const latestSaveContextRef = useRef(null)
@@ -72,7 +105,8 @@ export function useWorkspacePersistence({
     [activeInstitutionId, institutions],
   )
   const useRemoteWorkspace = Boolean(isRemoteSession && activeInstitutionId)
-  const canWriteRemoteWorkspace = !useRemoteWorkspace || WRITABLE_REMOTE_ROLES.has(activeInstitution?.role)
+  const isRelationalWorkspaceSource = workspaceSource === RELATIONAL_WORKSPACE_SOURCE
+  const canWriteRemoteWorkspace = (!useRemoteWorkspace || WRITABLE_REMOTE_ROLES.has(activeInstitution?.role)) && !isRelationalWorkspaceSource
   const effectiveSyncStatus = (
     activeInstitutionId &&
     !isHydrating &&
@@ -112,6 +146,7 @@ export function useWorkspacePersistence({
       useRemote: useRemoteWorkspace,
     })
     setLastSyncedAt(result.updatedAt)
+    setWorkspaceSource(result.source)
     setSyncStatus(result.source === 'supabase' ? 'saved' : 'local-only')
     return result
   }, [activeInstitutionId, canWriteRemoteWorkspace, ownerEmail, ownerUserId, snapshotPayload, useRemoteWorkspace])
@@ -134,6 +169,7 @@ export function useWorkspacePersistence({
       dirtySnapshotRef.current = false
       skipAutoSaveRef.current = true
       setLastSyncedAt(result.updatedAt)
+      setWorkspaceSource(result.source)
       setSyncStatus(result.source === 'supabase' ? 'saved' : 'local-only')
       return result
     } catch (error) {
@@ -192,6 +228,7 @@ export function useWorkspacePersistence({
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
 
     async function hydrateWorkspace() {
       if (!activeInstitutionId) {
@@ -201,6 +238,7 @@ export function useWorkspacePersistence({
           useRemoteWorkspace,
           workspaceKey: WORKSPACE_KEY,
         })
+        setWorkspaceSource('none')
         setIsHydrating(false)
         return
       }
@@ -209,6 +247,49 @@ export function useWorkspacePersistence({
       setSyncStatus(useRemoteWorkspace ? 'syncing' : 'local-only')
 
       try {
+        if (useRemoteWorkspace && isSupabaseConfigured) {
+          try {
+            const relationalEnabled = await fetchRelationalPreviewSetting({
+              institutionId: activeInstitutionId,
+              signal: controller.signal,
+            })
+
+            if (relationalEnabled) {
+              const { snapshot, diagnostics } = await fetchRelationalExamSnapshot({
+                institutionId: activeInstitutionId,
+                signal: controller.signal,
+              })
+
+              if (cancelled) return
+
+              const relationalSnapshot = buildWorkspaceSnapshotFromRelationalSnapshot(snapshot)
+              logWorkspacePersistenceDiagnostic('info', 'hydrate:relational-ok', {
+                activeInstitutionId,
+                mode: RELATIONAL_WORKSPACE_SOURCE,
+                useRemoteWorkspace,
+                workspaceKey: WORKSPACE_KEY,
+                counts: diagnostics?.counts ?? getSnapshotCounts(relationalSnapshot),
+              })
+              onHydrate(relationalSnapshot)
+              dirtySnapshotRef.current = false
+              setLastSyncedAt(null)
+              setWorkspaceSource(RELATIONAL_WORKSPACE_SOURCE)
+              setSyncStatus('read-only')
+              skipAutoSaveRef.current = true
+              return
+            }
+          } catch (error) {
+            if (cancelled) return
+            logWorkspacePersistenceDiagnostic('warn', 'hydrate:relational-fallback', {
+              activeInstitutionId,
+              mode: RELATIONAL_WORKSPACE_SOURCE,
+              useRemoteWorkspace,
+              workspaceKey: WORKSPACE_KEY,
+              errorMessage: error.message,
+            })
+          }
+        }
+
         const { snapshot, updatedAt, source } = await fetchWorkspaceSnapshot({
           institutionId: activeInstitutionId,
           workspaceKey: WORKSPACE_KEY,
@@ -229,6 +310,7 @@ export function useWorkspacePersistence({
         onHydrate(snapshot)
         dirtySnapshotRef.current = useRemoteWorkspace && source === 'local'
         setLastSyncedAt(updatedAt)
+        setWorkspaceSource(source)
         setSyncStatus(source === 'supabase' ? 'saved' : 'local-only')
         // Si se recupero un respaldo local mas nuevo, no se omite el siguiente
         // autosave: debe subir esa copia pendiente a Supabase.
@@ -255,6 +337,7 @@ export function useWorkspacePersistence({
 
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [activeInstitutionId, onHydrate, useRemoteWorkspace])
 
@@ -326,6 +409,7 @@ export function useWorkspacePersistence({
           counts: getSnapshotCounts(snapshotPayload),
         })
         setLastSyncedAt(updatedAt)
+        setWorkspaceSource(source)
         setSyncStatus(source === 'supabase' ? 'saved' : 'local-only')
       } catch (error) {
         if (cancelled) return
@@ -408,5 +492,7 @@ export function useWorkspacePersistence({
     useRemoteWorkspace,
     canWriteRemoteWorkspace,
     workspaceKey: WORKSPACE_KEY,
+    workspaceSource,
+    isRelationalWorkspaceSource,
   }
 }

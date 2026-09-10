@@ -7,6 +7,7 @@ function normalizeStudentForAccess(student) {
     apellido: student.apellido,
     full_name: student.full_name,
     carrera: student.carrera,
+    anio: student.anio,
     dni: student.dni,
     legajo: student.legajo,
   }

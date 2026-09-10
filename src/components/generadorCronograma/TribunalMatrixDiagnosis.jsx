@@ -14,8 +14,8 @@ function getStatusClass(status) {
   return 'border-amber-200 bg-amber-50 text-amber-800'
 }
 
-function TribunalMatrixDiagnosis({ docenteMateria = [], planesEstudio = [] }) {
-  const diagnosis = buildDocenteMateriaTribunalDiagnosis({ docenteMateria, planesEstudio })
+function TribunalMatrixDiagnosis({ docenteMateria = [], horariosDocentes = [], planesEstudio = [] }) {
+  const diagnosis = buildDocenteMateriaTribunalDiagnosis({ docenteMateria, horariosDocentes, planesEstudio })
   const { summary } = diagnosis
   const observedSubjects = diagnosis.subjects
     .filter((subject) => !subject.completa)
@@ -40,10 +40,14 @@ function TribunalMatrixDiagnosis({ docenteMateria = [], planesEstudio = [] }) {
         </span>
       </div>
 
-      <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <div className="metric-tile">
           <span>Relaciones</span>
           <strong>{summary.relacionesCargadas}</strong>
+        </div>
+        <div className="metric-tile">
+          <span>Titulares por horario</span>
+          <strong>{summary.titularesAutomaticosDesdeHorarios}</strong>
         </div>
         <div className="metric-tile">
           <span>Materias</span>

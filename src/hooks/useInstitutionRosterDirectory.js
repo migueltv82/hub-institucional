@@ -5,6 +5,7 @@ export function useInstitutionRosterDirectory({
   institutionId,
   audience,
   useRemote,
+  enabled = true,
 }) {
   return useQuery({
     queryKey: ['super-admin', 'institution-directory', useRemote, institutionId, audience],
@@ -13,7 +14,7 @@ export function useInstitutionRosterDirectory({
       audience,
       useRemote,
     }),
-    enabled: Boolean(institutionId),
+    enabled: Boolean(enabled && institutionId),
     placeholderData: keepPreviousData,
   })
 }

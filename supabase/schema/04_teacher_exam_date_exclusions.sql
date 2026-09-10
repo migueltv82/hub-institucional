@@ -14,6 +14,9 @@ create table if not exists public.teacher_exam_date_exclusions (
   unique nulls not distinct (institution_id, teacher_id, excluded_date)
 );
 
+create index if not exists idx_teacher_exam_date_exclusions_teacher_id
+  on public.teacher_exam_date_exclusions (teacher_id);
+
 alter table public.teacher_exam_date_exclusions enable row level security;
 
 drop policy if exists "teacher_exam_date_exclusions members read" on public.teacher_exam_date_exclusions;
@@ -45,3 +48,5 @@ on public.teacher_exam_date_exclusions
 for delete
 to authenticated
 using (public.is_super_admin() or public.is_member_of_institution(institution_id, array['owner', 'admin', 'editor']));
+
+grant select on public.teacher_exam_date_exclusions to authenticated;

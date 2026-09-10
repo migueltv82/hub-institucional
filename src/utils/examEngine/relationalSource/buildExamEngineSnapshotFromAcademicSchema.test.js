@@ -11,6 +11,8 @@ function createFakeSupabase(store) {
     from(table) {
       const query = {
         filters: [],
+        order() { return this },
+        range(from, to) { this.from = from; this.to = to; return this },
         eq(column, value) {
           this.filters.push({ column, value })
           return this
@@ -22,7 +24,7 @@ function createFakeSupabase(store) {
           const rows = (store[table] ?? []).filter((row) => (
             this.filters.every((filter) => row[filter.column] === filter.value)
           ))
-          return resolve({ data: rows, error: null })
+          return resolve({ data: rows.slice(this.from, this.to + 1), error: null })
         },
       }
       writeMethods.forEach((method) => {
@@ -52,6 +54,7 @@ describe('buildExamEngineSnapshotFromAcademicSchema', () => {
       'examType',
       'fechaFin',
       'fechaInicio',
+      'fechasBloqueadasDocente',
       'generationScope',
       'horariosDocentes',
       'planesEstudio',

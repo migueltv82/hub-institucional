@@ -209,6 +209,29 @@ function buildAlumnos({ studentRecords, studentCareerPlans, careersById }) {
   })
 }
 
+function buildFechasBloqueadasDocente({ teacherExamDateExclusions, teachersById }) {
+  return teacherExamDateExclusions.map((row) => {
+    const teacher = teachersById.get(row.teacher_id)
+    const teacherName = teacher ? fullName(teacher) || teacher.id : row.teacher_id
+
+    return {
+      id: row.id,
+      docenteId: row.teacher_id,
+      docenteNombre: teacherName,
+      docente: teacherName,
+      date: row.excluded_date,
+      fecha: row.excluded_date,
+      scope: 'FULL_DAY',
+      startTime: '',
+      endTime: '',
+      reason: row.reason ?? '',
+      motivo: row.reason ?? '',
+      source: 'academic-relational-schema',
+      status: 'ACTIVE',
+    }
+  })
+}
+
 export function mapAcademicRelationalRowsToSnapshot(tables = {}) {
   const careers = tables.careers ?? []
   const studyPlans = tables.study_plans ?? []
@@ -241,6 +264,7 @@ export function mapAcademicRelationalRowsToSnapshot(tables = {}) {
   const planesEstudio = buildPlanesEstudio({ studyPlanSubjects, planSubjectLookup })
   const correlatividades = buildCorrelatividades({ subjectPrerequisites, planSubjectLookup })
   const alumnos = buildAlumnos({ studentRecords, studentCareerPlans, careersById })
+  const fechasBloqueadasDocente = buildFechasBloqueadasDocente({ teacherExamDateExclusions, teachersById })
 
   return {
     snapshot: {
@@ -250,6 +274,7 @@ export function mapAcademicRelationalRowsToSnapshot(tables = {}) {
       planesEstudio,
       correlatividades,
       alumnos,
+      fechasBloqueadasDocente,
     },
     counts: {
       careers: careers.length,

@@ -12,13 +12,6 @@
 // Requiere VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY (o VITE_SUPABASE_ANON_KEY)
 // en el entorno o en .env.local/.env -- nunca service_role, se bloquea si lo detecta.
 //
-// Uso con --admin (bypasea RLS via SUPABASE_SECRET_KEY, igual que
-// scripts/importNormalizedData.mjs -- solo para chequear datos reales sin
-// depender de un login; segui escribiendo la key solo en tu propia terminal,
-// nunca la pegues en el chat):
-//   node scripts/examEngineAudit/previewRegularExamPlanFromAcademicSchema.mjs \
-//     --admin --institution-id=<uuid> --fecha-inicio=2026-11-01 --fecha-fin=2026-11-30
-
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -85,10 +78,11 @@ function parseArgs(argv = []) {
 
     const [rawKey, inlineValue] = arg.slice(2).split('=', 2)
     const key = rawKey.replaceAll('-', '_')
-    const value = inlineValue ?? argv[index + 1]
+    const nextValue = argv[index + 1]
+    const value = inlineValue ?? (nextValue && !nextValue.startsWith('--') ? nextValue : true)
     args[key] = value
 
-    if (inlineValue === undefined && value && !value.startsWith('--')) {
+    if (inlineValue === undefined && typeof value === 'string') {
       index += 1
     }
   }
@@ -131,6 +125,11 @@ async function main() {
   loadLocalEnv()
   const args = parseArgs(process.argv.slice(2))
 
+  if (args.admin !== undefined) {
+    fail('Este script es solo read-only: --admin no esta permitido.')
+    return
+  }
+
   const institutionId = args.institution_id || process.env.SUPABASE_IMPORT_INSTITUTION_ID
   const fechaInicio = args.fecha_inicio
   const fechaFin = args.fecha_fin
@@ -140,32 +139,17 @@ async function main() {
     return
   }
 
-  // Modo admin explicito (--admin): usa SUPABASE_SECRET_KEY para bypasear RLS,
-  // igual que scripts/importNormalizedData.mjs. Sin --admin, la clave anon/publishable
-  // respeta RLS -- si no hay sesion logueada como miembro de la institucion, las
-  // queries devuelven 0 filas (comportamiento correcto de RLS, no un bug).
-  const adminMode = args.admin !== undefined
   const supabaseUrl = process.env.VITE_SUPABASE_URL
-  let supabaseKey
-
-  if (adminMode) {
-    supabaseKey = process.env.SUPABASE_SECRET_KEY
-    if (!supabaseUrl || !supabaseKey) {
-      fail('Modo --admin requiere VITE_SUPABASE_URL y SUPABASE_SECRET_KEY en el entorno.')
-      return
-    }
-  } else {
-    const envValidation = validateSupabaseReadOnlyEnv(process.env)
-    if (!envValidation.valid) {
-      fail('Variables de entorno invalidas para lectura read-only.', {
-        errors: envValidation.errors,
-        warnings: envValidation.warnings,
-        config: envValidation.config,
-      })
-      return
-    }
-    supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+  const envValidation = validateSupabaseReadOnlyEnv(process.env)
+  if (!envValidation.valid) {
+    fail('Variables de entorno invalidas para lectura read-only.', {
+      errors: envValidation.errors,
+      warnings: envValidation.warnings,
+      config: envValidation.config,
+    })
+    return
   }
+  const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
 
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: {

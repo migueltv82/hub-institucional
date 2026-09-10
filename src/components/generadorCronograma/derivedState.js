@@ -94,6 +94,7 @@ export function getTeacherSourceReadiness({
   disponibilidadDocente = [],
   cargaHorariaDocente = [],
   horariosDocentes = [],
+  workspaceSource = '',
 } = {}) {
   const activeTeachers = asArray(docentes).filter(isActiveTeacher)
   const validLoadRows = asArray(cargaHorariaDocente).filter((row) => {
@@ -128,13 +129,15 @@ export function getTeacherSourceReadiness({
   const hasStructuredTeacherSource = missing.length === 0
   const hasLegacyTeacherScheduleSource = asArray(horariosDocentes).length > 0
   const hasValidTeacherSource = hasStructuredTeacherSource || hasLegacyTeacherScheduleSource
+  const usesRelationalScheduleSource = workspaceSource === 'academic-relational-schema' && hasLegacyTeacherScheduleSource
   const source = hasStructuredTeacherSource
     ? 'structured'
     : hasLegacyTeacherScheduleSource
-      ? 'legacy'
+      ? (usesRelationalScheduleSource ? 'relational-schedules' : 'legacy')
       : 'missing'
   const message = (() => {
     if (source === 'structured') return 'Fuente docente estructurada activa: disponibilidad y carga horaria.'
+    if (source === 'relational-schedules') return 'Fuente docente relacional activa: horarios de cursada.'
     if (source === 'legacy') return 'Usando fallback legacy: horarios docentes.'
     return `Falta fuente docente valida: ${missing.join(', ')}.`
   })()
@@ -231,6 +234,7 @@ export function getCronogramaViewState({
   regularCallRanges,
   requiereRegeneracion,
   uploadedFiles,
+  workspaceSource = '',
 }) {
   const mesasConfirmadas = cronograma.filter((mesa) => mesa.estado === 'confirmada')
   const mesasConAjusteManual = cronograma.filter((mesa) => mesa.ajusteManual)
@@ -241,6 +245,7 @@ export function getCronogramaViewState({
     disponibilidadDocente,
     cargaHorariaDocente,
     horariosDocentes,
+    workspaceSource,
   })
   const masterWorkbookReady = Boolean(uploadedFiles.masterWorkbook && uploadedFiles.docentesWorkbook && uploadedFiles.alumnosWorkbook)
   const periodoInvalido = isRegularExam(examType)

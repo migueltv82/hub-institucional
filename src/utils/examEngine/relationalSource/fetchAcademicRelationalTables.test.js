@@ -9,6 +9,8 @@ function createFakeSupabase(store, { errorTable } = {}) {
     from(table) {
       const query = {
         filters: [],
+        order() { return this },
+        range(from, to) { this.from = from; this.to = to; return this },
         eq(column, value) {
           this.filters.push({ column, value })
           return this
@@ -24,7 +26,7 @@ function createFakeSupabase(store, { errorTable } = {}) {
           const rows = (store[table] ?? []).filter((row) => (
             this.filters.every((filter) => row[filter.column] === filter.value)
           ))
-          return resolve({ data: rows, error: null })
+          return resolve({ data: rows.slice(this.from, this.to + 1), error: null })
         },
       }
       return query
@@ -33,6 +35,19 @@ function createFakeSupabase(store, { errorTable } = {}) {
 }
 
 describe('fetchAcademicRelationalTables', () => {
+  it('pagina datos mayores al limite de la API sin truncarlos', async () => {
+    const rows = Array.from({ length: 1203 }, (_, id) => ({ id, institution_id: 'inst-1' }))
+    const result = await fetchAcademicRelationalTables({ supabase: createFakeSupabase({ student_records: rows }), institutionId: 'inst-1' })
+    expect(result.student_records).toEqual(rows)
+  })
+
+  it('no inicia lecturas si la carga fue cancelada', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const client = createFakeSupabase({})
+    await expect(fetchAcademicRelationalTables({ supabase: client, institutionId: 'inst-1', signal: controller.signal })).rejects.toThrow()
+    expect(client.calls).toEqual([])
+  })
   it('lee todas las tablas filtrando por institution_id', async () => {
     const institutionId = 'inst-1'
     const store = {

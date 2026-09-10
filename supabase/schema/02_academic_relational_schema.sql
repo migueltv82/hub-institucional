@@ -270,14 +270,39 @@ create table if not exists public.student_academic_statuses (
 
 create index if not exists idx_careers_institution on public.careers (institution_id, name);
 create index if not exists idx_plans_career on public.study_plans (institution_id, career_id, status);
+create index if not exists idx_study_plans_coexist_with_plan on public.study_plans (institution_id, coexist_with_plan_id) where coexist_with_plan_id is not null;
 create index if not exists idx_plan_subjects_plan on public.study_plan_subjects (institution_id, plan_id, print_order);
+create index if not exists idx_study_plan_subjects_subject on public.study_plan_subjects (institution_id, subject_id);
 create index if not exists idx_prerequisites_target on public.subject_prerequisites (institution_id, target_plan_subject_id);
+create index if not exists idx_subject_prerequisites_prerequisite on public.subject_prerequisites (institution_id, prerequisite_plan_subject_id);
 create index if not exists idx_equivalences_source on public.plan_equivalences (institution_id, source_plan_subject_id);
+create index if not exists idx_plan_equivalences_target on public.plan_equivalences (institution_id, target_plan_subject_id);
 create index if not exists idx_teacher_assignments_subject on public.teacher_subject_assignments (institution_id, plan_subject_id, status);
+create index if not exists idx_teacher_subject_assignments_teacher on public.teacher_subject_assignments (institution_id, teacher_id);
+create index if not exists idx_teacher_subject_assignments_replaced_teacher on public.teacher_subject_assignments (institution_id, replaced_teacher_id) where replaced_teacher_id is not null;
 create index if not exists idx_schedules_subject on public.course_schedules (institution_id, plan_subject_id, weekday);
+create index if not exists idx_course_schedules_teacher on public.course_schedules (institution_id, teacher_id);
 create index if not exists idx_students_institution on public.student_records (institution_id, last_name, first_name);
 create index if not exists idx_student_plans_student on public.student_career_plans (institution_id, student_id, status);
+create index if not exists idx_student_career_plans_career on public.student_career_plans (institution_id, career_id);
+create index if not exists idx_student_career_plans_plan on public.student_career_plans (institution_id, plan_id);
 create index if not exists idx_academic_status_student on public.student_academic_statuses (institution_id, student_career_plan_id, plan_subject_id, recorded_at desc);
+create index if not exists idx_student_academic_statuses_plan_subject on public.student_academic_statuses (institution_id, plan_subject_id);
+
+grant select on table
+  public.careers,
+  public.study_plans,
+  public.subjects,
+  public.study_plan_subjects,
+  public.subject_prerequisites,
+  public.plan_equivalences,
+  public.teacher_records,
+  public.teacher_subject_assignments,
+  public.course_schedules,
+  public.student_records,
+  public.student_career_plans,
+  public.student_academic_statuses
+to authenticated;
 
 do $$
 declare

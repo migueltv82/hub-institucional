@@ -60,19 +60,24 @@ function StatTile({ label, value, helper, icon: Icon, tone = 'slate' }) {
 }
 
 export default function SuperAdminInstitutionRosterPage({ audience = 'students' }) {
-  const { institutionId } = useParams()
+  const { institutionId: routeInstitutionId } = useParams()
   const {
     activeInstitutionId,
     institutions,
     isRemoteSession,
+    isSuperAdmin,
+    profile,
     setActiveInstitutionId,
   } = useAuth()
+  const institutionId = routeInstitutionId ?? activeInstitutionId
   const [pageState, setPageState] = useState({ contextKey: '', page: 1 })
   const [searchTerm, setSearchTerm] = useState('')
   const deferredSearchTerm = useDeferredValue(searchTerm)
+  const accountRole = String(profile?.account_role ?? '').toLowerCase()
+  const canManageRoster = isSuperAdmin || !['alumno', 'student', 'docente', 'profesor', 'teacher'].includes(accountRole)
   const {
     data: summary,
-  } = useSuperAdminSummary({ useRemote: isRemoteSession })
+  } = useSuperAdminSummary({ useRemote: isRemoteSession, enabled: Boolean(routeInstitutionId && isSuperAdmin) })
   const {
     data,
     error,
@@ -82,13 +87,16 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
     institutionId,
     audience,
     useRemote: isRemoteSession,
+    enabled: canManageRoster,
   })
 
+  const isRelationalSource = data?.source === 'academic-relational-schema'
+
   useEffect(() => {
-    if (institutionId && institutionId !== activeInstitutionId) {
-      setActiveInstitutionId(institutionId)
+    if (routeInstitutionId && routeInstitutionId !== activeInstitutionId) {
+      setActiveInstitutionId(routeInstitutionId)
     }
-  }, [activeInstitutionId, institutionId, setActiveInstitutionId])
+  }, [activeInstitutionId, routeInstitutionId, setActiveInstitutionId])
 
   const paginationContextKey = `${institutionId ?? 'none'}:${audience}`
   const page = pageState.contextKey === paginationContextKey ? pageState.page : 1
@@ -98,6 +106,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
       ?? null,
     [institutionId, institutions, summary?.institutions],
   )
+  const basePath = routeInstitutionId ? `/super-admin/instituciones/${institutionId}` : '/app'
   const items = useMemo(
     () => (data?.items ?? []).filter((item) => matchesAudienceSearch(item, audience, deferredSearchTerm)),
     [audience, data?.items, deferredSearchTerm],
@@ -143,6 +152,17 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
     )
   }
 
+  if (!canManageRoster) {
+    return (
+      <section className="soft-card">
+        <h2 className="text-2xl font-bold text-slate-950">Acceso restringido</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Necesitas una sesion de administrador para consultar padrones institucionales.
+        </p>
+      </section>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
@@ -177,7 +197,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <NavLink
-              to={`/super-admin/instituciones/${institutionId}/alumnos`}
+              to={`${basePath}/alumnos`}
               className={`btn-secondary w-full ${audience === 'students' ? 'border-blue-300 bg-blue-50 text-blue-900' : ''}`}
               onClick={() => setActiveInstitutionId(institutionId)}
             >
@@ -185,7 +205,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
               Alumnos
             </NavLink>
             <NavLink
-              to={`/super-admin/instituciones/${institutionId}/docentes`}
+              to={`${basePath}/docentes`}
               className={`btn-secondary w-full ${audience === 'teachers' ? 'border-teal-300 bg-teal-50 text-teal-900' : ''}`}
               onClick={() => setActiveInstitutionId(institutionId)}
             >
@@ -199,7 +219,13 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
           <span className="soft-title">Navegacion operativa</span>
           <h3 className="mt-2 text-2xl font-bold text-slate-950">{title}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Esta vista usa el snapshot institucional como fuente operativa para mantener el padron visible incluso cuando todavia no se sincronizo a tablas auxiliares.
+            {isRelationalSource
+              ? 'Esta vista lee directo el schema relacional academico nuevo.'
+              : 'Esta vista usa el snapshot institucional como respaldo para mantener el padron visible.'}
+          </p>
+
+          <p className="mt-4 rounded-lg border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-600">
+            Fuente actual: {isRelationalSource ? 'schema relacional' : 'workspace snapshot'}
           </p>
 
           {data?.updatedAt && (
@@ -280,7 +306,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
                   <th className="px-4 py-3">Docente</th>
                   <th className="px-4 py-3">DNI</th>
                   <th className="px-4 py-3">Carreras</th>
-                  <th className="px-4 py-3">Telefono</th>
+                  <th className="px-4 py-3">Contacto</th>
                   <th className="px-4 py-3">Estado</th>
                 </tr>
               ) : (
@@ -307,10 +333,11 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
                   <tr key={item.id}>
                     <td className="px-4 py-4">
                       <p className="font-semibold text-slate-950">{item.full_name}</p>
+                      {item.email && <p className="mt-1 text-xs text-slate-500">{item.email}</p>}
                     </td>
                     <td className="px-4 py-4 text-slate-700">{item.dni || '-'}</td>
                     <td className="px-4 py-4 text-slate-700">{item.careers_label}</td>
-                    <td className="px-4 py-4 text-slate-700">{item.phone || '-'}</td>
+                    <td className="px-4 py-4 text-slate-700">{item.phone || item.email || '-'}</td>
                     <td className="px-4 py-4">
                       <span className={`status-chip ${
                         isActiveStatus(item.status)

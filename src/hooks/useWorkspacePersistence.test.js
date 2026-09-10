@@ -5,7 +5,10 @@ import { useWorkspacePersistence } from './useWorkspacePersistence.js'
 const mocks = vi.hoisted(() => ({
   clearWorkspaceData: vi.fn(),
   fetchAccessibleInstitutions: vi.fn(),
+  fetchRelationalExamSnapshot: vi.fn(),
+  fetchRelationalPreviewSetting: vi.fn(),
   fetchWorkspaceSnapshot: vi.fn(),
+  isSupabaseConfigured: false,
   persistActiveInstitutionId: vi.fn(),
   readStoredActiveInstitutionId: vi.fn(),
   saveWorkspaceSnapshot: vi.fn(),
@@ -13,8 +16,12 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../lib/supabase.js', () => ({
-  isSupabaseConfigured: false,
-  supabase: null,
+  get isSupabaseConfigured() {
+    return mocks.isSupabaseConfigured
+  },
+  get supabase() {
+    return mocks.isSupabaseConfigured ? {} : null
+  },
 }))
 
 vi.mock('../services/institutions.js', () => ({
@@ -25,8 +32,36 @@ vi.mock('../services/institutions.js', () => ({
 
 vi.mock('../services/workspaceSnapshot.js', () => ({
   clearWorkspaceData: mocks.clearWorkspaceData,
+  createEmptyWorkspaceSnapshot: () => ({
+    alumnos: [],
+    docentes: [],
+    docenteMateria: [],
+    horariosDocentes: [],
+    planesEstudio: [],
+    correlatividades: [],
+    uploadedFiles: {
+      masterWorkbook: null,
+      docentesWorkbook: null,
+      alumnosWorkbook: null,
+      horarios: null,
+      planes: null,
+      correlatividades: null,
+      alumnos: null,
+      docentes: null,
+      docenteMateria: null,
+    },
+    fechaInicio: '',
+    fechaFin: '',
+    cronograma: [],
+    requiereRegeneracion: false,
+  }),
   fetchWorkspaceSnapshot: mocks.fetchWorkspaceSnapshot,
   saveWorkspaceSnapshot: mocks.saveWorkspaceSnapshot,
+}))
+
+vi.mock('../services/relationalExamPreview.js', () => ({
+  fetchRelationalExamSnapshot: mocks.fetchRelationalExamSnapshot,
+  fetchRelationalPreviewSetting: mocks.fetchRelationalPreviewSetting,
 }))
 
 vi.mock('react-hot-toast', () => ({
@@ -84,7 +119,13 @@ describe('useWorkspacePersistence', () => {
     vi.useRealTimers()
     vi.clearAllMocks()
 
+    mocks.isSupabaseConfigured = false
     mocks.fetchAccessibleInstitutions.mockResolvedValue({ institutions })
+    mocks.fetchRelationalPreviewSetting.mockResolvedValue(false)
+    mocks.fetchRelationalExamSnapshot.mockResolvedValue({
+      snapshot: emptySnapshot,
+      diagnostics: { counts: {} },
+    })
     mocks.fetchWorkspaceSnapshot.mockResolvedValue({
       snapshot: emptySnapshot,
       updatedAt: '2026-04-28T10:00:00.000Z',
@@ -143,6 +184,66 @@ describe('useWorkspacePersistence', () => {
     expect(onHydrate).toHaveBeenCalledWith(hydratedSnapshot)
     expect(result.current.lastSyncedAt).toBe('2026-04-28T11:00:00.000Z')
     expect(result.current.syncStatus).toBe('local-only')
+  })
+
+  it('hidrata la UI existente desde el schema relacional cuando la institucion tiene el flag activo', async () => {
+    const onHydrate = vi.fn()
+    mocks.isSupabaseConfigured = true
+    mocks.fetchRelationalPreviewSetting.mockResolvedValue(true)
+    mocks.fetchRelationalExamSnapshot.mockResolvedValue({
+      snapshot: {
+        alumnos: [{ id: 'student-1', full_name: 'Ana Perez' }],
+        docentes: [{ id: 'teacher-1', full_name: 'Carla Ruiz' }],
+        docenteMateria: [{ id: 'assignment-1' }],
+        horariosDocentes: [{ id: 'schedule-1' }],
+        planesEstudio: [{ id: 'subject-1' }],
+        correlatividades: [],
+        fechasBloqueadasDocente: [{ id: 'block-1' }],
+      },
+      diagnostics: {
+        counts: {
+          studentRecords: 1,
+          teacherRecords: 1,
+        },
+      },
+    })
+
+    const { result } = renderPersistenceHook({
+      contextInstitutions: [{ id: 'institution-remote', name: 'Instituto Remoto', role: 'admin' }],
+      contextActiveInstitutionId: 'institution-remote',
+      isRemoteSession: true,
+      onHydrate,
+    })
+
+    await waitFor(() => {
+      expect(result.current.isHydrating).toBe(false)
+    })
+
+    expect(mocks.fetchRelationalPreviewSetting).toHaveBeenCalledWith({
+      institutionId: 'institution-remote',
+      signal: expect.any(AbortSignal),
+    })
+    expect(mocks.fetchRelationalExamSnapshot).toHaveBeenCalledWith({
+      institutionId: 'institution-remote',
+      signal: expect.any(AbortSignal),
+    })
+    expect(mocks.fetchWorkspaceSnapshot).not.toHaveBeenCalled()
+    expect(onHydrate).toHaveBeenCalledWith(expect.objectContaining({
+      alumnos: [{ id: 'student-1', full_name: 'Ana Perez' }],
+      docentes: [{ id: 'teacher-1', full_name: 'Carla Ruiz' }],
+      fechasBloqueadasDocente: [{ id: 'block-1' }],
+      uploadedFiles: expect.objectContaining({
+        masterWorkbook: 'schema-relacional',
+        docentesWorkbook: 'schema-relacional',
+        alumnosWorkbook: 'schema-relacional',
+      }),
+      cronograma: [],
+      requiereRegeneracion: false,
+    }))
+    expect(result.current.workspaceSource).toBe('academic-relational-schema')
+    expect(result.current.isRelationalWorkspaceSource).toBe(true)
+    expect(result.current.canWriteRemoteWorkspace).toBe(false)
+    expect(result.current.syncStatus).toBe('read-only')
   })
 
   it('omite el auto-guardado inicial y guarda luego de un cambio del payload', async () => {

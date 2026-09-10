@@ -16,6 +16,7 @@ import PaginationControls from '../components/PaginationControls.jsx'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { usePaginatedInstitutions } from '../hooks/usePaginatedInstitutions.js'
 import { deleteInstitution, updateInstitution } from '../services/superAdmin.js'
+import InstitutionPreviewControl from '../features/exams/components/InstitutionPreviewControl.jsx'
 
 const CreateInstitutionModal = lazy(() => import('../components/CreateInstitutionModal.jsx'))
 
@@ -310,6 +311,8 @@ function SuperAdminInstitutionsPage() {
                   {isExpanded ? 'Ocultar carreras' : 'Ver carreras'}
                 </button>
               </div>
+
+              <InstitutionPreviewControl institution={institution} />
 
               {isExpanded && (
                 <div className="mt-5 space-y-3">

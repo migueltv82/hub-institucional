@@ -472,7 +472,18 @@ export function resolveDocenteMateriaAssignment({
     })
   }
 
-  if (activeWithoutRole.length > 1 && !isProfessionalPracticeSubject(plan)) {
+  if (activeWithoutRole.length > 1 && isProfessionalPracticeSubject(plan) && activeWithoutRole[0].teacherId) {
+    return buildResolution({
+      status: DOCENTE_MATERIA_RESOLUTION_STATUS.TITULAR_INFERIDO,
+      titularId: activeWithoutRole[0].teacherId,
+      source: 'inferido_practica_profesional_cotitular',
+      match: 'practica_profesional_multidocente',
+      matchedAssignments,
+      requiresMesa,
+    })
+  }
+
+  if (activeWithoutRole.length > 1) {
     return buildResolution({
       status: DOCENTE_MATERIA_RESOLUTION_STATUS.AMBIGUO_REQUIERE_REVISION,
       matchedAssignments,

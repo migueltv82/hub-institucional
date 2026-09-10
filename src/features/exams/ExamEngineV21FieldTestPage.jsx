@@ -35,6 +35,7 @@ import {
   parseReviewRowsFile,
   resolveFinalUiState,
   runDraftScheduleStep,
+  runRelationalPreviewDraftStep,
   runFinalReviewStep,
   runReviewedScheduleStep,
   summarizeReviewedSchedule,
@@ -142,6 +143,7 @@ function ImportAction({
 }
 
 function ExamEngineV21FieldTestPage({
+  mode = 'operational',
   canPublishOfficialSchedule = true,
   dataReady = true,
   institutionId = '',
@@ -152,8 +154,15 @@ function ExamEngineV21FieldTestPage({
   workspaceKey = 'main',
   workspaceSnapshot = {},
 }) {
+  const isPreview = mode === 'preview'
+  const wizardSteps = isPreview ? [
+    WIZARD_STEPS[0],
+    { id: 'armar', title: 'Armar mesas', description: 'Revisar fechas, combinar mesas y completar tribunales.' },
+    { id: 'review', title: 'Resultado', description: 'Revisar la previsualizacion sin publicar.' },
+  ] : WIZARD_STEPS
+  const [previewErrors, setPreviewErrors] = useState([])
   const [configTouched, setConfigTouched] = useState(false)
-  const [configForm, setConfigForm] = useState(() => createDefaultExamCallConfigForm(workspaceSnapshot))
+  const [configForm, setConfigForm] = useState(() => createDefaultExamCallConfigForm(workspaceSnapshot, { requireExplicitDates: isPreview }))
   const [includeCurrentCronogramaAssignments, setIncludeCurrentCronogramaAssignments] = useState(false)
   const [uiState, setUiState] = useState(FIELD_TEST_UI_STATES.CONFIGURING_CALL)
   const [engineData, setEngineData] = useState(null)
@@ -186,11 +195,11 @@ function ExamEngineV21FieldTestPage({
       previousExamPeriod[1] !== workspaceSnapshot.fechaFin)
   ) {
     setPreviousExamPeriod([workspaceSnapshot.fechaInicio, workspaceSnapshot.fechaFin])
-    setConfigForm(createDefaultExamCallConfigForm(workspaceSnapshot))
+    setConfigForm(createDefaultExamCallConfigForm(workspaceSnapshot, { requireExplicitDates: isPreview }))
   }
 
   const currentStepId = resolveCurrentStepId(uiState)
-  const currentStepIndex = WIZARD_STEPS.findIndex((step) => step.id === currentStepId)
+  const currentStepIndex = wizardSteps.findIndex((step) => step.id === currentStepId)
 
   // Same render-time-adjustment pattern as previousExamPeriod above: the
   // viewed step follows real progress by default, but a manual click on an
@@ -205,7 +214,7 @@ function ExamEngineV21FieldTestPage({
     setViewStepId(currentStepId)
   }
 
-  const viewStepIndex = WIZARD_STEPS.findIndex((step) => step.id === viewStepId)
+  const viewStepIndex = wizardSteps.findIndex((step) => step.id === viewStepId)
   const isEspecial = engineData?.examCallConfig?.tipoPeriodo === 'ESPECIAL'
 
   const missingDataItems = useMemo(() => {
@@ -258,6 +267,7 @@ function ExamEngineV21FieldTestPage({
   })
 
   function updateConfigField(key, value) {
+    if (isPreview) resetLocalRunState()
     setConfigTouched(true)
     setConfigForm((current) => ({
       ...current,
@@ -279,6 +289,7 @@ function ExamEngineV21FieldTestPage({
   }
 
   async function refreshTeacherReviewStatus() {
+    if (isPreview) return
     if (!institutionId) {
       toast.error('Falta la institucion activa.')
       return
@@ -367,6 +378,7 @@ function ExamEngineV21FieldTestPage({
   }
 
   async function publishForTeacherReview() {
+    if (isPreview) return
     if (!institutionId) {
       toast.error('Falta la institucion activa.')
       return
@@ -406,6 +418,7 @@ function ExamEngineV21FieldTestPage({
   }
 
   async function generateDraft() {
+    if (!dataReady || isBusy) return
     if (!validation.ok) {
       toast.error(validation.errors[0])
       return
@@ -419,12 +432,18 @@ function ExamEngineV21FieldTestPage({
         examCallConfig,
         includeCurrentCronogramaAssignments,
       })
-      const result = runDraftScheduleStep({
+      setPreviewErrors([])
+      const result = isPreview ? runRelationalPreviewDraftStep({ data, examCallConfig, generatedAt: new Date().toISOString() }) : runDraftScheduleStep({
         docentes: data.docentes,
         materias: data.materias,
         examCallConfig,
         generatedAt: new Date().toISOString(),
       })
+
+      if (isPreview && result.errors.length) {
+        setPreviewErrors(result.errors)
+        return
+      }
 
       if (!result.draftExport.rows.length) {
         const firstReason = result.draftResult.excluded?.[0]?.message ||
@@ -464,6 +483,7 @@ function ExamEngineV21FieldTestPage({
   // alcance automatico, son pocas mesas sueltas). Solo se adaptan
   // docentes/materias para alimentar los datalists del formulario manual.
   function continueToManualBuild() {
+    if (isPreview) return
     if (!validation.ok) {
       toast.error(validation.errors[0])
       return
@@ -536,7 +556,7 @@ function ExamEngineV21FieldTestPage({
         draftResult,
         tribunalResult: finalizedTribunalResult,
       }))
-      toast.success('Precronograma completo listo para enviar a los docentes.')
+      toast.success(isPreview ? 'Previsualizacion completa lista para revisar.' : 'Precronograma completo listo para enviar a los docentes.')
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -602,6 +622,7 @@ function ExamEngineV21FieldTestPage({
   }
 
   function publishOfficialSchedule() {
+    if (isPreview) return
     if (!finalResult?.finalTribunals?.length) {
       toast.error('Primero confirma la revision final.')
       return
@@ -629,6 +650,7 @@ function ExamEngineV21FieldTestPage({
   }
 
   function resetLocalRunState() {
+    setPreviewErrors([])
     setEngineData(null)
     setDraftResult(null)
     setDraftExport(null)
@@ -638,6 +660,10 @@ function ExamEngineV21FieldTestPage({
   }
 
   async function resetRun() {
+    if (isPreview) {
+      resetLocalRunState()
+      return
+    }
     if (!canPublishOfficialSchedule) {
       toast.error('Tu rol actual no permite reiniciar el proceso de mesas.')
       return
@@ -688,24 +714,23 @@ function ExamEngineV21FieldTestPage({
       >
         <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <p className="soft-title">Paso 2 - Armado de mesas</p>
+            <p className="soft-title">{isPreview ? 'Vista previa' : 'Paso 2 - Armado de mesas'}</p>
             <h3 className="mt-2 flex min-w-0 flex-col items-start gap-2 text-3xl font-extrabold leading-tight text-slate-950 sm:flex-row sm:items-center md:text-4xl">
               <Sparkles className="h-8 w-8 shrink-0 text-teal-700" />
               Cronograma de mesas de examen
             </h3>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-              Configura el llamado, arma el precronograma con sus agrupaciones y vocales,
-              envialo a los docentes y aplica solamente los cambios solicitados antes de publicar.
+              {isPreview ? 'Elegi las fechas y el alcance para probar el armado de mesas con los datos de tu institucion.' : 'Configura el llamado, arma el precronograma con sus agrupaciones y vocales, envialo a los docentes y aplica solamente los cambios solicitados antes de publicar.'}
             </p>
           </div>
           <button
             className="btn-secondary w-full shrink-0 sm:w-auto"
-            disabled={isBusy || !canPublishOfficialSchedule}
+            disabled={isBusy || (!isPreview && !canPublishOfficialSchedule)}
             onClick={resetRun}
             type="button"
           >
             <RefreshCcw className="h-4 w-4" />
-            Reiniciar proceso
+            {isPreview ? 'Reiniciar previsualizacion' : 'Reiniciar proceso'}
           </button>
         </div>
       </motion.section>
@@ -716,7 +741,7 @@ function ExamEngineV21FieldTestPage({
           <WorkflowStepper
             activeIndex={viewStepIndex}
             currentIndex={currentStepIndex}
-            steps={WIZARD_STEPS}
+            steps={wizardSteps}
             onSelectStep={setViewStepId}
           />
         </div>
@@ -725,7 +750,7 @@ function ExamEngineV21FieldTestPage({
       {viewingPastStep && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-sky-200 bg-sky-50 px-4 py-3">
           <p className="text-sm font-bold text-sky-900">
-            Estás revisando &ldquo;{WIZARD_STEPS[viewStepIndex]?.title}&rdquo;, un paso ya completado. El proceso sigue donde lo dejaste.
+            Estás revisando &ldquo;{wizardSteps[viewStepIndex]?.title}&rdquo;, un paso ya completado. El proceso sigue donde lo dejaste.
           </p>
           <button className="btn-secondary" type="button" onClick={() => setViewStepId(currentStepId)}>
             Volver al paso actual
@@ -735,24 +760,30 @@ function ExamEngineV21FieldTestPage({
 
       <WarningList warnings={dataWarnings} />
 
+      {previewErrors.length > 0 && <section role="alert" className="soft-card border border-rose-200 bg-rose-50">
+        <h3 className="font-extrabold text-rose-900">Hay datos que impiden generar la previsualizacion ({previewErrors.length})</h3>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-rose-900">{previewErrors.map((issue, index) => <li key={`${issue.code}:${issue.entityId}:${index}`}>{issue.entityId ? `${issue.entityId}: ` : ''}{issue.message}</li>)}</ul>
+      </section>}
+
       {viewStepId === 'config' && (
         <>
-          <OperatorHandbook />
+          {!isPreview && <OperatorHandbook />}
 
-          <DataReadinessBanner
+          {!isPreview && <DataReadinessBanner
             missingItems={dataReady ? [] : missingDataItems}
             onGoToUploads={onGoToUploads}
-          />
+          />}
 
-          <section className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+          <section className={`grid min-w-0 gap-3 md:grid-cols-2 ${isPreview ? 'xl:grid-cols-4' : 'xl:grid-cols-3 2xl:grid-cols-5'}`}>
             <StatPill label="Docentes" value={sourceCounts.docentes} />
             <StatPill label="Horarios" value={sourceCounts.horarios} />
             <StatPill label="Docente-materia" value={sourceCounts.docenteMateria} />
             <StatPill label="Materias" value={sourceCounts.materias} />
-            <StatPill label="Cronograma actual" value={sourceCounts.cronograma} />
+            {!isPreview && <StatPill label="Cronograma actual" value={sourceCounts.cronograma} />}
           </section>
 
           <ExamCallConfigForm
+            previewOnly={isPreview}
             careerOptions={careerOptions}
             disabled={isBusy || !dataReady}
             form={configForm}
@@ -761,7 +792,7 @@ function ExamEngineV21FieldTestPage({
             validation={validation}
           />
 
-          <label className="flex min-w-0 items-start gap-3 rounded-md border border-slate-200 bg-white p-4 text-sm font-bold text-slate-800 sm:items-center">
+          {!isPreview && <label className="flex min-w-0 items-start gap-3 rounded-md border border-slate-200 bg-white p-4 text-sm font-bold text-slate-800 sm:items-center">
             <input
               className="h-4 w-4 accent-teal-700"
               checked={includeCurrentCronogramaAssignments}
@@ -770,7 +801,7 @@ function ExamEngineV21FieldTestPage({
               onChange={(event) => setIncludeCurrentCronogramaAssignments(event.target.checked)}
             />
             Considerar el cronograma actual como carga previa de docentes
-          </label>
+          </label>}
         </>
       )}
 
@@ -845,7 +876,7 @@ function ExamEngineV21FieldTestPage({
                 <div className="mt-3">
                   <DraftScheduleTable
                     rows={draftExport?.rows ?? []}
-                    onExport={exportTeacherReviewPdf}
+                    onExport={isPreview ? () => exportRows(draftExport, 'previsualizacion_mesas.csv') : exportTeacherReviewPdf}
                   />
                 </div>
               </details>
@@ -870,6 +901,7 @@ function ExamEngineV21FieldTestPage({
             />
 
             <InteractiveVocalSelectionPanel
+              confirmLabel={isPreview ? 'Ver resultado de la previsualizacion' : undefined}
               isBusy={isBusy}
               session={tribunalSession}
               onConfirm={confirmTribunalSelection}
@@ -881,20 +913,21 @@ function ExamEngineV21FieldTestPage({
       {viewStepId === 'review' && (
         <>
           <TribunalReviewTable
+            previewOnly={isPreview}
             rows={tribunalReviewExport?.rows ?? []}
-            onExport={() => exportRows(tribunalReviewExport, 'precronograma_completo_para_docentes.csv')}
+            onExport={() => exportRows(tribunalReviewExport, isPreview ? 'previsualizacion_tribunales.csv' : 'precronograma_completo_para_docentes.csv')}
             onExportPdf={exportCompletePrecronogramaPdf}
             onPublishForReview={publishForTeacherReview}
           />
 
-          <TeacherConfirmationStatusPanel
+          {!isPreview && <TeacherConfirmationStatusPanel
             counts={teacherReviewStatus?.counts ?? { confirmed: 0, pending: 0, objected: 0, total: 0 }}
             isLoading={isFetchingTeacherReviewStatus}
             mesas={teacherReviewStatus?.mesas ?? []}
             onRefresh={refreshTeacherReviewStatus}
-          />
+          />}
 
-          <details className="soft-card">
+          {!isPreview && <details className="soft-card">
             <summary className="cursor-pointer text-base font-extrabold text-slate-800">
               Importar cambios manualmente (docentes sin cuenta de portal)
             </summary>
@@ -911,11 +944,11 @@ function ExamEngineV21FieldTestPage({
                 onFile={importFinalReviewFile}
               />
             </div>
-          </details>
+          </details>}
         </>
       )}
 
-      {viewStepId === 'final' && (
+      {!isPreview && viewStepId === 'final' && (
         <FinalTribunalSummary
           alertRows={finalAlertsExport?.rows ?? []}
           canPublishOfficial={canPublishOfficialSchedule}

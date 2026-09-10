@@ -6,7 +6,11 @@ import {
   fetchStudentRecords,
   mapStudentRecordToSnapshotRow,
 } from '../../../services/rosterRecords.js'
-import { fetchWorkspaceSnapshot } from '../../../services/workspaceSnapshot.js'
+import { createEmptyWorkspaceSnapshot, fetchWorkspaceSnapshot } from '../../../services/workspaceSnapshot.js'
+import {
+  fetchRelationalExamSnapshot,
+  fetchRelationalPreviewSetting,
+} from '../../../services/relationalExamPreview.js'
 import { fetchStudentAttendanceRecords } from '../../../services/subjectAttendance.js'
 import {
   fetchAcademicRelationalSnapshotOverlay,
@@ -21,6 +25,7 @@ import {
 import { isSupabaseConfigured, supabase } from '../../../lib/supabase.js'
 
 export const STUDENT_WORKSPACE_KEY = 'main'
+const RELATIONAL_WORKSPACE_SOURCE = 'academic-relational-schema'
 
 async function fetchStudentSubjectTeacherNotices({ institutionId, workspaceKey = 'main', useRemote }) {
   if (!useRemote || !institutionId || !isSupabaseConfigured || !supabase) return []
@@ -1005,13 +1010,25 @@ export async function fetchStudentPortalData({ user, isRemoteSession, isSuperAdm
   }
 
   const useSecureStudentRead = Boolean(isRemoteSession && !isSuperAdmin && isStudentPortalAccount(user))
-  const [workspaceResult, studentRecords, academicOverlay, attendanceRecords, teacherNotices] = await Promise.all([
-    useSecureStudentRead
-      ? fetchStudentPortalSecureWorkspaceSnapshot({
-          institutionId: activeInstitution.id,
-          workspaceKey: STUDENT_WORKSPACE_KEY,
-          useRemote: true,
-        })
+  const relationalEnabled = !useSecureStudentRead && Boolean(isRemoteSession) && await fetchRelationalPreviewSetting({
+    institutionId: activeInstitution.id,
+  }).catch(() => false)
+  const workspaceRequest = useSecureStudentRead
+    ? fetchStudentPortalSecureWorkspaceSnapshot({
+        institutionId: activeInstitution.id,
+        workspaceKey: STUDENT_WORKSPACE_KEY,
+        useRemote: true,
+      })
+    : relationalEnabled
+      ? fetchRelationalExamSnapshot({ institutionId: activeInstitution.id })
+        .then(({ snapshot }) => ({
+          snapshot: {
+            ...createEmptyWorkspaceSnapshot(),
+            ...snapshot,
+            workspaceSource: RELATIONAL_WORKSPACE_SOURCE,
+            cronograma: [],
+          },
+        }))
       : fetchWorkspaceSnapshot({
           institutionId: activeInstitution.id,
           workspaceKey: STUDENT_WORKSPACE_KEY,
@@ -1022,7 +1039,9 @@ export async function fetchStudentPortalData({ user, isRemoteSession, isSuperAdm
           // vieja/incompleta con fecha mas reciente, no debe tapar los datos
           // reales de Supabase.
           preferLocalWhenNewer: false,
-        }),
+        })
+  const [workspaceResult, studentRecords, academicOverlay, attendanceRecords, teacherNotices] = await Promise.all([
+    workspaceRequest,
     useSecureStudentRead
       ? Promise.resolve([])
       : fetchStudentRecords({

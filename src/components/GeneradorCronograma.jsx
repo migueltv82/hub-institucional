@@ -297,6 +297,8 @@ function GeneradorCronograma() {
     useRemoteWorkspace,
     canWriteRemoteWorkspace,
     workspaceKey,
+    workspaceSource,
+    isRelationalWorkspaceSource,
   } = useWorkspacePersistence({
     isRemoteSession,
     isSuperAdmin,
@@ -877,6 +879,7 @@ function GeneradorCronograma() {
     isRemoteSession,
     isSupabaseConfigured,
     useRemoteWorkspace,
+    workspaceSource,
   })
   const persistenceMessage = getPersistenceMessage({
     activeInstitution,
@@ -886,10 +889,11 @@ function GeneradorCronograma() {
     lastSyncedAt,
     syncStatus,
     useRemoteWorkspace,
+    workspaceSource,
   })
 
   const loadInstitutionAcademicData = useCallback(() => {
-    if (!useRemoteWorkspace || !activeInstitutionId) {
+    if (isRelationalWorkspaceSource || !useRemoteWorkspace || !activeInstitutionId) {
       return Promise.resolve({ grades: [], studentRecords: [] })
     }
 
@@ -898,10 +902,10 @@ function GeneradorCronograma() {
       workspaceKey,
       useRemote: useRemoteWorkspace,
     })
-  }, [activeInstitutionId, useRemoteWorkspace, workspaceKey])
+  }, [activeInstitutionId, isRelationalWorkspaceSource, useRemoteWorkspace, workspaceKey])
 
   const refreshInstitutionAcademicData = useCallback(async ({ notify = false } = {}) => {
-    if (!useRemoteWorkspace || !activeInstitutionId) {
+    if (isRelationalWorkspaceSource || !useRemoteWorkspace || !activeInstitutionId) {
       setInstitutionAcademicData({
         institutionId: activeInstitutionId || '', loaded: false, grades: [], studentRecords: [],
       })
@@ -923,12 +927,12 @@ function GeneradorCronograma() {
     } finally {
       setIsRefreshingInstitutionAcademicData(false)
     }
-  }, [activeInstitutionId, loadInstitutionAcademicData, useRemoteWorkspace])
+  }, [activeInstitutionId, isRelationalWorkspaceSource, loadInstitutionAcademicData, useRemoteWorkspace])
 
   useEffect(() => {
     let cancelled = false
 
-    if (!useRemoteWorkspace || !activeInstitutionId) {
+    if (isRelationalWorkspaceSource || !useRemoteWorkspace || !activeInstitutionId) {
       Promise.resolve().then(() => {
         if (!cancelled) setInstitutionAcademicData({
           institutionId: activeInstitutionId || '', loaded: false, grades: [], studentRecords: [],
@@ -958,7 +962,7 @@ function GeneradorCronograma() {
     })
 
     return () => { cancelled = true }
-  }, [activeInstitutionId, loadInstitutionAcademicData, selectedStudentCareer, useRemoteWorkspace])
+  }, [activeInstitutionId, isRelationalWorkspaceSource, loadInstitutionAcademicData, selectedStudentCareer, useRemoteWorkspace])
 
   const descargarArchivosOriginales = useCallback(async () => {
     if (!useRemoteWorkspace) {
@@ -1005,6 +1009,7 @@ function GeneradorCronograma() {
     regularCallRanges,
     requiereRegeneracion,
     uploadedFiles,
+    workspaceSource,
   })
 
   const masterWorkbookReady = Boolean(uploadedFiles.masterWorkbook)
@@ -1175,8 +1180,9 @@ function GeneradorCronograma() {
 
                 {!canEditWorkspace && (
                   <WorkspaceNotice tone="sky">
-                    Estas viendo este workspace en modo solo lectura. Tu rol actual permite consultar
-                    la informacion, pero no cargar archivos, editar, confirmar, regenerar ni borrar datos.
+                    {isRelationalWorkspaceSource
+                      ? 'Estas viendo datos reales del schema relacional nuevo en modo solo lectura. La edicion directa de padrones queda deshabilitada hasta conectar escrituras contra student_records y teacher_records.'
+                      : 'Estas viendo este workspace en modo solo lectura. Tu rol actual permite consultar la informacion, pero no cargar archivos, editar, confirmar, regenerar ni borrar datos.'}
                   </WorkspaceNotice>
                 )}
               </div>
@@ -1307,6 +1313,7 @@ function GeneradorCronograma() {
 
                   <TribunalMatrixDiagnosis
                     docenteMateria={docenteMateria}
+                    horariosDocentes={horariosDocentes}
                     planesEstudio={planesEstudio}
                   />
                 </>
@@ -1482,12 +1489,14 @@ function GeneradorCronograma() {
                         onSelectCareer={setSelectedStudentCareer}
                         planesEstudio={planesEstudio}
                       />
-                      <StudentSubjectEnrollmentSection
-                        activeInstitution={activeInstitution}
-                        alumnos={alumnos}
-                        canEditWorkspace={canEditWorkspace}
-                        planesEstudio={planesEstudio}
-                      />
+                      {!isRelationalWorkspaceSource && (
+                        <StudentSubjectEnrollmentSection
+                          activeInstitution={activeInstitution}
+                          alumnos={alumnos}
+                          canEditWorkspace={canEditWorkspace}
+                          planesEstudio={planesEstudio}
+                        />
+                      )}
                     </>
                   )}
                 </>
@@ -1542,6 +1551,7 @@ function GeneradorCronograma() {
                 canPublishOfficialSchedule={canEditWorkspace}
                 dataReady={examEngineDataReady}
                 institutionId={activeInstitutionId}
+                mode={isRelationalWorkspaceSource ? 'preview' : undefined}
                 onGoToUploads={() => selectWorkspaceView('dashboard')}
                 onPublishOfficialSchedule={publicarCronogramaFinalDesdeMotor}
                 onResetExamProcess={reiniciarProcesoMesasDesdeMotor}

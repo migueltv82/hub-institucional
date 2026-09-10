@@ -902,28 +902,86 @@ async function persistStudentRecord({
   displayName: string
   userId: string
 }) {
-  const career = String(student.carrera ?? student.career ?? '').trim()
-  const firstName = String(student.nombre ?? student.first_name ?? '').trim()
-  const lastName = String(student.apellido ?? student.last_name ?? '').trim()
+  const displayParts = displayName.split(/\s+/).filter(Boolean)
+  const firstName = getOptionalString(student.nombre ?? student.first_name) || displayParts[0] || email
+  const lastName = getOptionalString(student.apellido ?? student.last_name) || displayParts.slice(1).join(' ') || '-'
+  const nationalId = getStudentPassword(student.dni ?? student.documento)
+  const externalCode = getOptionalString(student.external_code ?? student.legajo) || nationalId || email
+  const rawStatus = getOptionalString(student.estado ?? student.status).toLowerCase()
+  const status = ['inactive', 'inactivo', 'baja'].includes(rawStatus) ? 'inactive' : 'active'
   const { data, error } = await adminClient
     .from('student_records')
     .upsert({
       institution_id: institutionId,
-      workspace_key: 'main',
-      profile_id: userId,
+      external_code: externalCode,
       email,
-      full_name: displayName,
       first_name: firstName,
       last_name: lastName,
-      career,
-      academic_year: String(student.anio ?? student.academic_year ?? '').trim(),
-      dni: getStudentPassword(student.dni ?? student.documento),
-      legajo: String(student.legajo ?? '').trim(),
-      phone: String(student.telefono ?? student.phone ?? '').trim(),
-      status: String(student.estado ?? student.status ?? 'activo').trim() || 'activo',
-      raw_payload: student,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'institution_id,workspace_key,email,career' })
+      national_id: nationalId || null,
+      phone: getOptionalString(student.telefono ?? student.phone) || null,
+      status,
+      notes: getOptionalString(student.notes ?? student.observaciones) || null,
+    }, { onConflict: 'institution_id,external_code' })
+    .select('id')
+    .single()
+
+  if (error) throw error
+  return data?.id ?? null
+}
+
+async function persistStudentCareerPlan({
+  adminClient,
+  institutionId,
+  student,
+  studentRecordId,
+}: {
+  adminClient: ReturnType<typeof createClient>
+  institutionId: string
+  student: Record<string, unknown>
+  studentRecordId: string | null
+}) {
+  const careerValue = getOptionalString(student.carrera ?? student.career)
+  if (!studentRecordId || !careerValue) return null
+
+  const careerIdentity = normalizePortalIdentity(careerValue)
+  const { data: careers, error: careerError } = await adminClient
+    .from('careers')
+    .select('id, external_code, name')
+    .eq('institution_id', institutionId)
+    .eq('status', 'active')
+
+  if (careerError) throw careerError
+
+  const career = (Array.isArray(careers) ? careers : []).find((row) => (
+    normalizePortalIdentity(row.external_code) === careerIdentity ||
+    normalizePortalIdentity(row.name) === careerIdentity
+  ))
+  if (!career?.id) return null
+
+  const { data: plan, error: planError } = await adminClient
+    .from('study_plans')
+    .select('id')
+    .eq('institution_id', institutionId)
+    .eq('career_id', career.id)
+    .eq('status', 'active')
+    .order('plan_year', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (planError) throw planError
+  if (!plan?.id) return null
+
+  const yearValue = Number(student.anio ?? student.academic_year)
+  const { data, error } = await adminClient
+    .from('student_career_plans')
+    .upsert({
+      institution_id: institutionId,
+      student_id: studentRecordId,
+      career_id: career.id,
+      plan_id: plan.id,
+      current_year: Number.isInteger(yearValue) ? yearValue : null,
+      status: 'active',
+    }, { onConflict: 'institution_id,student_id,plan_id' })
     .select('id')
     .single()
 
@@ -1040,6 +1098,12 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof createCli
         displayName,
         userId: user.id,
       })
+      const studentCareerPlanId = await persistStudentCareerPlan({
+        adminClient,
+        institutionId,
+        student,
+        studentRecordId,
+      })
 
       const linkedStudentRecords = await linkStudentRecordsToProfile({
         adminClient,
@@ -1053,6 +1117,7 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof createCli
         user_id: user.id,
         linked_student_records: linkedStudentRecords,
         student_record_id: studentRecordId,
+        student_career_plan_id: studentCareerPlanId,
         status,
       })
     } catch (error) {

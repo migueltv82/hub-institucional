@@ -16,7 +16,7 @@ Copiar y pegar todo el bloque de abajo en Codex. No es continuación de `docs/co
 
 ## Estado verificado ahora mismo (no asumir, repo cambia rápido)
 
-- `git log --oneline -5` en `origin/main` debería mostrar como último commit `af5a3fa` ("fix: script de preview del motor -- modo --admin y campos correctos del reporte"). Si no, algo se pusheó después de escribir este doc — leer los commits nuevos antes de seguir.
+- `git log --oneline -5` en `origin/main` debería mostrar como último commit `af5a3fa` ("fix: script de preview del motor -- modo --admin y campos correctos del reporte"). Si no, algo se pusheó después de escribir este doc — leer los commits nuevos antes de seguir. Nota posterior: el script local ya no acepta `--admin`; debe correr con `VITE_SUPABASE_URL` + publishable/anon key y respetar RLS.
 - `npm run check` está en verde: 262 test files, 2087 tests, lint limpio, build OK.
 - Instituto San Miguel (`institution_id = '3f9dd1a0-19b8-462f-bdd8-7e849d90ae04'`) tiene datos reales cargados y verificados: 6 carreras, 7 planes, 226 materias, 243 correlatividades, 65 docentes (ya sin duplicados por DNI), 189 asignaciones docente-materia, 273 horarios, 307 alumnos.
 - El proyecto Supabase (`qwrwwansdblcixkjmibx`) tiene aplicados `01_foundation.sql`, `02_academic_relational_schema.sql`, `03_workspace_data.sql`, `04_teacher_exam_date_exclusions.sql` (confirmado por conteo de tablas + RLS, ver `supabase/schema/00_README.md`).
@@ -29,7 +29,7 @@ Copiar y pegar todo el bloque de abajo en Codex. No es continuación de `docs/co
 4. **`src/utils/examEngine/relationalSource/`** (fetch + map + orquestador, 22 tests) — arma `docentes`/`horariosDocentes`/`docenteMateria`/`planesEstudio`/`correlatividades`/`alumnos` leyendo el schema relacional, y se lo pasa sin cambios a la lógica ya existente (`src/utils/examEngine/comparison/buildRegularExamInputFromWorkspaceSnapshot.js`, `src/utils/examEngine/rules/calculateTeacherAssignmentLimit.js`). El motor de generación en sí (`src/utils/examEngine/planning/generateRegular.js`) no se tocó.
 5. **`supabase/schema/04_teacher_exam_date_exclusions.sql`** — tabla nueva para bloqueos puntuales de docente (licencias), separada de `course_schedules` (que resuelve los días habituales de clase).
 6. **Limpieza de deuda técnica**: eliminados 12 archivos `*SupabaseSql.test.js` en `src/services/` que leían SQL de `supabase/setup_multi_tenant/` (carpeta ya removida) — no tenían implementación JS ni SQL fuente en ningún lado, puro peso muerto.
-7. **Validado contra datos reales** con `scripts/examEngineAudit/previewRegularExamPlanFromAcademicSchema.mjs --admin` (requiere `SUPABASE_SECRET_KEY`, nunca pasarla por el chat — correr en terminal propia). Confirmó que el lector funciona de punta a punta.
+7. **Validado contra datos reales** inicialmente con `scripts/examEngineAudit/previewRegularExamPlanFromAcademicSchema.mjs --admin` en una terminal local. Nota posterior: para alinear el script con el contrato read-only de la Fase 1, se removió `--admin`; el script actual usa solo publishable/anon key y bloquea valores o variables `service_role`.
 8. **2 pares de `teacher_records` duplicados por DNI** (`31256302`, `32110882`) fusionados en Supabase, sin perder datos (campos combinados con `COALESCE`, referencias repunteadas). Verificado en 0 duplicados restantes.
 
 ## Hallazgos pendientes, sin resolver (deliberado, decisión de Miguel)

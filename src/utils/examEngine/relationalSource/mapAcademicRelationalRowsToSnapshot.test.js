@@ -116,6 +116,15 @@ describe('mapAcademicRelationalRowsToSnapshot', () => {
     const teacher3 = snapshot.docentes.find((docente) => docente.id === 'teacher-3')
 
     expect(teacher3.bloqueos).toEqual(['2026-10-15'])
+    expect(snapshot.fechasBloqueadasDocente).toEqual([
+      expect.objectContaining({
+        docenteId: 'teacher-3',
+        docenteNombre: 'Marta Diaz',
+        date: '2026-10-15',
+        scope: 'FULL_DAY',
+        status: 'ACTIVE',
+      }),
+    ])
   })
 
   it('course_schedules sin docente resoluble se descarta en vez de romper', () => {
