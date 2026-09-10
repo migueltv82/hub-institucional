@@ -1263,6 +1263,8 @@ function GeneradorCronograma() {
                 <>
                   <UploadsSection
                     canEditWorkspace={canEditWorkspace}
+                    canManageDataSource={isSuperAdmin}
+                    isRelationalWorkspaceSource={isRelationalWorkspaceSource}
                     description="Subi la plantilla academica institucional con carreras, planes, materias y correlatividades."
                     onUploadMaster={onUploadMaster}
                     scope="institution"
@@ -1424,6 +1426,8 @@ function GeneradorCronograma() {
                 <>
                   <UploadsSection
                     canEditWorkspace={canEditWorkspace}
+                    canManageDataSource={isSuperAdmin}
+                    isRelationalWorkspaceSource={isRelationalWorkspaceSource}
                     description="Subí la plantilla general de alumnos. La carga agrega registros nuevos y actualiza los existentes."
                     onUploadStudents={onUploadStudents}
                     scope="students"
@@ -1504,6 +1508,8 @@ function GeneradorCronograma() {
                 <>
                   <UploadsSection
                     canEditWorkspace={canEditWorkspace}
+                    canManageDataSource={isSuperAdmin}
+                    isRelationalWorkspaceSource={isRelationalWorkspaceSource}
                     description="Subi o reemplaza la plantilla de docentes, titularidades, horarios y disponibilidad desde este modulo."
                     onUploadTeachers={onUploadTeachers}
                     scope="teachers"
