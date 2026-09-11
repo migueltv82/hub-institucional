@@ -145,11 +145,31 @@ function getSubjectProgramId(subject) {
 }
 
 function getSubjectCode(row) {
-  return clean(getFirst(row, ['materia', 'code', 'codigo', 'subject_code', 'subject_id']))
+  return clean(getFirst(row, [
+    'materia',
+    'materia_codigo',
+    'materiaCodigo',
+    'codigo_materia',
+    'code',
+    'codigo',
+    'subject_code',
+    'subjectCode',
+    'subject_id',
+  ]))
 }
 
 function getSubjectName(row) {
-  return clean(getFirst(row, ['nombre', 'nombremateria', 'name', 'subject_name'])) || getSubjectCode(row)
+  return clean(getFirst(row, [
+    'nombre',
+    'nombreMateria',
+    'nombremateria',
+    'materia_nombre',
+    'materiaNombre',
+    'nombre_materia',
+    'name',
+    'subject_name',
+    'subjectName',
+  ])) || getSubjectCode(row)
 }
 
 function getCareer(row) {

@@ -24,10 +24,14 @@ Ejecutar en el SQL Editor del dashboard, en este orden:
 
 5. **`05_workspace_operational_compat.sql`** — datos operativos que la UI ya sincroniza al guardar un workspace: `workspace_source_files` + bucket privado `workspace-source-files`, `teacher_availability_records`, `teacher_workload_records`, `legacy_subjects_catalog`, `legacy_subject_prerequisites` y `legacy_exam_sessions`. Mantiene el contrato actual de `src/services/sourceFiles.js`, `src/services/teacherAcademicRecords.js` y los sync `legacy_*` llamados desde `src/services/workspaceSnapshot.js`; `legacy_exam_sessions.exam_date` queda textual porque la UI puede enviar timestamps completos.
 
+6. **`06_subject_teacher_assignments.sql`** — `subject_teacher_assignments` compatible con la UI de asignaciones docente-materia (`titular`, `suplente`, `licencia`) y RPCs atomicas para resolver usuarios por email, registrar licencias con reemplazante y volver una asignacion a titular/suplente. Mantiene unicidad de asignaciones activas por institucion, workspace, materia, carrera y docente.
+
+7. **`07_academic_operations.sql`** — inscripciones a materias (`subject_enrollments`), libro docente (`student_grades`, `subject_class_sessions`, `subject_attendance_records`) y deuda administrativa (`student_financial_status`). Incluye RPCs seguras para inscripcion desde portal alumno y carga docente de clases, asistencia y notas.
+
 Proximos bloques (todavia no escritos, quedan para completar la operacion academica):
 
 - Persistencia del cronograma generado por el motor de mesas (tablas de "mesas"/tribunal, todavia no existen).
-- Resto de datos operativos no cubiertos por el bloque 5: `subject_enrollments`, `exam_enrollments`, `student_grades`, asistencia, actas. Requiere antes decidir si se reconcilian con tablas ya existentes del bloque 2 (`student_academic_statuses` vs `student_grades`) o se portan aparte.
+- Datos operativos de mesas no cubiertos por los bloques 5 a 7: `exam_teacher_assignments`, `exam_enrollments`, confirmaciones/objeciones docentes, actas. Requiere mantener compatibilidad con `legacy_exam_sessions` hasta que exista persistencia relacional real del cronograma.
 
 ## Por que existe esta carpeta
 

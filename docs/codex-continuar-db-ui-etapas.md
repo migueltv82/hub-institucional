@@ -16,7 +16,7 @@ Estado actualizado al 2026-09-10:
 - Etapa 1 cerrada en remoto: foundation + RPCs P0 de superadmin verificadas y probadas desde la UI.
 - Etapa 2 cerrada estructuralmente en remoto: `student_records` y `teacher_records` compatibles con UI, verificacion resumen 11/11 OK.
 - Etapa 3 cerrada estructuralmente en remoto: `05_workspace_operational_compat.sql` aplicado y verificacion resumen 19/19 OK.
-- Etapa 3: carga y descarga de planillas confirmadas por el usuario el 2026-09-10; conteos posteriores recibidos: 3 archivos, 226 materias y 505 relaciones de correlatividad. Falta ejercitar disponibilidad/carga docente y cronograma, cuyas fuentes y tablas siguen vacias.
+- Etapa 3: carga y descarga de planillas confirmadas por el usuario el 2026-09-10; conteos posteriores recibidos y reconfirmados: 3 archivos, 226 materias y 505 relaciones de correlatividad. Siguen abiertos disponibilidad/carga docente y cronograma: el conteo del 2026-09-10 17:11:03.457+00 todavia muestra tablas y fuentes del snapshot en 0.
 
 Estado para retomar desde la oficina:
 
@@ -98,13 +98,106 @@ Resultado funcional confirmado:
 - `505` relaciones frente a `226` entradas fuente es compatible con el constructor: una fila puede producir varias relaciones y se incluyen correlativas indirectas. La diferencia sola no indica duplicados ni un error; estos conteos tampoco certifican una comparacion fila a fila.
 - Los ceros docentes y de mesas coinciden con fuentes vacias: no son evidencia de falla de sincronizacion. La escritura de esos tres flujos todavia no fue ejercitada.
 
+Conteo posterior recibido:
+
+- El usuario compartio una nueva grilla de `verify_03_workspace_functional_counts.sql`, con `snapshot_actualizado = 2026-09-10 17:11:03.457+00` para todas las filas:
+
+| Tabla | Filas guardadas | Fuente | Filas fuente |
+| --- | ---: | --- | ---: |
+| workspace_source_files | 3 | No aplica | No aplica |
+| teacher_availability_records | 0 | disponibilidadDocente | 0 |
+| teacher_workload_records | 0 | cargaHorariaDocente | 0 |
+| legacy_subjects_catalog | 226 | planesEstudio | 226 |
+| legacy_subject_prerequisites | 505 | correlatividades | 226 |
+| legacy_exam_sessions | 0 | cronograma | 0 |
+
+- Este conteo reconfirma que archivos originales, catalogo y correlatividades siguen persistidos.
+- No cierra los flujos funcionales pendientes: `disponibilidadDocente`, `cargaHorariaDocente` y `cronograma` permanecen vacios en el snapshot y en las tablas espejo. Etapa 3 sigue abierta y no se avanza a etapa 4.
+- Investigacion posterior: la plantilla descargable ya incluye la hoja `disponibilidad_docente` y puede precargarla desde `horarios_docentes`, pero el importador no estaba leyendo esa hoja ni estaba materializando `cargaHorariaDocente` en el snapshot al cargar planillas. Por eso los conteos podian seguir en 0 aunque los archivos originales estuvieran guardados.
+- Correccion local aplicada: el parser XLSX lee `disponibilidad_docente` en plantilla maestra/docente, el flujo de carga persiste `disponibilidadDocente`, y `cargaHorariaDocente` se deriva desde `horariosDocentes` para que el snapshot tenga filas sincronizables.
+- Verificacion local posterior: pasaron 62 tests en `importTemplateV2Workbook`, `useCronogramaFiles`, `teacherAcademicAdmin`, `teacherAcademicRecords`, `workspaceSnapshotTeacherAcademicRecords` y `TeacherRosterSection`. `npm.cmd run build` tambien paso con `audit:prod`; solo quedaron los warnings conocidos de chunks grandes. No se detecto rotura local en parseo XLSX, merge/persistencia del snapshot, validacion, alta en UI, mapeo ni sincronizacion docente.
+- Aclaracion del usuario: la carga y descarga de planillas ya habia funcionado correctamente en la etapa anterior. No volver a pedir ese smoke como prueba. Cualquier nueva importacion solo tendria sentido para validar el mapeo corregido de planilla a snapshot, no para volver a demostrar que el boton carga/descarga.
+
+Conteo funcional posterior a generar carga horaria desde horarios:
+
+- El usuario compartio una nueva grilla de `verify_03_workspace_functional_counts.sql`, con `snapshot_actualizado = 2026-09-10 23:34:24.139+00` para todas las filas:
+
+| Tabla | Filas guardadas | Fuente | Filas fuente |
+| --- | ---: | --- | ---: |
+| workspace_source_files | 3 | No aplica | No aplica |
+| teacher_availability_records | 0 | disponibilidadDocente | 0 |
+| teacher_workload_records | 177 | cargaHorariaDocente | 177 |
+| legacy_subjects_catalog | 226 | planesEstudio | 226 |
+| legacy_subject_prerequisites | 505 | correlatividades | 226 |
+| legacy_exam_sessions | 0 | cronograma | 0 |
+
+- Resultado: `teacher_workload_records` queda probado funcionalmente. La UI genero carga horaria desde horarios y el snapshot/tablas espejo guardaron `177` filas.
+- Sigue pendiente `teacher_availability_records`: la UI mostro disponibilidad derivada desde horarios docentes, pero `disponibilidadDocente` sigue en 0 en el snapshot y en la tabla espejo. Falta decidir si se materializa automaticamente desde horarios, se importa desde `disponibilidad_docente`, o se documenta como disponibilidad visual derivada no persistida.
+- Sigue pendiente `legacy_exam_sessions`: no hay cronograma guardado todavia. Etapa 3 sigue abierta y no se avanza a etapa 4.
+
+Inicio de etapa 4:
+
+- El usuario habilito iniciar etapa 4 con los pendientes de etapa 3 ya documentados explicitamente.
+- Alcance de etapa 4 segun `docs/db-ui-contract.md`: crear `subject_teacher_assignments` compatible con la UI y los RPCs `academic_resolve_member_profile_by_email`, `academic_create_teacher_subject_leave` y `academic_update_teacher_assignment_condition`.
+- Preparacion local: agregado `supabase/schema/06_subject_teacher_assignments.sql` y `supabase/docs/verify_04_subject_teacher_assignments_summary.sql`.
+- La tabla queda pensada para `institution_id = 3f9dd1a0-19b8-462f-bdd8-7e849d90ae04`, workspace `main`, pero el bloque es multi-institucion y no hardcodea esa institucion.
+- No se aplico todavia en remoto ni se declara cerrada la etapa 4 hasta correr el SQL en Supabase, ejecutar el verificador y probar desde UI alta/baja/cambio de condicion/licencia.
+
+Verificacion remota inicial de etapa 4:
+
+- El usuario ejecuto `supabase/schema/06_subject_teacher_assignments.sql` y luego `supabase/docs/verify_04_subject_teacher_assignments_summary.sql`.
+- Resultado recibido: 9 checks OK y 1 FAIL aparente.
+- Checks OK: columnas, constraints, indices, campos requeridos, duplicados activos, policies RLS, grants de tabla, RPCs presentes y grants de RPC.
+- FAIL aparente: `subject_teacher_assignments_updated_at_trigger` devolvio `found=2/1`.
+- Diagnostico: no indica necesariamente duplicacion real; `information_schema.triggers` puede devolver una fila por evento del mismo trigger (`INSERT` y `UPDATE`). Se corrigio el verificador local para contar `distinct trigger_name`.
+- El usuario volvio a ejecutar `supabase/docs/verify_04_subject_teacher_assignments_summary.sql` actualizado y el resultado fue 10/10 OK:
+
+| Check | Estado | Detalle |
+| --- | --- | --- |
+| subject_teacher_assignments_columns | OK | columnas esperadas presentes |
+| subject_teacher_assignments_constraints | OK | found=8/8 expected constraints |
+| subject_teacher_assignments_indexes | OK | found=5/5 expected indexes |
+| subject_teacher_assignments_required_fields | OK | bad_required=0, bad_role=0, bad_status=0 |
+| subject_teacher_assignments_active_duplicates | OK | duplicate_groups=0, duplicate_extra_rows=0 |
+| subject_teacher_assignments_rls_policies | OK | found=4/4 expected read/insert/update/delete policies |
+| subject_teacher_assignments_authenticated_grants | OK | found=4/4 expected SELECT/INSERT/UPDATE/DELETE grants |
+| assignment_rpcs_present | OK | found=3/3 expected RPCs |
+| assignment_rpcs_authenticated_grants | OK | found=3/3 expected EXECUTE grants |
+| subject_teacher_assignments_updated_at_trigger | OK | found=1/1 expected touch trigger |
+
+- Etapa 4 queda cerrada estructuralmente en remoto y probada funcionalmente desde UI por confirmacion del usuario.
+- Smoke funcional confirmado: alta de asignacion, bloqueo de duplicado, cambio de condicion, baja y licencia con reemplazante funcionan correctamente.
+- No repetir este smoke salvo que aparezca una regresion nueva.
+
+Inicio de etapa 5:
+
+- Alcance segun `docs/db-ui-contract.md`: agregar inscripciones a materias, notas, asistencia y deuda.
+- Preparacion local: agregado `supabase/schema/07_academic_operations.sql` y `supabase/docs/verify_05_academic_operations_summary.sql`.
+- El bloque cubre `subject_enrollments`, `student_grades`, `subject_class_sessions`, `subject_attendance_records` y `student_financial_status`.
+- RPCs incluidas: `upsert_subject_enrollment_from_portal`, `academic_teacher_create_class_session`, `academic_teacher_upsert_attendance_records` y `academic_teacher_upsert_student_grade`.
+- Queda fuera de esta etapa `exam_enrollments` y confirmaciones/objeciones de mesas; corresponde a etapa 6 junto con `exam_teacher_assignments`.
+- Verificacion local: pasaron 41 tests en `subjectEnrollments`, `studentGrades`, `subjectAttendance`, `subjectRoster` y lecturas relacionales del portal alumno.
+- Verificacion local: `npm.cmd run build` paso con `audit:prod`; solo quedaron warnings conocidos de chunks grandes.
+- El usuario ejecuto `supabase/schema/07_academic_operations.sql` y luego `supabase/docs/verify_05_academic_operations_summary.sql`.
+- Verificacion remota etapa 5: 18/18 checks OK. Columnas, indices unicos, triggers `updated_at`, campos requeridos, duplicados, RPCs, grants y policies RLS quedaron validados.
+- Etapa 5 queda cerrada estructuralmente en remoto.
+- Pendiente: smoke funcional desde UI admin/alumno/docente antes de cerrar etapa 5 completa.
+- Smoke funcional portal alumno: el usuario confirmo que la inscripcion funciona, pero detecto que la lista muestra codigos de materias sin nombres.
+- Correccion local aplicada: el mapper del portal alumno ahora reconoce codigos desde `materia_codigo`, `materiaCodigo`, `codigo_materia` y `subjectCode`; tambien reconoce nombres desde `materia_nombre`, `materiaNombre`, `nombre_materia` y `subjectName`, ademas de los aliases previos.
+- Segundo hallazgo del smoke portal alumno: al confirmar inscripcion, la UI mostro `No se pudo confirmar la inscripcion en las tablas academicas`.
+- Diagnostico: `upsert_subject_enrollment_from_portal` es llamada por la Edge Function `admin-users` con service role, luego de validar al alumno. La RPC local exigia `actor_user_id = auth.uid()`, pero en esta ruta `auth.uid()` no representa al alumno final. Se corrigio para validar `actor_user_id = target_student_id` y la membresia/perfil activo del alumno.
+- El usuario repitio el smoke y el portal siguio mostrando el mensaje generico `La tabla academica relacional no confirmo el alta`.
+- Diagnostico actualizado: si la Edge Function remota estuviera corriendo la version actual y la RPC fallara, deberia devolver un error estricto o un detalle de `relational_error`. El mensaje generico indica que la respuesta llego sin confirmacion relacional ni detalle, compatible con `admin-users` remoto desactualizado o sin el bloque obligatorio de dual-write de inscripciones.
+- Pendiente remoto: volver a ejecutar `supabase/schema/07_academic_operations.sql` si no se aplico despues de la correccion y redeploy manual de `supabase/functions/admin-users/index.ts` desde el dashboard de Supabase, siguiendo `supabase/docs/deploy_admin_users.md` / nota de `docs/codex-continuar-fase-2.md` (este proyecto no usa deploy CLI desde esta maquina).
+- Despues de redeploy, repetir smoke de inscripcion del portal alumno y correr `supabase/docs/verify_05_student_portal_enrollment_diagnostics.sql`.
+
 Siguiente paso:
 
-1. En la misma institucion `3f9dd1a0-19b8-462f-bdd8-7e849d90ae04`, workspace `main`, probar **Docentes > Disponibilidad > Agregar disponibilidad**, con una franja real de un docente.
-2. Probar **Docentes > Carga horaria > Generar desde horarios** si existen horarios validos, o **Agregar carga horaria** con datos reales. Importar docentes no llena automaticamente esos dos arrays.
-3. Esperar la sincronizacion y recargar; comprobar que los registros permanezcan. Ejecutar otra vez `supabase/docs/verify_03_workspace_functional_counts.sql` y revisar que las dos tablas docentes tengan filas cuando sus fuentes ya las tengan.
+1. En la misma institucion `3f9dd1a0-19b8-462f-bdd8-7e849d90ae04`, workspace `main`, abrir `/app` con **Schema relacional en panel admin** desactivado y estado **Supabase seguro**.
+2. No repetir descarga/carga como smoke. La carga horaria docente ya quedo probada con `177` filas sincronizadas.
+3. Para cerrar disponibilidad, validar si la planilla ya cargada contenia `disponibilidad_docente`. Si no la contenia, probar **Docentes > Disponibilidad > Agregar disponibilidad** con una franja real de un docente y volver a ejecutar conteos. Si se decide que la disponibilidad derivada desde horarios debe persistirse automaticamente, implementar ese mapeo explicitamente.
 4. La sincronizacion de `legacy_exam_sessions` queda pendiente hasta generar y guardar un cronograma valido en modo operativo; no es necesario publicar mesas para probarla. No inventar asignaciones o disponibilidad para forzar su generacion.
-5. No avanzar a etapa 4 ni declarar cerrada toda la etapa 3 hasta completar o documentar explicitamente los flujos funcionales pendientes.
+5. No declarar cerrada toda la etapa 3 hasta completar o documentar explicitamente los flujos funcionales pendientes. La etapa 4 puede continuar porque esos pendientes ya quedaron documentados.
 
 Consulta de conteos para pegar despues del smoke:
 

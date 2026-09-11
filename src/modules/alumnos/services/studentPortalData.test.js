@@ -103,6 +103,40 @@ describe('studentPortalData', () => {
     }))
   })
 
+  it('muestra el nombre de materia cuando el plan viene con materia_nombre', () => {
+    const result = mapWorkspaceSnapshotToStudentStore({
+      snapshot: {
+        alumnos: [{
+          email: 'ana@example.com',
+          full_name: 'Ana Perez',
+          carrera: 'PROFESORADO DE INGLES',
+        }],
+        planesEstudio: [{
+          carrera: 'PROFESORADO DE INGLES',
+          materia_codigo: 'ING06',
+          materia_nombre: 'FONETICA Y FONOLOGIA INGLESA I',
+          anio_cursada: 1,
+        }],
+        correlatividades: [],
+        cronograma: [],
+      },
+      user: {
+        id: 'user-1',
+        email: 'ana@example.com',
+        nombre: 'Ana Perez',
+      },
+      activeInstitution: {
+        id: 'inst-1',
+        name: 'Instituto',
+      },
+    })
+
+    expect(result.subjects[0]).toEqual(expect.objectContaining({
+      code: 'ING06',
+      name: 'FONETICA Y FONOLOGIA INGLESA I',
+    }))
+  })
+
   it('resuelve la carrera del alumno contra el nombre canonico del plan de estudios', () => {
     const result = mapWorkspaceSnapshotToStudentStore({
       snapshot: {

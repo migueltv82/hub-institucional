@@ -3,8 +3,23 @@ const REQUIRED_SHEETS = [
   'plan_estudios',
   'correlatividades',
 ]
-const ALL_SHEETS = [...REQUIRED_SHEETS, 'docentes', 'docente_materia', 'horarios_docentes', 'alumnos_inscripciones']
+const ALL_SHEETS = [
+  ...REQUIRED_SHEETS,
+  'docentes',
+  'docente_materia',
+  'horarios_docentes',
+  'disponibilidad_docente',
+  'alumnos_inscripciones',
+]
 const DEDICATED_FALLBACK_REQUIRED_HEADERS = {
+  disponibilidad_docente: [
+    'docente_id',
+    'dia',
+    'turno',
+    'hora_desde',
+    'hora_hasta',
+    'disponible_mesa',
+  ],
   alumnos_inscripciones: [
     'alumno_id',
     'materia_id',
@@ -88,6 +103,17 @@ function buildSubjectById(rows = []) {
 
 function subjectCareerId(row = {}) {
   return clean(row.carrera_id ?? row.carreraId)
+}
+
+function parseBooleanLike(value, fallback = true) {
+  const text = clean(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!text) return fallback
+  if (['no', 'false', 'falso', '0', 'n'].includes(text)) return false
+  if (['si', 'true', 'verdadero', '1', 's', 'y', 'yes'].includes(text)) return true
+  return fallback
 }
 
 // planesEstudio ya trae cada materia con su carrera resuelta (nombre), por
@@ -195,6 +221,8 @@ export async function parseTemplateV2MasterWorkbook(file) {
     }
   }).filter((row) => clean(row.materia_id) && clean(row.docente_id))
 
+  const disponibilidadDocente = buildAvailabilityRows(source.disponibilidad_docente, teacherById)
+
   const alumnos = uniqueRows(source.alumnos_inscripciones.map((row) => {
     const subject = resolvedSubject(row)
     return {
@@ -247,10 +275,11 @@ export async function parseTemplateV2MasterWorkbook(file) {
   if (!planesEstudio.length) throw new Error('La hoja plan_estudios no contiene materias validas.')
 
   return {
-    datasets: { alumnos, correlatividades, docenteMateria, docentes, horariosDocentes, planesEstudio },
+    datasets: { alumnos, correlatividades, disponibilidadDocente, docenteMateria, docentes, horariosDocentes, planesEstudio },
     summary: {
       alumnos: alumnos.length,
       correlatividades: correlatividades.length,
+      disponibilidadDocente: disponibilidadDocente.length,
       docenteMateria: docenteMateria.length,
       docentes: docentes.length,
       horariosDocentes: horariosDocentes.length,
@@ -280,10 +309,43 @@ function readDedicatedWorkbookSource(workbook, requiredSheets, label) {
   return source
 }
 
+function readOptionalWorkbookRows(workbook, sheetName) {
+  const worksheet = workbook.getWorksheet(sheetName) ?? findWorksheetByHeaders(workbook, sheetName)
+  return worksheet ? rowsFromWorksheet(worksheet) : []
+}
+
+function buildAvailabilityRows(sourceRows = [], teacherById = new Map()) {
+  return sourceRows.map((row) => {
+    const teacher = teacherById.get(clean(row.docente_id)) ?? {}
+    const docente = fullTeacherName(teacher) || clean(row.docente)
+    return {
+      ...row,
+      id: clean(row.disponibilidad_id || row.id),
+      docenteId: clean(row.docente_id),
+      docente_id: clean(row.docente_id),
+      docente,
+      profesor: docente,
+      dni_docente: clean(teacher.dni_docente) || clean(row.dni_docente),
+      dia: clean(row.dia),
+      turno: clean(row.turno).toUpperCase(),
+      hora_desde: clean(row.hora_desde),
+      hora_hasta: clean(row.hora_hasta),
+      disponible_mesa: parseBooleanLike(row.disponible_mesa, true),
+      motivo_no_disponible: clean(row.motivo_no_disponible || row.motivo || row.reason),
+      estado: clean(row.estado || row.status || 'ACTIVO'),
+      vigencia_desde: clean(row.vigencia_desde || row.valid_from),
+      vigencia_hasta: clean(row.vigencia_hasta || row.valid_until),
+      observaciones: clean(row.observaciones || row.observacion),
+      source: clean(row.source || row.fuente || 'disponibilidad_docente'),
+    }
+  }).filter((row) => clean(row.docente_id) && clean(row.docente) && clean(row.dia) && clean(row.hora_desde) && clean(row.hora_hasta))
+}
+
 export async function parseTemplateV2TeachersWorkbook(file, { planesEstudio = [] } = {}) {
   const workbook = await loadXlsxWorkbook(file, 'La plantilla de docentes')
 
   const source = readDedicatedWorkbookSource(workbook, ['docentes', 'docente_materia', 'horarios_docentes'], 'La plantilla de docentes')
+  source.disponibilidad_docente = readOptionalWorkbookRows(workbook, 'disponibilidad_docente')
   const teacherById = new Map(source.docentes.map((row) => [clean(row.docente_id), row]))
   const subjectById = buildSubjectById(planesEstudio)
   const careerById = buildCareerById(planesEstudio)
@@ -315,7 +377,16 @@ export async function parseTemplateV2TeachersWorkbook(file, { planesEstudio = []
   }
   const docenteMateria = source.docente_materia.map((row) => enrich(row)).filter((row) => clean(row.materia_id) && clean(row.docente_id))
   const horariosDocentes = source.horarios_docentes.map((row) => enrich(row, true)).filter((row) => clean(row.materia_id) && clean(row.docente_id))
-  return { datasets: { docentes, docenteMateria, horariosDocentes }, summary: { docentes: docentes.length, docenteMateria: docenteMateria.length, horariosDocentes: horariosDocentes.length } }
+  const disponibilidadDocente = buildAvailabilityRows(source.disponibilidad_docente, teacherById)
+  return {
+    datasets: { disponibilidadDocente, docentes, docenteMateria, horariosDocentes },
+    summary: {
+      disponibilidadDocente: disponibilidadDocente.length,
+      docentes: docentes.length,
+      docenteMateria: docenteMateria.length,
+      horariosDocentes: horariosDocentes.length,
+    },
+  }
 }
 
 export async function parseTemplateV2StudentsWorkbook(file, { planesEstudio = [] } = {}) {

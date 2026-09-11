@@ -5,6 +5,7 @@ import {
   parseTemplateV2StudentsWorkbook,
   parseTemplateV2TeachersWorkbook,
 } from '../utils/examEngine/templatesV2/importTemplateV2Workbook.js'
+import { buildCargaHorariaDocenteFromHorarios } from '../components/generadorCronograma/teacherAcademicAdmin.js'
 
 const defaultFileHandlers = {
   parseTemplateV2MasterWorkbook,
@@ -187,6 +188,32 @@ function teacherScheduleIdentity(row = {}) {
   ].join('::')
 }
 
+function teacherAvailabilityIdentity(row = {}) {
+  const teacherKey = teacherIdentity(row)
+  if (!teacherKey) return ''
+  return [
+    teacherKey,
+    normalizeIdentityPart(firstClean(row, ['dia', 'day', 'diaSemana'])),
+    normalizeIdentityPart(firstClean(row, ['turno', 'shift'])),
+    normalizeIdentityPart(firstClean(row, ['hora_desde', 'horaDesde', 'desde', 'inicio'])),
+    normalizeIdentityPart(firstClean(row, ['hora_hasta', 'horaHasta', 'hasta', 'fin'])),
+    normalizeIdentityPart(firstClean(row, ['vigencia_desde', 'vigenciaDesde', 'valid_from'])),
+    normalizeIdentityPart(firstClean(row, ['vigencia_hasta', 'vigenciaHasta', 'valid_until'])),
+  ].join('::')
+}
+
+function teacherLoadIdentity(row = {}) {
+  const teacherKey = teacherIdentity(row)
+  const subjectKey = subjectIdentity(row)
+  if (!teacherKey || !subjectKey) return ''
+  return [
+    teacherKey,
+    careerIdentity(row),
+    planIdentity(row),
+    subjectKey,
+  ].join('::')
+}
+
 function mergeRows(existing = [], incoming = [], keyFn) {
   const merged = new Map()
   let created = 0
@@ -238,19 +265,39 @@ export function mergeTeacherWorkbookDatasets(snapshotPayload = {}, incomingDatas
     incomingDatasets?.horariosDocentes,
     teacherScheduleIdentity,
   )
+  const disponibilidadDocente = mergeRows(
+    snapshotPayload?.disponibilidadDocente,
+    incomingDatasets?.disponibilidadDocente,
+    teacherAvailabilityIdentity,
+  )
+  const cargaHorariaDocente = mergeRows(
+    snapshotPayload?.cargaHorariaDocente,
+    incomingDatasets?.cargaHorariaDocente,
+    teacherLoadIdentity,
+  )
+  const generatedCargaHorariaDocente = buildCargaHorariaDocenteFromHorarios({
+    cargaHorariaDocente: cargaHorariaDocente.rows,
+    horariosDocentes: horariosDocentes.rows,
+  })
 
   return {
     datasets: {
+      cargaHorariaDocente: generatedCargaHorariaDocente.rows,
+      disponibilidadDocente: disponibilidadDocente.rows,
       docentes: docentes.rows,
       docenteMateria: docenteMateria.rows,
       horariosDocentes: horariosDocentes.rows,
     },
     created: {
+      cargaHorariaDocente: generatedCargaHorariaDocente.generated,
+      disponibilidadDocente: disponibilidadDocente.created,
       docentes: docentes.created,
       docenteMateria: docenteMateria.created,
       horariosDocentes: horariosDocentes.created,
     },
     updated: {
+      cargaHorariaDocente: cargaHorariaDocente.updated,
+      disponibilidadDocente: disponibilidadDocente.updated,
       docentes: docentes.updated,
       docenteMateria: docenteMateria.updated,
       horariosDocentes: horariosDocentes.updated,
@@ -302,8 +349,10 @@ export function useCronogramaFiles({
   persistWorkspaceSnapshot,
   setAlumnos,
   setCorrelatividades,
+  setCargaHorariaDocente,
   setDocenteMateria,
   setDocentes,
+  setDisponibilidadDocente,
   setHorariosDocentes,
   setPlanesEstudio,
   setRequiereRegeneracion,
@@ -343,7 +392,8 @@ export function useCronogramaFiles({
       const hasTeacherDatasets = Boolean(
         datasets.docentes?.length ||
         datasets.docenteMateria?.length ||
-        datasets.horariosDocentes?.length,
+        datasets.horariosDocentes?.length ||
+        datasets.disponibilidadDocente?.length,
       )
       const hasStudentDatasets = Boolean(datasets.alumnos?.length)
       const teacherDatasets = hasTeacherDatasets ? mergeTeacherWorkbookDatasets(snapshotPayload, datasets) : null
@@ -358,6 +408,8 @@ export function useCronogramaFiles({
         setDocentes(teacherDatasets.datasets.docentes)
         setDocenteMateria(teacherDatasets.datasets.docenteMateria)
         setHorariosDocentes(teacherDatasets.datasets.horariosDocentes)
+        setDisponibilidadDocente?.(teacherDatasets.datasets.disponibilidadDocente)
+        setCargaHorariaDocente?.(teacherDatasets.datasets.cargaHorariaDocente)
       }
       if (studentDatasets) setAlumnos(studentDatasets.rows)
       toast.success(`Carga maestra guardada: ${summary.planesEstudio} materias importadas, ${academicDatasets.datasets.planesEstudio.length} materias totales.`)
@@ -378,6 +430,7 @@ export function useCronogramaFiles({
       const nextUploadedFiles = { ...snapshotPayload?.uploadedFiles, docentesWorkbook: file.name }
       await persistFile({ file, datasetKey: 'docentesWorkbook', datasets: merged.datasets, nextUploadedFiles })
       setDocentes(merged.datasets.docentes); setDocenteMateria(merged.datasets.docenteMateria); setHorariosDocentes(merged.datasets.horariosDocentes)
+      setDisponibilidadDocente?.(merged.datasets.disponibilidadDocente); setCargaHorariaDocente?.(merged.datasets.cargaHorariaDocente)
       toast.success(`Carga docente acumulativa guardada: ${merged.created.docentes} docentes nuevos, ${merged.created.docenteMateria} titularidades nuevas, ${merged.created.horariosDocentes} horarios nuevos. Total: ${merged.datasets.docentes.length} docentes.`)
     } catch (error) { toast.error(`No se pudo cargar la plantilla de docentes: ${error.message}`) } finally { event.target.value = '' }
   }

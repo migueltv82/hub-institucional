@@ -52,6 +52,14 @@ describe('parseTemplateV2MasterWorkbook', () => {
       inicio: '18:00',
       fin: '20:00',
     })
+    expect(result.datasets.disponibilidadDocente[0]).toMatchObject({
+      docente: 'Perez Ana',
+      dia: 'LUNES',
+      turno: 'NOCHE',
+      hora_desde: '18:00',
+      hora_hasta: '20:00',
+      disponible_mesa: true,
+    })
   })
 
   it('no autorreferencia una materia sin correlativa cargada (bug real: fila con correlativa_id vacio)', async () => {
@@ -111,6 +119,10 @@ describe('parseTemplateV2TeachersWorkbook', () => {
     horariosDocentes.addRow(['materia_id', 'materia_codigo', 'materia_nombre', 'docente_id', 'docente', 'dia', 'hora_inicio', 'hora_fin'])
     horariosDocentes.addRow(['subject-uuid-lab05', 'LAB05', 'QUIMICA', 'doc-1', 'BACA Carolina', 'MARTES', '18:20', '20:20'])
 
+    const disponibilidadDocente = workbook.addWorksheet('disponibilidad_docente')
+    disponibilidadDocente.addRow(['docente_id', 'dia', 'turno', 'hora_desde', 'hora_hasta', 'disponible_mesa', 'observaciones'])
+    disponibilidadDocente.addRow(['doc-1', 'MARTES', 'NOCHE', '18:20', '20:20', 'NO', 'Viaje'])
+
     const buffer = await workbook.xlsx.writeBuffer()
     const result = await parseTemplateV2TeachersWorkbook(workbookFile(buffer, 'docentes.xlsx'), {
       planesEstudio: [{
@@ -139,6 +151,18 @@ describe('parseTemplateV2TeachersWorkbook', () => {
       inicio: '18:20',
       fin: '20:20',
     })
+    expect(result.datasets.disponibilidadDocente[0]).toMatchObject({
+      docente_id: 'doc-1',
+      docente: 'BACA Carolina',
+      profesor: 'BACA Carolina',
+      dia: 'MARTES',
+      turno: 'NOCHE',
+      hora_desde: '18:20',
+      hora_hasta: '20:20',
+      disponible_mesa: false,
+      observaciones: 'Viaje',
+    })
+    expect(result.summary.disponibilidadDocente).toBe(1)
   })
 
   it('resuelve el nombre de carrera por carrera_id cuando materia_id no matchea ningun plan', async () => {

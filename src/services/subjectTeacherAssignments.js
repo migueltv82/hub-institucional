@@ -26,7 +26,7 @@ function isMissingDeletedAtColumn(error) {
 }
 
 function deletedAtMigrationMessage(action) {
-  return `${action}. Falta actualizar la base: ejecuta supabase/setup_multi_tenant/07_subject_teacher_assignment_active_unique.sql en Supabase.`
+  return `${action}. Falta actualizar la base: ejecuta supabase/schema/06_subject_teacher_assignments.sql en Supabase.`
 }
 
 function isInvalidTeacherRecordForeignKey(error) {

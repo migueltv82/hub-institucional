@@ -320,7 +320,7 @@ describe('subjectTeacherAssignments service', () => {
     const result = await updateSubjectTeacherAssignmentRole('a1', 'licencia')
 
     expect(result.success).toBe(false)
-    expect(result.error).toContain('07_subject_teacher_assignment_active_unique.sql')
+    expect(result.error).toContain('06_subject_teacher_assignments.sql')
   })
 
   it('da de baja una titularidad', async () => {
@@ -347,6 +347,6 @@ describe('subjectTeacherAssignments service', () => {
     const result = await deactivateSubjectTeacherAssignment('a1')
 
     expect(result.success).toBe(false)
-    expect(result.error).toContain('07_subject_teacher_assignment_active_unique.sql')
+    expect(result.error).toContain('06_subject_teacher_assignments.sql')
   })
 })
