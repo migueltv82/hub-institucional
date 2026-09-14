@@ -1182,6 +1182,7 @@ export default function SubjectDetailView({
       const result = await removeStudentFromTeacherSubject({
         institutionId,
         studentId: student.studentId,
+        student,
         subjectId,
         programId,
         currentPassword,
@@ -1210,6 +1211,7 @@ export default function SubjectDetailView({
       const result = await resetStudentSubjectAcademicRecords({
         institutionId,
         studentId: student.studentId,
+        student,
         subjectId,
         programId,
         currentPassword,

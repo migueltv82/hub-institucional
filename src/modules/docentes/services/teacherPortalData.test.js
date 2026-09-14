@@ -899,6 +899,83 @@ describe('teacherPortalData', () => {
     expect(result.stats.subjects).toBe(1)
   })
 
+  it('no infla horas ni materias con filas de otros docentes aunque el padron tenga materias amplias', () => {
+    const result = mapWorkspaceSnapshotToTeacherPortal({
+      snapshot: {
+        horariosDocentes: [{
+          profesor: 'CORBALAN MIGUEL',
+          carrera: 'PROFESORADO DE INGLES',
+          materia_codigo: 'ING06',
+          nombreMateria: 'Fonetica y Fonologia Inglesa I',
+          dia: 'Miercoles',
+          inicio: '19:40',
+          fin: '21:10',
+        }, {
+          profesor: 'OTRO DOCENTE',
+          carrera: 'PROFESORADO DE INGLES',
+          materia_codigo: 'ING07',
+          nombreMateria: 'Gramatica Inglesa I',
+          dia: 'Jueves',
+          inicio: '18:00',
+          fin: '22:00',
+        }],
+        docenteMateria: [{
+          docente: 'CORBALAN MIGUEL',
+          carrera_id: 'ING',
+          materia_codigo: 'ING06',
+          nombreMateria: 'Fonetica y Fonologia Inglesa I',
+        }, {
+          docente: 'OTRO DOCENTE',
+          carrera_id: 'ING',
+          materia_codigo: 'ING07',
+          nombreMateria: 'Gramatica Inglesa I',
+        }],
+        planesEstudio: [{
+          carrera: 'PROFESORADO DE INGLES',
+          materia: 'ING06',
+          nombre: 'Fonetica y Fonologia Inglesa I',
+          anio: '1',
+        }, {
+          carrera: 'PROFESORADO DE INGLES',
+          materia: 'ING07',
+          nombre: 'Gramatica Inglesa I',
+          anio: '1',
+        }],
+      },
+      teacherRows: [{
+        record_id: 'teacher-record-corbalan',
+        profile_id: 'teacher-user-corbalan',
+        email: '29541016@docentes.inst-1.local',
+        full_name: 'CORBALAN MIGUEL',
+        nombre: 'CORBALAN',
+        apellido: 'MIGUEL',
+        dni: '29541016',
+        carreras: ['PROFESORADO DE INGLES'],
+        raw: {
+          materias: ['ING06', 'ING07'],
+        },
+      }],
+      studentRows: [],
+      user: {
+        id: 'teacher-user-corbalan',
+        email: '29541016@docentes.inst-1.local',
+        nombre: 'CORBALAN MIGUEL',
+      },
+      activeInstitution: {
+        id: 'inst-1',
+        name: 'Instituto',
+      },
+    })
+
+    expect(result.schedules).toHaveLength(1)
+    expect(result.schedules[0]).toEqual(expect.objectContaining({ profesor: 'CORBALAN MIGUEL', materiaCodigo: 'ING06' }))
+    expect(result.subjectRows).toHaveLength(1)
+    expect(result.subjectRows[0]).toEqual(expect.objectContaining({ materiaCodigo: 'ING06' }))
+    expect(result.stats.weeklyHours).toBe(1.5)
+    expect(result.stats.scheduleBlocks).toBe(1)
+    expect(result.stats.subjects).toBe(1)
+  })
+
   it('no duplica una materia cuando cargaHorariaDocente (formato canonico) trae el nombre completo de la carrera en program_id y docenteMateria/horariosDocentes traen el codigo corto', () => {
     // Regresion: cargaHorariaDocente puede venir en formato canonico, con
     // "program_id" ya resuelto al nombre completo de la carrera, mientras

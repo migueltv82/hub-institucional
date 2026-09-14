@@ -77,12 +77,86 @@ describe('useCronogramaFiles', () => {
       [{ alumno_id: '1', nombre: 'Ana' }, { alumno_id: '2', nombre: 'Luis' }],
       [{ alumno_id: '2', nombre: 'Luis Alberto' }, { alumno_id: '3', nombre: 'Marta' }],
     )
-    expect(result).toMatchObject({ created: 1, updated: 1 })
+    expect(result).toMatchObject({ created: 1, updated: 1, preserved: 1 })
     expect(result.rows).toEqual([
       { alumno_id: '1', nombre: 'Ana' },
       { alumno_id: '2', nombre: 'Luis Alberto' },
       { alumno_id: '3', nombre: 'Marta' },
     ])
+  })
+
+  it('actualiza el mismo alumno por DNI aunque la nueva planilla traiga otro id', () => {
+    const result = mergeStudentRows(
+      [{
+        id: 'student-record-1',
+        profile_id: 'profile-1',
+        email: 'ana.viejo@example.com',
+        nombre: 'Ana',
+        apellido: 'Perez',
+        dni: '30111222',
+        carrera: 'PROFESORADO DE INGLES',
+        anio: '1',
+      }],
+      [{
+        id: 'xlsx-random-id',
+        email: 'ana.nuevo@example.com',
+        nombre: 'Ana Maria',
+        dni: '30.111.222',
+        carrera: 'PROFESORADO DE INGLES',
+        anio: '2',
+      }],
+    )
+
+    expect(result).toMatchObject({ created: 0, updated: 1, preserved: 0 })
+    expect(result.rows).toEqual([{
+      id: 'student-record-1',
+      profile_id: 'profile-1',
+      email: 'ana.nuevo@example.com',
+      nombre: 'Ana Maria',
+      apellido: 'Perez',
+      dni: '30.111.222',
+      carrera: 'PROFESORADO DE INGLES',
+      anio: '2',
+    }])
+  })
+
+  it('no borra datos existentes cuando la planilla anual trae celdas vacias', () => {
+    const result = mergeStudentRows(
+      [{
+        record_id: 'record-1',
+        email: 'luis@example.com',
+        nombre: 'Luis',
+        apellido: 'Gomez',
+        dni: '28111222',
+        legajo: 'L-100',
+        telefono: '381555111',
+        carrera: 'TECNICO SUPERIOR EN TURISMO',
+        anio: '1',
+      }],
+      [{
+        email: 'luis@example.com',
+        nombre: 'Luis Alberto',
+        apellido: '',
+        dni: '',
+        legajo: '',
+        telefono: '',
+        carrera: 'TECNICO SUPERIOR EN TURISMO',
+        anio: '2',
+      }],
+    )
+
+    expect(result).toMatchObject({ created: 0, updated: 1, preserved: 0 })
+    expect(result.rows).toEqual([{
+      record_id: 'record-1',
+      email: 'luis@example.com',
+      nombre: 'Luis Alberto',
+      apellido: 'Gomez',
+      dni: '28111222',
+      legajo: 'L-100',
+      telefono: '381555111',
+      carrera: 'TECNICO SUPERIOR EN TURISMO',
+      anio: '2',
+    }])
   })
 
   it('acumula docentes, titularidades y horarios sin borrar el padron anterior', () => {

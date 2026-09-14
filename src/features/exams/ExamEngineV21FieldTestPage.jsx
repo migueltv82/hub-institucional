@@ -54,8 +54,8 @@ import {
 const WIZARD_STEPS = [
   { id: 'config', title: 'Configurar llamado', description: 'Fechas, tipo de llamado y alcance del periodo de mesas.' },
   { id: 'armar', title: 'Armar mesas', description: 'Precronograma, combinar y completar tribunales (o cargarlas a mano si es especial).' },
-  { id: 'review', title: 'Envío a docentes', description: 'Publicá el precronograma completo para que lo confirmen.' },
-  { id: 'final', title: 'Cronograma final', description: 'Revisá las confirmaciones y publicá la versión definitiva.' },
+  { id: 'review', title: 'EnvÃ­o a docentes', description: 'PublicÃ¡ el precronograma completo para que lo confirmen.' },
+  { id: 'final', title: 'Cronograma final', description: 'RevisÃ¡ las confirmaciones y publicÃ¡ la versiÃ³n definitiva.' },
 ]
 
 function resolveCurrentStepId(uiState) {
@@ -148,6 +148,7 @@ function ExamEngineV21FieldTestPage({
   dataReady = true,
   institutionId = '',
   onGoToUploads,
+  onExamEngineStateChange,
   onPublishOfficialSchedule,
   onResetExamProcess,
   uploadedFiles = {},
@@ -160,26 +161,55 @@ function ExamEngineV21FieldTestPage({
     { id: 'armar', title: 'Armar mesas', description: 'Revisar fechas, combinar mesas y completar tribunales.' },
     { id: 'review', title: 'Resultado', description: 'Revisar la previsualizacion sin publicar.' },
   ] : WIZARD_STEPS
+  const persistedState = !isPreview && workspaceSnapshot?.examEngineV21State?.version === 1
+    ? workspaceSnapshot.examEngineV21State
+    : null
   const [previewErrors, setPreviewErrors] = useState([])
   const [configTouched, setConfigTouched] = useState(false)
-  const [configForm, setConfigForm] = useState(() => createDefaultExamCallConfigForm(workspaceSnapshot, { requireExplicitDates: isPreview }))
-  const [includeCurrentCronogramaAssignments, setIncludeCurrentCronogramaAssignments] = useState(false)
-  const [uiState, setUiState] = useState(FIELD_TEST_UI_STATES.CONFIGURING_CALL)
-  const [engineData, setEngineData] = useState(null)
-  const [draftResult, setDraftResult] = useState(null)
-  const [draftExport, setDraftExport] = useState(null)
-  const [reviewedResult, setReviewedResult] = useState(null)
-  const [reviewedSummary, setReviewedSummary] = useState(null)
-  const [tribunalResult, setTribunalResult] = useState(null)
-  const [tribunalReviewExport, setTribunalReviewExport] = useState(null)
-  const [finalResult, setFinalResult] = useState(null)
-  const [finalSummary, setFinalSummary] = useState(null)
-  const [officialExport, setOfficialExport] = useState(null)
-  const [finalAlertsExport, setFinalAlertsExport] = useState(null)
-  const [dataWarnings, setDataWarnings] = useState([])
+  const [configForm, setConfigForm] = useState(() => persistedState?.configForm ?? createDefaultExamCallConfigForm(workspaceSnapshot, { requireExplicitDates: isPreview }))
+  const [includeCurrentCronogramaAssignments, setIncludeCurrentCronogramaAssignments] = useState(Boolean(persistedState?.includeCurrentCronogramaAssignments))
+  const [uiState, setUiState] = useState(persistedState?.uiState ?? FIELD_TEST_UI_STATES.CONFIGURING_CALL)
+  const [engineData, setEngineData] = useState(persistedState?.engineData ?? null)
+  const [draftResult, setDraftResult] = useState(persistedState?.draftResult ?? null)
+  const [draftExport, setDraftExport] = useState(persistedState?.draftExport ?? null)
+  const [reviewedResult, setReviewedResult] = useState(persistedState?.reviewedResult ?? null)
+  const [reviewedSummary, setReviewedSummary] = useState(persistedState?.reviewedSummary ?? null)
+  const [tribunalResult, setTribunalResult] = useState(persistedState?.tribunalResult ?? null)
+  const [tribunalReviewExport, setTribunalReviewExport] = useState(persistedState?.tribunalReviewExport ?? null)
+  const [finalResult, setFinalResult] = useState(persistedState?.finalResult ?? null)
+  const [finalSummary, setFinalSummary] = useState(persistedState?.finalSummary ?? null)
+  const [officialExport, setOfficialExport] = useState(persistedState?.officialExport ?? null)
+  const [finalAlertsExport, setFinalAlertsExport] = useState(persistedState?.finalAlertsExport ?? null)
+  const [dataWarnings, setDataWarnings] = useState(persistedState?.dataWarnings ?? [])
   const [isBusy, setIsBusy] = useState(false)
-  const [teacherReviewStatus, setTeacherReviewStatus] = useState(null)
+  const [teacherReviewStatus, setTeacherReviewStatus] = useState(persistedState?.teacherReviewStatus ?? null)
   const [isFetchingTeacherReviewStatus, setIsFetchingTeacherReviewStatus] = useState(false)
+
+  function persistExamEngineState(overrides = {}) {
+    if (isPreview || !onExamEngineStateChange) return true
+
+    return onExamEngineStateChange({
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      configForm,
+      includeCurrentCronogramaAssignments,
+      uiState,
+      engineData,
+      draftResult,
+      draftExport,
+      reviewedResult,
+      reviewedSummary,
+      tribunalResult,
+      tribunalReviewExport,
+      finalResult,
+      finalSummary,
+      officialExport,
+      finalAlertsExport,
+      dataWarnings,
+      teacherReviewStatus,
+      ...overrides,
+    })
+  }
 
   // Adjusting state during render (React-recommended pattern) instead of an
   // effect: when the workspace's exam period changes and the user hasn't
@@ -313,7 +343,9 @@ function ExamEngineV21FieldTestPage({
         return
       }
 
-      setTeacherReviewStatus(summarizeTeacherReviewStatus(tribunalReviewExport.rows, result.rows))
+      const nextTeacherReviewStatus = summarizeTeacherReviewStatus(tribunalReviewExport.rows, result.rows)
+      setTeacherReviewStatus(nextTeacherReviewStatus)
+      void persistExamEngineState({ teacherReviewStatus: nextTeacherReviewStatus })
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -458,19 +490,39 @@ function ExamEngineV21FieldTestPage({
         docentes: data.docentes,
         examCallConfig,
       })
+      const nextEngineData = { ...data, examCallConfig }
+      const nextWarnings = buildDataWarnings({
+        docentes: data.docentes,
+        materias: data.materias,
+        draftResult: result.draftResult,
+      })
 
       clearDownstreamFromDraft()
-      setEngineData({ ...data, examCallConfig })
+      setEngineData(nextEngineData)
       setDraftResult(result.draftResult)
       setDraftExport(result.draftExport)
       setReviewedResult(reviewed.reviewedResult)
       setReviewedSummary(reviewed.summary)
       setUiState(FIELD_TEST_UI_STATES.REVIEWED_IMPORTED)
-      setDataWarnings(buildDataWarnings({
-        docentes: data.docentes,
-        materias: data.materias,
+      setDataWarnings(nextWarnings)
+      await persistExamEngineState({
+        configForm,
+        includeCurrentCronogramaAssignments,
+        uiState: FIELD_TEST_UI_STATES.REVIEWED_IMPORTED,
+        engineData: nextEngineData,
         draftResult: result.draftResult,
-      }))
+        draftExport: result.draftExport,
+        reviewedResult: reviewed.reviewedResult,
+        reviewedSummary: reviewed.summary,
+        tribunalResult: null,
+        tribunalReviewExport: null,
+        finalResult: null,
+        finalSummary: null,
+        officialExport: null,
+        finalAlertsExport: null,
+        dataWarnings: nextWarnings,
+        teacherReviewStatus: null,
+      })
       toast.success('Precronograma generado. Ya puedes combinar mesas y asignar vocales.')
     } catch (error) {
       toast.error(error.message)
@@ -498,13 +550,32 @@ function ExamEngineV21FieldTestPage({
         includeCurrentCronogramaAssignments,
       })
 
+      const nextEngineData = { ...data, examCallConfig }
       clearDownstreamFromDraft()
-      setEngineData({ ...data, examCallConfig })
+      setEngineData(nextEngineData)
       setDraftResult(null)
       setDraftExport(null)
       setUiState(FIELD_TEST_UI_STATES.REVIEWED_IMPORTED)
       setDataWarnings([])
-      toast.success('Listo, ahora cargá cada mesa especial a mano.')
+      void persistExamEngineState({
+        configForm,
+        includeCurrentCronogramaAssignments,
+        uiState: FIELD_TEST_UI_STATES.REVIEWED_IMPORTED,
+        engineData: nextEngineData,
+        draftResult: null,
+        draftExport: null,
+        reviewedResult: null,
+        reviewedSummary: null,
+        tribunalResult: null,
+        tribunalReviewExport: null,
+        finalResult: null,
+        finalSummary: null,
+        officialExport: null,
+        finalAlertsExport: null,
+        dataWarnings: [],
+        teacherReviewStatus: null,
+      })
+      toast.success('Listo, ahora cargÃ¡ cada mesa especial a mano.')
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -516,9 +587,22 @@ function ExamEngineV21FieldTestPage({
     const previousCount = reviewedResult?.reviewedSchedule?.length ?? 0
     const combinedCount = previousCount - nextReviewedSchedule.length
 
-    setReviewedResult((current) => ({ ...current, reviewedSchedule: nextReviewedSchedule }))
-    setReviewedSummary(summarizeReviewedSchedule(nextReviewedSchedule))
+    const nextReviewedResult = { ...reviewedResult, reviewedSchedule: nextReviewedSchedule }
+    const nextReviewedSummary = summarizeReviewedSchedule(nextReviewedSchedule)
+    setReviewedResult(nextReviewedResult)
+    setReviewedSummary(nextReviewedSummary)
     tribunalSession.resetSelections()
+    void persistExamEngineState({
+      reviewedResult: nextReviewedResult,
+      reviewedSummary: nextReviewedSummary,
+      tribunalResult: null,
+      tribunalReviewExport: null,
+      finalResult: null,
+      finalSummary: null,
+      officialExport: null,
+      finalAlertsExport: null,
+      teacherReviewStatus: null,
+    })
     toast.success(
       combinedCount > 0
         ? `Se combinaron ${combinedCount} ${combinedCount === 1 ? 'par' : 'pares'} de mesas.`
@@ -542,6 +626,12 @@ function ExamEngineV21FieldTestPage({
       const tribunalReviewExportResult = exportGeneratedTribunalsForReview(finalizedTribunalResult, {
         generatedAt: new Date().toISOString(),
       })
+      const nextWarnings = buildDataWarnings({
+        docentes: engineData.docentes,
+        materias: engineData.materias,
+        draftResult,
+        tribunalResult: finalizedTribunalResult,
+      })
 
       setTribunalResult(finalizedTribunalResult)
       setTribunalReviewExport(tribunalReviewExportResult)
@@ -550,12 +640,18 @@ function ExamEngineV21FieldTestPage({
       setOfficialExport(null)
       setFinalAlertsExport(null)
       setUiState(FIELD_TEST_UI_STATES.WAITING_FINAL_REVIEW_IMPORT)
-      setDataWarnings(buildDataWarnings({
-        docentes: engineData.docentes,
-        materias: engineData.materias,
-        draftResult,
+      setDataWarnings(nextWarnings)
+      void persistExamEngineState({
+        uiState: FIELD_TEST_UI_STATES.WAITING_FINAL_REVIEW_IMPORT,
         tribunalResult: finalizedTribunalResult,
-      }))
+        tribunalReviewExport: tribunalReviewExportResult,
+        finalResult: null,
+        finalSummary: null,
+        officialExport: null,
+        finalAlertsExport: null,
+        dataWarnings: nextWarnings,
+        teacherReviewStatus: null,
+      })
       toast.success(isPreview ? 'Previsualizacion completa lista para revisar.' : 'Precronograma completo listo para enviar a los docentes.')
     } catch (error) {
       toast.error(error.message)
@@ -588,18 +684,29 @@ function ExamEngineV21FieldTestPage({
       generatedAt: new Date().toISOString(),
     })
 
-    setFinalResult(result.finalResult)
-    setFinalSummary(result.summary)
-    setOfficialExport(result.officialExport)
-    setFinalAlertsExport(result.finalAlertsExport)
-    setUiState(resolveFinalUiState(result.summary))
-    setDataWarnings(buildDataWarnings({
+    const nextUiState = resolveFinalUiState(result.summary)
+    const nextWarnings = buildDataWarnings({
       docentes: engineData.docentes,
       materias: engineData.materias,
       draftResult,
       tribunalResult,
       finalResult: result.finalResult,
-    }))
+    })
+
+    setFinalResult(result.finalResult)
+    setFinalSummary(result.summary)
+    setOfficialExport(result.officialExport)
+    setFinalAlertsExport(result.finalAlertsExport)
+    setUiState(nextUiState)
+    setDataWarnings(nextWarnings)
+    void persistExamEngineState({
+      uiState: nextUiState,
+      finalResult: result.finalResult,
+      finalSummary: result.summary,
+      officialExport: result.officialExport,
+      finalAlertsExport: result.finalAlertsExport,
+      dataWarnings: nextWarnings,
+    })
     toast.success('Revision final importada y revalidada.')
   }
 
@@ -621,7 +728,7 @@ function ExamEngineV21FieldTestPage({
     importFinalReviewRows(createConfirmedFinalReviewRows(tribunalReviewExport?.rows ?? []))
   }
 
-  function publishOfficialSchedule() {
+  async function publishOfficialSchedule() {
     if (isPreview) return
     if (!finalResult?.finalTribunals?.length) {
       toast.error('Primero confirma la revision final.')
@@ -638,12 +745,17 @@ function ExamEngineV21FieldTestPage({
     }
 
     if (onPublishOfficialSchedule) {
-      const result = onPublishOfficialSchedule(publishedCronograma, {
-        finalResult,
-        officialExport,
-      })
+      try {
+        setIsBusy(true)
+        const result = await onPublishOfficialSchedule(publishedCronograma, {
+          finalResult,
+          officialExport,
+        })
 
-      if (result === false) return
+        if (result === false) return
+      } finally {
+        setIsBusy(false)
+      }
     }
 
     toast.success(`Cronograma publicado en portales: ${publishedCronograma.length} mesas.`)
@@ -657,6 +769,9 @@ function ExamEngineV21FieldTestPage({
     clearDownstreamFromDraft()
     setDataWarnings([])
     setUiState(FIELD_TEST_UI_STATES.CONFIGURING_CALL)
+    if (!isPreview && onExamEngineStateChange) {
+      void onExamEngineStateChange(null)
+    }
   }
 
   async function resetRun() {
@@ -750,7 +865,7 @@ function ExamEngineV21FieldTestPage({
       {viewingPastStep && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-sky-200 bg-sky-50 px-4 py-3">
           <p className="text-sm font-bold text-sky-900">
-            Estás revisando &ldquo;{wizardSteps[viewStepIndex]?.title}&rdquo;, un paso ya completado. El proceso sigue donde lo dejaste.
+            EstÃ¡s revisando &ldquo;{wizardSteps[viewStepIndex]?.title}&rdquo;, un paso ya completado. El proceso sigue donde lo dejaste.
           </p>
           <button className="btn-secondary" type="button" onClick={() => setViewStepId(currentStepId)}>
             Volver al paso actual
@@ -846,10 +961,10 @@ function ExamEngineV21FieldTestPage({
                     <thead className="sticky top-0 bg-slate-100 text-slate-800">
                       <tr>
                         <th className="px-3 py-2">Carrera</th>
-                        <th className="px-3 py-2">Código</th>
+                        <th className="px-3 py-2">CÃ³digo</th>
                         <th className="px-3 py-2">Materia</th>
                         <th className="px-3 py-2">Motivo</th>
-                        <th className="px-3 py-2">Cómo resolverlo</th>
+                        <th className="px-3 py-2">CÃ³mo resolverlo</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">

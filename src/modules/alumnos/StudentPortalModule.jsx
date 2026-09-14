@@ -10,6 +10,7 @@ import {
   GraduationCap,
   ListChecks,
   LogOut,
+  UsersRound,
 } from 'lucide-react'
 import { NavLink, Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext.jsx'
@@ -19,6 +20,7 @@ import StudentDashboardPage from './pages/StudentDashboardPage.jsx'
 import StudentAcademicStatusPage from './pages/StudentAcademicStatusPage.jsx'
 import StudentSubjectsPage from './pages/StudentSubjectsPage.jsx'
 import StudentGradesPage from './pages/StudentGradesPage.jsx'
+import StudentClassmatesPage from './pages/StudentClassmatesPage.jsx'
 import StudentExamEnrollmentPage from './pages/StudentExamEnrollmentPage.jsx'
 import { isStudentCourseEnrollmentInternalPreviewEnabled } from '../../features/studentCourseEnrollment/studentCourseEnrollmentPreviewAccess.js'
 import { saveWorkspaceSnapshot } from '../../services/workspaceSnapshot.js'
@@ -31,6 +33,7 @@ const baseNavItems = [
   { to: '/app/dashboard', label: 'Dashboard', icon: GraduationCap },
   { to: '/app/estado-academico', label: 'Estado academico', icon: ListChecks },
   { to: '/app/materias', label: 'Materias', icon: BookOpenCheck },
+  { to: '/app/companeros', label: 'Compañeros', icon: UsersRound },
   { to: '/app/calificaciones', label: 'Calificaciones', icon: ClipboardList },
   { to: '/app/mesas-examen', label: 'Mesas de examen', icon: CalendarDays },
 ]
@@ -567,6 +570,7 @@ export default function StudentPortalModule() {
         <Route path="dashboard" element={<StudentDashboardPage />} />
         <Route path="estado-academico" element={<StudentAcademicStatusPage />} />
         <Route path="materias" element={<StudentSubjectsPage />} />
+        <Route path="companeros" element={<StudentClassmatesPage />} />
         <Route path="calificaciones" element={<StudentGradesPage />} />
         <Route path="mesas-examen" element={<StudentExamEnrollmentPage />} />
         {courseEnrollmentPreviewEnabled && StudentCourseEnrollmentInternalPreview && (

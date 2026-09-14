@@ -13,6 +13,17 @@ function ensureSupabaseReady() {
   }
 }
 
+function isMissingExamTeacherAssignmentsTable(error) {
+  const errorText = `${error?.message ?? ''} ${error?.details ?? ''} ${error?.hint ?? ''}`.toLowerCase()
+  return error?.code === 'PGRST205' ||
+    error?.code === '42P01' ||
+    (errorText.includes('exam_teacher_assignments') && (
+      errorText.includes('could not find the table') ||
+      errorText.includes('schema cache') ||
+      errorText.includes('does not exist')
+    ))
+}
+
 function buildDocenteIndex(docentes = []) {
   const index = new Map()
   docentes.forEach((docente) => {
@@ -185,7 +196,10 @@ export async function publishExamTeacherAssignmentsForReview({
     .select('id')
 
   if (error) {
-    return { success: false, error: `No se pudo publicar el precronograma. ${error.message}` }
+    const migrationHint = isMissingExamTeacherAssignmentsTable(error)
+      ? ' Ejecuta supabase/docs/repair_06_exam_teacher_assignments.sql en Supabase y vuelve a intentar.'
+      : ''
+    return { success: false, error: `No se pudo publicar el precronograma.${migrationHint} ${error.message}` }
   }
 
   return {
@@ -266,7 +280,7 @@ export async function resetExamProcessForWorkspace({
 
   if (error) {
     const migrationHint = isMissingExamProcessResetFunction(error)
-      ? ' Ejecuta supabase/setup_multi_tenant/21_exam_process_reset.sql en Supabase y vuelve a intentar.'
+      ? ' Ejecuta supabase/docs/repair_06_exam_process_reset_rpc.sql en Supabase y vuelve a intentar.'
       : ''
     return {
       success: false,

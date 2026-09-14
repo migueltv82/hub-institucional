@@ -20,6 +20,7 @@ async function loadService({
     hybrid_read_enabled: false,
     relational_primary_enabled: false,
   },
+  portalGrades = [],
   fromResults = [],
 } = {}) {
   vi.resetModules()
@@ -31,7 +32,11 @@ async function loadService({
     queryIndex += 1
     return builder ?? createQueryBuilder({ data: [], error: null })
   })
-  const rpc = vi.fn().mockResolvedValue({ data: transitionConfig, error: null })
+  const rpc = vi.fn(async (functionName) => (
+    functionName === 'academic_get_student_portal_grades'
+      ? { data: portalGrades, error: null }
+      : { data: transitionConfig, error: null }
+  ))
 
   vi.doMock('../../../lib/supabase.js', () => ({
     isSupabaseConfigured: true,
@@ -55,7 +60,7 @@ afterEach(() => {
 })
 
 describe('fetchAcademicRelationalSnapshotOverlay', () => {
-  it('en snapshot_only lee solo las notas relacionales del libro docente', async () => {
+  it('en snapshot_only lee inscripciones y notas propias persistidas', async () => {
     const { fetchAcademicRelationalSnapshotOverlay, from } = await loadService()
 
     const result = await fetchAcademicRelationalSnapshotOverlay({
@@ -65,13 +70,43 @@ describe('fetchAcademicRelationalSnapshotOverlay', () => {
       useRemote: true,
     })
 
-    expect(from).toHaveBeenCalledTimes(1)
+    expect(from).toHaveBeenCalledWith('subject_enrollments')
+    expect(from).toHaveBeenCalledWith('exam_enrollments')
+    expect(result.relationalData).toEqual({
+      enrollments: [],
+      enrollmentsLoaded: true,
+      examEnrollments: [],
+      grades: [],
+    })
+  })
+
+  it('usa lectura directa de notas si la RPC de portal alumno todavia no existe', async () => {
+    const { fetchAcademicRelationalSnapshotOverlay, from, rpc } = await loadService({
+      fromResults: [
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [{ id: 'grade-1', student_id: 'student-1', subject_id: 'ING01', program_id: 'Profesorado', grade_value: 8 }], error: null },
+      ],
+    })
+    rpc.mockImplementation(async (functionName) => (
+      functionName === 'academic_get_student_portal_grades'
+        ? { data: null, error: { code: 'PGRST202', message: 'Could not find the function academic_get_student_portal_grades' } }
+        : { data: { stage: 'snapshot_only', read_mode: 'snapshot_only' }, error: null }
+    ))
+
+    const result = await fetchAcademicRelationalSnapshotOverlay({
+      institutionId: 'inst-1',
+      workspaceKey: 'main',
+      user: { id: 'student-1' },
+      useRemote: true,
+    })
+
     expect(from).toHaveBeenCalledWith('student_grades')
     expect(result.relationalData).toEqual({
       enrollments: [],
-      enrollmentsLoaded: false,
+      enrollmentsLoaded: true,
       examEnrollments: [],
-      grades: [],
+      grades: [expect.objectContaining({ id: 'grade-1', score: 8 })],
     })
   })
 
@@ -90,6 +125,7 @@ describe('fetchAcademicRelationalSnapshotOverlay', () => {
         { data: [], error: null },
         { data: [], error: null },
       ],
+      portalGrades: [{ id: 'grade-1', student_id: 'student-1', subject_id: 'ING01', program_id: 'Profesorado', grade_value: 9 }],
     })
 
     const result = await fetchAcademicRelationalSnapshotOverlay({
@@ -101,8 +137,8 @@ describe('fetchAcademicRelationalSnapshotOverlay', () => {
 
     expect(from).toHaveBeenCalledWith('subject_enrollments')
     expect(from).toHaveBeenCalledWith('exam_enrollments')
-    expect(from).toHaveBeenCalledWith('student_grades')
     expect(result.relationalData.enrollmentsLoaded).toBe(true)
+    expect(result.relationalData.grades).toEqual([expect.objectContaining({ id: 'grade-1', score: 9 })])
     expect(result.relationalData.enrollments).toEqual([
       expect.objectContaining({
         id: 'enrollment-1',

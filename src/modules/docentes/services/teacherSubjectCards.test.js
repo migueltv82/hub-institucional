@@ -198,6 +198,40 @@ describe('teacherSubjectCards', () => {
     }))
   })
 
+  it('no crea tarjetas desde asignaciones relacionales que no aparecen en los grupos filtrados del docente', () => {
+    const result = mergeTeacherSubjects({
+      includeAssignedOnly: false,
+      subjectGroups: [{
+        key: 'profesorado::ing06',
+        career: 'PROFESORADO DE INGLES',
+        code: 'ING06',
+        name: 'FONETICA Y FONOLOGIA INGLESA I',
+        schedules: [{ dia: 'JUEVES' }],
+        students: [],
+      }],
+      assignedSubjects: [{
+        id: 'assignment-real',
+        subjectId: 'INGO6',
+        programId: 'CARRERA',
+        nombre: 'FONETICA Y FONOLOGIA INGLESA I',
+        carrera: 'CARRERA',
+      }, {
+        id: 'assignment-extra',
+        subjectId: 'ING99',
+        programId: 'PROFESORADO DE INGLES',
+        nombre: 'MATERIA DE OTRO DOCENTE',
+        carrera: 'PROFESORADO DE INGLES',
+      }],
+    })
+
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual(expect.objectContaining({
+      subjectId: 'ING06',
+      programId: 'PROFESORADO DE INGLES',
+      schedules: [expect.objectContaining({ dia: 'JUEVES' })],
+    }))
+  })
+
   it('cruza los grupos del dashboard con las inscripciones reales', () => {
     const result = mergeSubjectGroupsWithRosters([
       {

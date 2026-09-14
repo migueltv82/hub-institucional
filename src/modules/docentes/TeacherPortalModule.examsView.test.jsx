@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import toast from 'react-hot-toast'
 import { DashboardView, ExamsView } from './TeacherPortalModule.jsx'
 import { confirmTeacherExamAssignment } from './services/teacherExamAssignments.js'
+import { getTeacherVisibleEmail, isTeacherTechnicalEmail } from './services/teacherContactDisplay.js'
 
 // Huso horario negativo a proposito: reproduce el bug real de formatDate()
 // mostrando el dia calendario anterior cuando new Date('2026-08-10') se
@@ -19,6 +20,18 @@ vi.mock('react-hot-toast', () => ({
 
 afterEach(() => {
   vi.clearAllMocks()
+})
+
+describe('TeacherPortalModule - datos visibles del docente', () => {
+  it('oculta emails tecnicos internos del portal docente', () => {
+    expect(isTeacherTechnicalEmail('29541016@docentes.3f9dd1a0-19b8-462f-bdd8-7e849d90ae04.local')).toBe(true)
+    expect(getTeacherVisibleEmail('29541016@docentes.3f9dd1a0-19b8-462f-bdd8-7e849d90ae04.local')).toBe('')
+  })
+
+  it('mantiene emails reales cargados por el docente', () => {
+    expect(isTeacherTechnicalEmail('miguel.corbalan@example.edu')).toBe(false)
+    expect(getTeacherVisibleEmail('miguel.corbalan@example.edu')).toBe('miguel.corbalan@example.edu')
+  })
 })
 
 function assignment(overrides = {}) {

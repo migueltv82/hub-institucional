@@ -133,7 +133,7 @@ export function useWorkspacePersistence({
     useRemoteWorkspace,
   ])
 
-  const saveSnapshotNow = useCallback(async (payloadOverride = snapshotPayload) => {
+  const saveSnapshotNow = useCallback(async (payloadOverride = snapshotPayload, options = {}) => {
     if (!activeInstitutionId) throw new Error('No hay una institucion activa para guardar los datos.')
     if (!canWriteRemoteWorkspace) throw new Error('Tu rol institucional es de solo lectura.')
     setSyncStatus(useRemoteWorkspace ? 'syncing' : 'local-only')
@@ -144,6 +144,7 @@ export function useWorkspacePersistence({
       ownerUserId: ownerUserId ?? null,
       payload: payloadOverride,
       useRemote: useRemoteWorkspace,
+      syncOperational: options.syncOperational,
     })
     setLastSyncedAt(result.updatedAt)
     setWorkspaceSource(result.source)
@@ -391,6 +392,7 @@ export function useWorkspacePersistence({
           ownerUserId: ownerUserId ?? null,
           payload: snapshotPayload,
           useRemote: useRemoteWorkspace,
+          syncOperational: false,
         })
 
         if (cancelled) return
@@ -460,6 +462,7 @@ export function useWorkspacePersistence({
         ownerUserId: context.ownerUserId ?? null,
         payload: context.payload,
         useRemote: context.useRemoteWorkspace,
+        syncOperational: false,
       }).catch(() => {
         dirtySnapshotRef.current = true
       })

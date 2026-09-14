@@ -50,6 +50,7 @@ const emptySnapshot = {
   estadoAcademico: [],
   academicStatusRows: [],
   enrollments: [],
+  courseClassmates: [],
   grades: [],
   examEnrollments: [],
   academicStatus: null,
@@ -58,6 +59,7 @@ const emptySnapshot = {
   adminReviewPromotions: [],
   adminReviewApprovalRequests: [],
   adminReviewSecondApprovals: [],
+  examEngineV21State: null,
   uploadedFiles: {
     masterWorkbook: null,
     docentesWorkbook: null,
@@ -763,6 +765,7 @@ export function normalizeWorkspaceSnapshot(payload) {
     estadoAcademico: normalizeArray(payload.estadoAcademico),
     academicStatusRows: normalizeArray(payload.academicStatusRows),
     enrollments: normalizeArray(payload.enrollments),
+    courseClassmates: normalizeArray(payload.courseClassmates),
     grades: normalizeArray(payload.grades),
     examEnrollments: normalizeArray(payload.examEnrollments),
     academicStatus: payload.academicStatus && typeof payload.academicStatus === 'object'
@@ -773,6 +776,9 @@ export function normalizeWorkspaceSnapshot(payload) {
     adminReviewPromotions: normalizeArray(payload.adminReviewPromotions),
     adminReviewApprovalRequests: normalizeArray(payload.adminReviewApprovalRequests),
     adminReviewSecondApprovals: normalizeArray(payload.adminReviewSecondApprovals),
+    examEngineV21State: payload.examEngineV21State && typeof payload.examEngineV21State === 'object'
+      ? payload.examEngineV21State
+      : null,
     uploadedFiles: normalizeUploadedFiles(payload.uploadedFiles),
     fechaInicio: typeof payload.fechaInicio === 'string' ? payload.fechaInicio : '',
     fechaFin: typeof payload.fechaFin === 'string' ? payload.fechaFin : '',
@@ -896,7 +902,15 @@ export async function fetchWorkspaceSnapshot({ institutionId, workspaceKey, useR
   }
 }
 
-export async function saveWorkspaceSnapshot({ institutionId, workspaceKey, ownerEmail, ownerUserId, payload, useRemote }) {
+export async function saveWorkspaceSnapshot({
+  institutionId,
+  workspaceKey,
+  ownerEmail,
+  ownerUserId,
+  payload,
+  useRemote,
+  syncOperational = true,
+}) {
   if (!canUseRemoteWorkspace({ institutionId, useRemote })) {
     try {
       assertRemoteWorkspaceContext({ institutionId, useRemote })
@@ -943,6 +957,23 @@ export async function saveWorkspaceSnapshot({ institutionId, workspaceKey, owner
       errorMessage: error.message,
     })
     throw error
+  }
+
+  if (!syncOperational) {
+    logWorkspaceSnapshotDiagnostic('info', 'save:supabase-ok-skip-operational-sync', {
+      counts: getSnapshotCounts(normalizedPayload),
+      destination: TABLE_NAME,
+      hasInstitutionId: Boolean(institutionId),
+      source: 'supabase',
+      updatedAt,
+      useRemote,
+      workspaceKey,
+    })
+
+    return {
+      updatedAt,
+      source: 'supabase',
+    }
   }
 
   try {

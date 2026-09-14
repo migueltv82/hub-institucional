@@ -184,7 +184,7 @@ function matchesTeacherIdentity(row, user, teacherRecord = null) {
   if (!row || typeof row !== 'object') return false
 
   const rowProfileId = getFirst(row, ['profile_id', 'profileId', 'teacher_id', 'teacherId', 'user_id', 'userId'])
-  if (sameNonEmptyText(rowProfileId, user?.id) || sameNonEmptyText(getTeacherProfileId(teacherRecord), user?.id)) return true
+  if (sameNonEmptyText(rowProfileId, user?.id) || sameNonEmptyText(rowProfileId, getTeacherProfileId(teacherRecord))) return true
 
   const rowTeacherRecordId = getFirst(row, ['teacher_record_id', 'teacherRecordId', 'docenteId', 'docente_id', 'teacher_id', 'teacherId', 'record_id'])
   if (sameNonEmptyText(rowTeacherRecordId, teacherRecord?.record_id)) return true
@@ -250,8 +250,37 @@ function teacherRecordHasScheduleSubject(row, teacherRecord) {
   )
 }
 
+function hasExplicitTeacherIdentity(row) {
+  return Boolean(clean(getFirst(row, [
+    'profile_id',
+    'profileId',
+    'teacher_id',
+    'teacherId',
+    'user_id',
+    'userId',
+    'teacher_record_id',
+    'teacherRecordId',
+    'docenteId',
+    'docente_id',
+    'record_id',
+    'email',
+    'correo',
+    'mail',
+    'dni',
+    'documento',
+    'document_number',
+    'profesor',
+    'docente',
+    'nombre',
+    'teacher_name',
+    'teacher_display_name',
+  ])))
+}
+
 function matchesTeacherSchedule(row, user, teacherRecord = null) {
-  return matchesTeacherIdentity(row, user, teacherRecord) || teacherRecordHasScheduleSubject(row, teacherRecord)
+  if (matchesTeacherIdentity(row, user, teacherRecord)) return true
+  if (hasExplicitTeacherIdentity(row)) return false
+  return teacherRecordHasScheduleSubject(row, teacherRecord)
 }
 
 function parseTimeToMinutes(value) {
@@ -459,7 +488,7 @@ function resolveSubjectName({ career, subjectCode, currentName, indexes }) {
 }
 
 function enrichScheduleRow(row, subjectIndexes) {
-  const subjectCode = clean(row?.materia || row?.codigo || row?.subject_code)
+  const subjectCode = clean(row?.materia || row?.materiaCodigo || row?.materia_codigo || row?.codigo || row?.subject_code || row?.subject_id)
   const subjectName = resolveSubjectName({
     career: row?.carrera || row?.programa || row?.program,
     subjectCode,
@@ -829,7 +858,10 @@ export function mapWorkspaceSnapshotToTeacherPortal({
     .sort((a, b) => new Date(getExamDate(a) || 0) - new Date(getExamDate(b) || 0))
   const subjectRows = asArray(snapshot.docenteMateria)
     .concat(asArray(snapshot.cargaHorariaDocente))
-    .filter((row) => matchesTeacherIdentity(row, user, matchedTeacherRecord) || teacherRecordHasScheduleSubject(row, matchedTeacherRecord))
+    .filter((row) => (
+      matchesTeacherIdentity(row, user, matchedTeacherRecord) ||
+      (!hasExplicitTeacherIdentity(row) && teacherRecordHasScheduleSubject(row, matchedTeacherRecord))
+    ))
     .map((row) => enrichSubjectRow(row, subjectIndexes))
     .sort((a, b) => clean(a.nombreMateria || a.materia).localeCompare(clean(b.nombreMateria || b.materia), 'es', { sensitivity: 'base' }))
   const teacherCareers = new Set(schedules.map((row) => clean(row.carrera)).filter(Boolean))

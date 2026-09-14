@@ -74,6 +74,7 @@ describe('workspaceSnapshot service', () => {
       estadoAcademico: [],
       academicStatusRows: [],
       enrollments: [],
+      courseClassmates: [],
       grades: [],
       examEnrollments: [],
       academicStatus: null,
@@ -82,6 +83,7 @@ describe('workspaceSnapshot service', () => {
       adminReviewPromotions: [],
       adminReviewApprovalRequests: [],
       adminReviewSecondApprovals: [],
+      examEngineV21State: null,
       uploadedFiles: {
         masterWorkbook: null,
         docentesWorkbook: null,

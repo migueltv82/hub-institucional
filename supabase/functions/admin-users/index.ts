@@ -1951,16 +1951,20 @@ function getStudentAcademicResetIdentity(student: Record<string, unknown>) {
   addIdentityValue(identity.profileIds, student.profile_id)
   addIdentityValue(identity.profileIds, student.user_id)
   addIdentityValue(identity.profileIds, student.student_id)
+  addIdentityValue(identity.profileIds, student.studentId)
   addIdentityValue(identity.recordIds, student.student_record_id)
+  addIdentityValue(identity.recordIds, student.studentRecordId)
   addIdentityValue(identity.recordIds, student.record_id)
   addIdentityValue(identity.emails, student.email)
   addIdentityValue(identity.emails, student.student_email)
+  addIdentityValue(identity.emails, student.studentEmail)
   addIdentityValue(identity.emails, raw.email)
   addIdentityValue(identity.dnis, student.dni)
   addIdentityValue(identity.dnis, student.documento)
   addIdentityValue(identity.dnis, raw.dni)
   addIdentityValue(identity.dnis, raw.documento)
   addIdentityValue(identity.names, student.full_name)
+  addIdentityValue(identity.names, student.fullName)
   addIdentityValue(identity.names, student.alumno)
   addIdentityValue(identity.names, student.nombre_completo)
   addIdentityValue(identity.names, [getOptionalString(student.nombre), getOptionalString(student.apellido)].filter(Boolean).join(' '))
@@ -2004,17 +2008,19 @@ function recordMatchesStudentAcademicIdentity(row: Record<string, unknown>, iden
   })
 
   return (
-    hasMatch(identity.profileIds, [row.profile_id, row.user_id, row.student_id, raw.profile_id, raw.user_id, raw.student_id]) ||
-    hasMatch(identity.recordIds, [row.student_record_id, row.record_id, raw.student_record_id, raw.record_id]) ||
+    hasMatch(identity.profileIds, [row.profile_id, row.user_id, row.student_id, row.studentId, raw.profile_id, raw.user_id, raw.student_id, raw.studentId]) ||
+    hasMatch(identity.recordIds, [row.student_record_id, row.studentRecordId, row.record_id, raw.student_record_id, raw.studentRecordId, raw.record_id]) ||
     hasMatch(identity.emails, [row.email, row.student_email, row.correo, raw.email, raw.student_email]) ||
     hasMatch(identity.dnis, [row.dni, row.student_dni, row.documento, raw.dni, raw.documento]) ||
     hasMatch(identity.names, [
       row.alumno,
       row.full_name,
+      row.fullName,
       row.nombre_completo,
       row.student_name,
       raw.alumno,
       raw.full_name,
+      raw.fullName,
       [getOptionalString(row.nombre), getOptionalString(row.apellido)].filter(Boolean).join(' '),
     ])
   )
@@ -2160,6 +2166,23 @@ function stripStudentSubjectAcademicSnapshotData(
     academicStatus: isRecord(snapshot.academicStatus) && matchesStudentAndSubject(snapshot.academicStatus)
       ? null
       : snapshot.academicStatus,
+  }
+}
+
+function stripStudentSubjectEnrollmentSnapshotData(
+  snapshot: Record<string, unknown>,
+  identity: StudentAcademicResetIdentity,
+  subjectId: string,
+  programId: string,
+) {
+  const nextSnapshot = stripStudentSubjectAcademicSnapshotData(snapshot, identity, subjectId, programId)
+
+  return {
+    ...nextSnapshot,
+    enrollments: asRecordArray(nextSnapshot.enrollments).filter((row) => !(
+      recordMatchesStudentAcademicIdentity(row, identity) &&
+      subjectAcademicResetRowMatchesSubjectProgram(row, subjectId, programId)
+    )),
   }
 }
 
@@ -3610,6 +3633,9 @@ async function handleTeacherRemoveStudentSubjectRecords(
   const programId = getOptionalString(payload.program_id).trim()
   const password = requireString(payload.current_password, 'La contrasena actual')
   const caller = context?.caller
+  const student = isRecord(payload.student)
+    ? payload.student
+    : { student_id: studentId }
 
   if (!caller?.id || !caller.email) {
     throw new HttpError('No se pudo identificar la cuenta docente.', 401)
@@ -3645,6 +3671,44 @@ async function handleTeacherRemoveStudentSubjectRecords(
       .join(' ')
     throw new Error(details || 'La base de datos rechazo la eliminacion solicitada.')
   }
+
+  const identity = getStudentAcademicResetIdentity({
+    ...student,
+    student_id: studentId,
+  })
+  const studentRecords = await fetchStudentRecordsForAcademicReset({
+    adminClient,
+    institutionId,
+    workspaceKey,
+    identity,
+  })
+  mergeStudentAcademicResetIdentity(identity, studentRecords)
+
+  const { data: snapshotRow, error: snapshotError } = await adminClient
+    .from('workspace_snapshots')
+    .select('payload')
+    .eq('institution_id', institutionId)
+    .eq('workspace_key', workspaceKey)
+    .maybeSingle()
+
+  if (snapshotError) throw snapshotError
+
+  if (isRecord(snapshotRow?.payload)) {
+    const nextSnapshot = stripStudentSubjectEnrollmentSnapshotData(
+      snapshotRow.payload,
+      identity,
+      subjectId,
+      programId,
+    )
+    const { error: updateSnapshotError } = await adminClient
+      .from('workspace_snapshots')
+      .update({ payload: nextSnapshot, updated_at: new Date().toISOString() })
+      .eq('institution_id', institutionId)
+      .eq('workspace_key', workspaceKey)
+
+    if (updateSnapshotError) throw updateSnapshotError
+  }
+
   return data
 }
 

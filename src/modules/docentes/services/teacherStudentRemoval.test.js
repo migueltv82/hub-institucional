@@ -18,6 +18,11 @@ describe('removeStudentFromTeacherSubject', () => {
     await removeStudentFromTeacherSubject({
       institutionId: 'inst-1',
       studentId: 'student-1',
+      student: {
+        studentId: 'student-1',
+        studentRecordId: 'record-1',
+        dni: '123',
+      },
       subjectId: 'ING06',
       programId: 'Profesorado de Ingles',
       currentPassword: 'clave-segura',
@@ -28,6 +33,11 @@ describe('removeStudentFromTeacherSubject', () => {
         action: 'teacher_remove_student_subject_records',
         institution_id: 'inst-1',
         student_id: 'student-1',
+        student: expect.objectContaining({
+          studentId: 'student-1',
+          studentRecordId: 'record-1',
+          dni: '123',
+        }),
         subject_id: 'ING06',
         program_id: 'Profesorado de Ingles',
         current_password: 'clave-segura',

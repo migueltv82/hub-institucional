@@ -39,6 +39,9 @@ function createWorkspaceQuery() {
       mocks.upsert(payload)
       return { error: null }
     },
+    delete() {
+      return this
+    },
   }
 }
 
@@ -144,5 +147,33 @@ describe('workspaceSnapshot teacher academic persistence', () => {
       }),
       useRemote: true,
     })
+  })
+
+  it('permite guardar solo el snapshot sin disparar sincronizaciones operativas pesadas', async () => {
+    await saveWorkspaceSnapshot({
+      institutionId: 'inst-1',
+      workspaceKey: 'main',
+      ownerEmail: 'admin@example.com',
+      ownerUserId: 'admin-1',
+      payload: {
+        examEngineV21State: {
+          version: 1,
+          uiState: 'REVIEWED_IMPORTED',
+        },
+      },
+      useRemote: true,
+      syncOperational: false,
+    })
+
+    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        examEngineV21State: {
+          version: 1,
+          uiState: 'REVIEWED_IMPORTED',
+        },
+      }),
+    }))
+    expect(mocks.syncRosterRecords).not.toHaveBeenCalled()
+    expect(mocks.syncTeacherAcademicRecords).not.toHaveBeenCalled()
   })
 })

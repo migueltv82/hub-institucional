@@ -2649,9 +2649,9 @@ function TeacherRosterSection({
     setForm(buildTeacherForm(null))
   }
 
-  const submitEdit = () => {
+  const submitEdit = async () => {
     if (modalMode === 'create') {
-      const created = onCreateTeacher?.(form)
+      const created = await onCreateTeacher?.(form)
 
       if (created !== false) {
         cancelEditing()
@@ -2663,7 +2663,7 @@ function TeacherRosterSection({
     if (!editingTeacher) return
 
     const teacherIdentity = editingTeacher.dni || editingTeacher.nombre
-    const updated = onUpdateTeacher?.(teacherIdentity, form)
+    const updated = await onUpdateTeacher?.(teacherIdentity, form)
 
     if (updated !== false) {
       cancelEditing()

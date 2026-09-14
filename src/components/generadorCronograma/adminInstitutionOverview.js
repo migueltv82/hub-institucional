@@ -868,8 +868,10 @@ function addCareerLabel(labels, career) {
   const cleaned = clean(career)
   if (!cleaned || isIgnoredCareerLabel(cleaned)) return ''
 
-  const key = normalizeText(cleaned)
-  if (!labels.has(key)) labels.set(key, cleaned)
+  const label = resolveCareerDisplayName(cleaned) || cleaned
+  const key = normalizeText(label)
+  if (!key || isIgnoredCareerLabel(label)) return ''
+  if (!labels.has(key)) labels.set(key, label)
   return key
 }
 

@@ -89,7 +89,7 @@ describe('ExamEngineV21FieldTestPage', () => {
     // Combinar mesas y completar tribunales ya no son pasos separados: se
     // ven juntos apenas se genera el precronograma, sin boton intermedio.
     await waitFor(() => {
-      expect(screen.getByText('Ahorrá tribunales combinando mesas compatibles')).toBeInTheDocument()
+      expect(screen.getByText(/tribunales combinando mesas compatibles/)).toBeInTheDocument()
     })
     expect(screen.getByText('Seleccion de vocales')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Guardar cambios y preparar envio' })).toBeEnabled()
@@ -107,7 +107,46 @@ describe('ExamEngineV21FieldTestPage', () => {
     expect(screen.getByText('Seleccion de vocales')).toBeInTheDocument()
   })
 
-  it('especial: arma mesas a mano y llegan a "Envío a docentes" sin pasar por el generador automático', () => {
+  it('restaura el precronograma generado desde el snapshot despues de refrescar', async () => {
+    const onExamEngineStateChange = vi.fn(() => true)
+    const firstRender = render(
+      <ExamEngineV21FieldTestPage
+        dataReady
+        onExamEngineStateChange={onExamEngineStateChange}
+        uploadedFiles={{ horarios: true, planes: true, correlatividades: true }}
+        workspaceSnapshot={buildWorkspaceSnapshot()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generar precronograma' }))
+
+    await waitFor(() => {
+      expect(onExamEngineStateChange).toHaveBeenCalledWith(expect.objectContaining({
+        version: 1,
+        uiState: 'REVIEWED_IMPORTED',
+        draftResult: expect.any(Object),
+        reviewedResult: expect.any(Object),
+      }))
+    })
+
+    const persistedState = onExamEngineStateChange.mock.calls.at(-1)[0]
+    firstRender.unmount()
+
+    render(
+      <ExamEngineV21FieldTestPage
+        dataReady
+        uploadedFiles={{ horarios: true, planes: true, correlatividades: true }}
+        workspaceSnapshot={{
+          ...buildWorkspaceSnapshot(),
+          examEngineV21State: persistedState,
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Seleccion de vocales')).toBeInTheDocument()
+    expect(screen.getByText('Ver precronograma detallado')).toBeInTheDocument()
+  })
+  it('especial: arma mesas a mano y llegan a "EnvÃƒÆ’Ã‚Â­o a docentes" sin pasar por el generador automÃƒÆ’Ã‚Â¡tico', () => {
     render(
       <ExamEngineV21FieldTestPage
         dataReady
@@ -124,7 +163,7 @@ describe('ExamEngineV21FieldTestPage', () => {
     fireEvent.change(screen.getByLabelText('Materia'), { target: { value: 'Coloquio final ad-hoc' } })
     fireEvent.change(screen.getByLabelText('Titular'), { target: { value: 'Ana Titular' } })
     fireEvent.click(screen.getByRole('button', { name: /Agregar mesa/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Continuar a envío a docentes/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Continuar a env.o a docentes/ }))
 
     expect(screen.getByText('Coloquio final ad-hoc')).toBeInTheDocument()
   })

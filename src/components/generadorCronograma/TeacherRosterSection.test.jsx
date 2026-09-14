@@ -1,8 +1,37 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import TeacherRosterSection from './TeacherRosterSection.jsx'
 
 describe('TeacherRosterSection fechas bloqueadas', () => {
+  it('espera el alta manual asincronica antes de cerrar el modal', async () => {
+    const onCreateTeacher = vi.fn().mockResolvedValue(true)
+
+    render(
+      <TeacherRosterSection
+        canEditWorkspace
+        careerOptions={['PROFESORADO DE INGLES']}
+        docentes={[]}
+        onCreateTeacher={onCreateTeacher}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Nuevo docente/i }))
+    fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Ana' } })
+    fireEvent.change(screen.getByLabelText('Apellido'), { target: { value: 'Perez' } })
+    fireEvent.change(screen.getByLabelText('DNI'), { target: { value: '30111222' } })
+    fireEvent.click(screen.getByLabelText('PROFESORADO DE INGLES'))
+    fireEvent.click(screen.getByRole('button', { name: 'Crear docente' }))
+
+    await waitFor(() => {
+      expect(onCreateTeacher).toHaveBeenCalledWith(expect.objectContaining({
+        nombre: 'Ana',
+        apellido: 'Perez',
+        dni: '30111222',
+        carreras: ['PROFESORADO DE INGLES'],
+      }))
+    })
+  })
+
   it('no reintroduce codigos de carrera desde los perfiles docentes', () => {
     render(
       <TeacherRosterSection

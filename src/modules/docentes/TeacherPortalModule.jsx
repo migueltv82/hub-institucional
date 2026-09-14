@@ -40,6 +40,7 @@ import {
   fetchTeacherPortalData,
 } from './services/teacherPortalData.js'
 import { fetchTeacherSubjectRosters } from './services/subjectRoster.js'
+import { getTeacherVisibleEmail } from './services/teacherContactDisplay.js'
 import { updateTeacherProfile, validateTeacherProfile } from './services/teacherProfile.js'
 import { buildTeacherReassignmentOptions } from '../../features/exams/teacherReassignmentOptions.js'
 import {
@@ -736,6 +737,7 @@ function TeacherPortalLayout({ data, examAssignments, onRefetchExamAssignments, 
   const [profileForm, setProfileForm] = useState({ email: '', telefono: '' })
   const teacherName = data?.currentTeacher?.full_name || user?.nombre || 'Docente'
   const teacherEmail = data?.currentTeacher?.email || user?.email || ''
+  const visibleTeacherEmail = getTeacherVisibleEmail(teacherEmail)
   const teacherPhone = data?.currentTeacher?.telefono || ''
   const courseRosterPreviewEnabled = import.meta.env.DEV && isTeacherCourseRosterInternalPreviewEnabled()
   const navItems = courseRosterPreviewEnabled
@@ -790,7 +792,7 @@ function TeacherPortalLayout({ data, examAssignments, onRefetchExamAssignments, 
                   <Building2 className="h-4 w-4 text-teal-700" />
                   <strong>Institución:</strong> {data?.currentInstitution?.name || 'Falta cargar'}
                 </span>
-                <span className="inline-flex items-center gap-2"><Mail className="h-4 w-4 text-teal-700" /><strong>Email:</strong> {teacherEmail || 'Falta cargar'}</span>
+                <span className="inline-flex items-center gap-2"><Mail className="h-4 w-4 text-teal-700" /><strong>Email:</strong> {visibleTeacherEmail || 'Falta cargar'}</span>
                 <span className="inline-flex items-center gap-2"><Phone className="h-4 w-4 text-teal-700" /><strong>Teléfono:</strong> {teacherPhone || 'Falta cargar'}</span>
               </p>
             </div>
@@ -997,6 +999,7 @@ export default function TeacherPortalModule() {
     const mergedSubjects = mergeTeacherSubjects({
       assignedSubjects: enrichedSubjects,
       subjectGroups: subjectGroupsWithRosters,
+      includeAssignedOnly: subjectGroupsWithRosters.length === 0,
     })
 
     return mergeSubjectsWithRosters(mergedSubjects, subjectRosters)

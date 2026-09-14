@@ -300,6 +300,7 @@ describe('useWorkspacePersistence', () => {
       ownerUserId: 'user-1',
       payload: changedSnapshot,
       useRemote: false,
+      syncOperational: false,
     })
     expect(result.current.syncStatus).toBe('local-only')
   })
@@ -526,6 +527,7 @@ describe('useWorkspacePersistence', () => {
         institutionId: 'institution-1',
         workspaceKey: 'main',
         payload: changedSnapshot,
+        syncOperational: false,
       }))
       expect(result.current.lastSyncedAt).toBe('2026-04-28T10:01:00.000Z')
     })
@@ -542,6 +544,7 @@ describe('useWorkspacePersistence', () => {
       expect(mocks.saveWorkspaceSnapshot).toHaveBeenCalledTimes(1)
       expect(mocks.saveWorkspaceSnapshot).toHaveBeenCalledWith(expect.objectContaining({
         payload: expect.objectContaining({ fechaInicio: '2026-08-01' }),
+        syncOperational: false,
       }))
     })
 

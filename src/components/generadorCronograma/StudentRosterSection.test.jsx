@@ -18,6 +18,39 @@ vi.mock('../../services/studentFinancialStatus.js', () => ({
 }))
 
 describe('StudentRosterSection con plantilla nueva', () => {
+  it('permite mostrar solo el boton de alta manual y conserva el flujo de creacion', async () => {
+    const onCreateStudent = vi.fn().mockResolvedValue(true)
+
+    render(<StudentRosterSection
+      academicData={{ planesEstudio: [] }}
+      alumnos={[]}
+      canEditWorkspace
+      careerOptions={['PROFESORADO DE INGLES']}
+      createOnly
+      onCreateStudent={onCreateStudent}
+    />)
+
+    expect(screen.queryByPlaceholderText(/Nombre, apellido, DNI/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Nuevo alumno/i }))
+
+    expect(screen.getByRole('heading', { name: /Datos del padron/i })).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Ana' } })
+    fireEvent.change(screen.getByLabelText('Apellido'), { target: { value: 'Perez' } })
+    fireEvent.change(screen.getByLabelText('Carrera'), { target: { value: 'PROFESORADO DE INGLES' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Crear alumno' }))
+
+    await waitFor(() => {
+      expect(onCreateStudent).toHaveBeenCalledWith(expect.objectContaining({
+        nombre: 'Ana',
+        apellido: 'Perez',
+        carrera: 'PROFESORADO DE INGLES',
+        full_name: 'Ana Perez',
+      }))
+    })
+  })
+
   it('muestra, busca y edita carrera_id y el anio cursado migrado', () => {
     render(<StudentRosterSection
       academicData={{
@@ -244,6 +277,134 @@ describe('StudentRosterSection con plantilla nueva', () => {
     expect(screen.getByRole('heading', { name: 'Datos del padron' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Marcar adeuda cuota' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Ver ficha académica' })).toBeInTheDocument()
+  })
+
+  it('permite cambiar un alumno de carrera desde el panel admin', async () => {
+    const onUpdateStudent = vi.fn().mockResolvedValue(true)
+
+    render(<StudentRosterSection
+      academicData={{ planesEstudio: [] }}
+      alumnos={[
+        { id: 'a1', nombre: 'Ana', apellido: 'Perez', dni: '1', email: 'ana@example.com', carrera: 'INGLES', anio: '1' },
+      ]}
+      canEditWorkspace
+      careerFilter="INGLES"
+      careerOptions={['INGLES', 'QUIMICA']}
+      onBackToAdmin={vi.fn()}
+      onUpdateStudent={onUpdateStudent}
+    />)
+
+    fireEvent.click(screen.getByText('Ana Perez'))
+    fireEvent.change(screen.getByLabelText('Carrera'), { target: { value: 'QUIMICA' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await waitFor(() => {
+      expect(onUpdateStudent).toHaveBeenCalledWith(
+        'a1',
+        expect.objectContaining({
+          carrera: 'QUIMICA',
+          full_name: 'Ana Perez',
+        }),
+      )
+    })
+  })
+
+  it('permite cambiar la condicion activo/inactivo desde el modal del alumno', async () => {
+    const onUpdateStudent = vi.fn().mockResolvedValue(true)
+
+    render(<StudentRosterSection
+      academicData={{ planesEstudio: [] }}
+      alumnos={[
+        { id: 'a1', nombre: 'Ana', apellido: 'Perez', dni: '1', email: 'ana@example.com', carrera: 'INGLES', estado: 'activo' },
+      ]}
+      canEditWorkspace
+      careerFilter="INGLES"
+      careerOptions={['INGLES']}
+      onBackToAdmin={vi.fn()}
+      onUpdateStudent={onUpdateStudent}
+    />)
+
+    fireEvent.click(screen.getByText('Ana Perez'))
+    fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'inactivo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await waitFor(() => {
+      expect(onUpdateStudent).toHaveBeenCalledWith(
+        'a1',
+        expect.objectContaining({
+          estado: 'inactivo',
+        }),
+      )
+    })
+  })
+
+  it('permite eliminar un alumno desde el modal de edicion', async () => {
+    const onDeleteStudent = vi.fn().mockResolvedValue(true)
+
+    render(<StudentRosterSection
+      academicData={{ planesEstudio: [] }}
+      alumnos={[
+        { id: 'a1', nombre: 'Ana', apellido: 'Perez', dni: '1', email: 'ana@example.com', carrera: 'INGLES' },
+      ]}
+      canEditWorkspace
+      careerFilter="INGLES"
+      careerOptions={['INGLES']}
+      onBackToAdmin={vi.fn()}
+      onDeleteStudent={onDeleteStudent}
+      onUpdateStudent={vi.fn()}
+    />)
+
+    fireEvent.click(screen.getByText('Ana Perez'))
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar alumno' }))
+
+    await waitFor(() => {
+      expect(onDeleteStudent).toHaveBeenCalledWith('a1')
+    })
+  })
+
+  it('no duplica variantes abreviadas como carreras extra en el selector', () => {
+    render(<StudentRosterSection
+      academicData={{ planesEstudio: [] }}
+      alumnos={[
+        {
+          id: 'a1',
+          nombre: 'Ana',
+          apellido: 'Perez',
+          dni: '1',
+          email: 'ana@example.com',
+          carrera: 'TECNICO SUP EN TURISMO',
+          anio: '1',
+        },
+      ]}
+      canEditWorkspace
+      careerFilter="TECNICO SUP EN TURISMO"
+      careerOptions={[
+        'PROFESORADO DE GEOGRAFIA',
+        'PROFESORADO DE INGLES',
+        'PROFESORADO DE QUIMICA',
+        'TECNICO SUPERIOR EN LABORATORIO',
+        'TECNICO SUPERIOR EN TRADUCTORADO',
+        'TECNICO SUP EN TRADUCTORADO',
+        'TECNICO SUPERIOR EN TURISMO',
+        'TECNICO SUP EN TURISMO',
+      ]}
+      onBackToAdmin={vi.fn()}
+      onUpdateStudent={vi.fn()}
+    />)
+
+    fireEvent.click(screen.getByText('Ana Perez'))
+
+    const selector = screen.getByLabelText('Carrera')
+    expect(selector).toHaveValue('TECNICO SUPERIOR EN TURISMO')
+    expect(within(selector).getAllByRole('option').map((option) => option.value)).toEqual([
+      '',
+      'PROFESORADO DE GEOGRAFIA',
+      'PROFESORADO DE INGLES',
+      'PROFESORADO DE QUIMICA',
+      'TECNICO SUPERIOR EN LABORATORIO',
+      'TECNICO SUPERIOR EN TRADUCTORADO',
+      'TECNICO SUPERIOR EN TURISMO',
+    ])
   })
 
   it('actualiza adeuda cuota usando el registro financiero existente', async () => {

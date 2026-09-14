@@ -133,6 +133,51 @@ describe('adminInstitutionOverview', () => {
     expect(overview.totals.subjects).toBe(1)
   })
 
+  it('unifica variantes institucionales abreviadas y completas en la distribucion', () => {
+    const overview = buildAdminInstitutionOverview({
+      careerOptions: [
+        'TECNICO SUPERIOR EN TURISMO',
+        'TECNICO SUP EN TURISMO',
+        'TECNICO SUPERIOR EN TRADUCTORADO',
+        'TECNICO SUP EN TRADUCTORADO',
+      ],
+      planesEstudio: [
+        { carrera: 'TECNICO SUPERIOR EN TURISMO', materia_codigo: 'TUR-1' },
+        { carrera: 'TECNICO SUP EN TURISMO', materia_codigo: 'TUR-2' },
+        { carrera: 'TECNICO SUPERIOR EN TRADUCTORADO', materia_codigo: 'TRA-1' },
+        { carrera: 'TECNICO SUP EN TRADUCTORADO', materia_codigo: 'TRA-2' },
+      ],
+      alumnos: [
+        { id: 'student-1', carrera: 'TECNICO SUPERIOR EN TURISMO' },
+        { id: 'student-2', carrera: 'TECNICO SUP EN TRADUCTORADO' },
+      ],
+      docentes: [
+        { dni: '11', full_name: 'Ana Diaz', carreras: ['TECNICO SUP EN TURISMO'] },
+        { dni: '22', full_name: 'Bruno Paz', carrera: 'TECNICO SUPERIOR EN TRADUCTORADO' },
+      ],
+    })
+
+    expect(overview.careerRows.map((row) => row.career)).toEqual([
+      'TECNICO SUPERIOR EN TRADUCTORADO',
+      'TECNICO SUPERIOR EN TURISMO',
+    ])
+    expect(overview.careerRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        career: 'TECNICO SUPERIOR EN TURISMO',
+        studentCount: 1,
+        teacherCount: 1,
+        subjectCount: 2,
+      }),
+      expect.objectContaining({
+        career: 'TECNICO SUPERIOR EN TRADUCTORADO',
+        studentCount: 1,
+        teacherCount: 1,
+        subjectCount: 2,
+      }),
+    ]))
+    expect(overview.totals.careers).toBe(2)
+  })
+
   it('normaliza codigos de carrera contra el plan para no duplicar distribucion ni horarios', () => {
     const planesEstudio = [
       {

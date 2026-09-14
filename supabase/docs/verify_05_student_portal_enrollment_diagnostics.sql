@@ -2,6 +2,10 @@
 -- Institucion: 3f9dd1a0-19b8-462f-bdd8-7e849d90ae04, workspace main.
 --
 -- Interpretacion rapida:
+-- - Si rpc_signature_present = 0, volver a ejecutar supabase/schema/07_academic_operations.sql.
+-- - Si transition_config muestra snapshot_only, el codigo local actual igual fuerza
+--   escritura relacional para enroll_subject/withdraw_subject; si el remoto no lo hace,
+--   falta redeploy de supabase/functions/admin-users/index.ts.
 -- - Si recent_dual_write_warnings = 0 y recent_subject_enrollments no sube,
 --   probablemente la Edge Function admin-users desplegada no es la version actual.
 -- - Si recent_dual_write_warnings > 0, revisar relational_errors para ver la causa real.
@@ -34,7 +38,28 @@ warnings as (
     on log.target_id = params.institution_id::text
   where log.action = 'student_portal_dual_write_warning'
     and log.created_at >= params.since_at
+),
+transition as (
+  select coalesce(max(setting.value::text), '{}') as value
+  from public.app_settings setting
+  where setting.key = 'academic_relational_transition'
+),
+rpc_signature as (
+  select count(*)::int as rows_count
+  from pg_proc proc
+  join pg_namespace namespace
+    on namespace.oid = proc.pronamespace
+  where namespace.nspname = 'public'
+    and proc.proname = 'upsert_subject_enrollment_from_portal'
+    and pg_get_function_identity_arguments(proc.oid) =
+      'target_institution_id uuid, target_workspace_key text, actor_user_id uuid, target_student_id uuid, target_subject_id text, target_program_id text, target_student_record_id uuid, target_status text, target_enrolled_at timestamp with time zone, target_dropped_at timestamp with time zone, target_legacy_snapshot_id text, target_client_mutation_id text, target_metadata jsonb'
 )
+select 'rpc_signature_present' as check_name, rpc_signature.rows_count::text as value
+from rpc_signature
+union all
+select 'transition_config' as check_name, coalesce(transition.value, '{}') as value
+from transition
+union all
 select 'recent_subject_enrollments' as check_name, enrollments.rows_count::text as value
 from enrollments
 union all

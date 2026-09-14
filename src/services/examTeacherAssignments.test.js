@@ -102,6 +102,28 @@ describe('publishExamTeacherAssignmentsForReview', () => {
     expect(result.skippedNoEmail[0]).toMatchObject({ role: 'VOCAL_2', docenteId: 'doc-vocal-b' })
   })
 
+  it('devuelve una guia clara si falta la tabla de asignaciones docentes de mesas', async () => {
+    const { publishExamTeacherAssignmentsForReview } = await loadService({
+      fromResult: {
+        data: null,
+        error: {
+          code: 'PGRST205',
+          message: "Could not find the table 'public.exam_teacher_assignments' in the schema cache",
+        },
+      },
+      rpcImplementation: () => Promise.resolve({ data: [{ user_id: 'uid-ana' }], error: null }),
+    })
+
+    const result = await publishExamTeacherAssignmentsForReview({
+      institutionId: 'inst-1',
+      mesas: [mesaTitularYVocales({ vocal1Id: '', vocal1: '', vocal2Id: '', vocal2: '' })],
+      docentes: [{ id: 'doc-titular', nombre: 'Ana Titular', email: 'ana@instituto.edu' }],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('repair_06_exam_teacher_assignments.sql')
+  })
+
   it('resuelve por el email sintetico de DNI cuando el docente no tiene email cargado en la planilla', async () => {
     const docentes = [
       { id: 'doc-titular', nombre: 'Ana Titular', email: '', dni: '30071977' },
@@ -253,7 +275,7 @@ describe('resetExamProcessForWorkspace', () => {
     const result = await resetExamProcessForWorkspace({ institutionId: 'inst-1' })
 
     expect(result.success).toBe(false)
-    expect(result.error).toContain('21_exam_process_reset.sql')
+    expect(result.error).toContain('repair_06_exam_process_reset_rpc.sql')
   })
 
   it('no intenta tocar Supabase si la app esta en modo local', async () => {

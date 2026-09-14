@@ -6,6 +6,7 @@ import {
   parseTemplateV2TeachersWorkbook,
 } from '../utils/examEngine/templatesV2/importTemplateV2Workbook.js'
 import { buildCargaHorariaDocenteFromHorarios } from '../components/generadorCronograma/teacherAcademicAdmin.js'
+import { showImportantNotice } from '../services/importantNotice.js'
 
 const defaultFileHandlers = {
   parseTemplateV2MasterWorkbook,
@@ -234,23 +235,99 @@ function mergeRows(existing = [], incoming = [], keyFn) {
   return { rows: [...merged.values()], created, updated }
 }
 
-function studentIdentity(student = {}) {
-  const stableId = clean(student.alumno_id ?? student.id ?? student.dni ?? student.documento)
-  if (stableId) return `id:${stableId.toLowerCase()}`
-  return `email:${clean(student.email ?? student.correo).toLowerCase()}::${clean(student.carrera_id ?? student.carrera).toLowerCase()}`
+const studentStableFields = [
+  ['dni', ['dni', 'documento', 'document_number', 'documentNumber']],
+  ['email', ['email', 'correo', 'mail', 'login_email', 'loginEmail']],
+  ['legajo', ['legajo', 'matricula', 'student_number', 'studentNumber']],
+  ['record', ['record_id', 'recordId', 'student_record_id', 'studentRecordId']],
+  ['profile', ['profile_id', 'profileId', 'user_id', 'userId', 'student_id', 'studentId']],
+  ['legacy', ['alumno_id', 'alumnoId']],
+]
+
+const protectedStudentFields = new Set([
+  'id',
+  'record_id',
+  'recordId',
+  'student_record_id',
+  'studentRecordId',
+  'profile_id',
+  'profileId',
+  'user_id',
+  'userId',
+  'student_id',
+  'studentId',
+])
+
+function studentIdentityKeys(student = {}) {
+  const keys = []
+
+  studentStableFields.forEach(([prefix, fields]) => {
+    const value = firstClean(student, fields)
+    const normalized = normalizeIdentityPart(value)
+    if (normalized) keys.push(`${prefix}:${normalized}`)
+  })
+
+  const rawId = firstClean(student, ['id'])
+  const normalizedRawId = normalizeIdentityPart(rawId)
+  if (normalizedRawId) keys.push(`id:${normalizedRawId}`)
+
+  const fallbackEmail = normalizeIdentityPart(firstClean(student, ['email', 'correo', 'mail']))
+  const fallbackCareer = normalizeIdentityPart(firstClean(student, ['carrera_id', 'carreraId', 'carrera', 'career']))
+  if (fallbackEmail && fallbackCareer) keys.push(`email-career:${fallbackEmail}:${fallbackCareer}`)
+
+  return [...new Set(keys)]
+}
+
+function hasValueForMerge(value) {
+  if (typeof value === 'string') return clean(value) !== ''
+  return value !== null && value !== undefined
+}
+
+function mergeStudentRow(existing = {}, incoming = {}) {
+  const next = { ...existing }
+
+  Object.entries(incoming).forEach(([field, value]) => {
+    if (!hasValueForMerge(value)) return
+    if (protectedStudentFields.has(field) && hasValueForMerge(existing[field])) return
+    next[field] = value
+  })
+
+  return next
 }
 
 export function mergeStudentRows(existing = [], incoming = []) {
-  const merged = new Map(existing.map((student) => [studentIdentity(student), student]))
+  const merged = new Map()
+  const identityIndex = new Map()
+  const existingKeys = new Set()
+  const touchedExistingKeys = new Set()
   let created = 0
   let updated = 0
-  incoming.forEach((student) => {
-    const key = studentIdentity(student)
+
+  ;(Array.isArray(existing) ? existing : []).forEach((student, index) => {
+    const keys = studentIdentityKeys(student)
+    const key = keys[0] || `existing:${index}`
+    merged.set(key, student)
+    existingKeys.add(key)
+    keys.forEach((identityKey) => identityIndex.set(identityKey, key))
+  })
+
+  ;(Array.isArray(incoming) ? incoming : []).forEach((student, index) => {
+    const keys = studentIdentityKeys(student)
+    const matchedKey = keys.find((identityKey) => identityIndex.has(identityKey))
+    const key = matchedKey ? identityIndex.get(matchedKey) : (keys[0] || `incoming:${index}`)
     if (merged.has(key)) updated += 1
     else created += 1
-    merged.set(key, { ...(merged.get(key) ?? {}), ...student })
+    if (existingKeys.has(key)) touchedExistingKeys.add(key)
+    merged.set(key, mergeStudentRow(merged.get(key) ?? {}, student))
+    keys.forEach((identityKey) => identityIndex.set(identityKey, key))
   })
-  return { rows: [...merged.values()], created, updated }
+
+  return {
+    rows: [...merged.values()],
+    created,
+    updated,
+    preserved: existingKeys.size - touchedExistingKeys.size,
+  }
 }
 
 export function mergeTeacherWorkbookDatasets(snapshotPayload = {}, incomingDatasets = {}) {
@@ -400,6 +477,7 @@ export function useCronogramaFiles({
       const studentDatasets = hasStudentDatasets ? mergeStudentRows(snapshotPayload?.alumnos, datasets.alumnos) : null
       if (teacherDatasets) Object.assign(mergedDatasets, teacherDatasets.datasets)
       if (studentDatasets) mergedDatasets.alumnos = studentDatasets.rows
+      const willRequireReview = Boolean(cronogramaLength) || snapshotPayload?.requiereRegeneracion
 
       await persistFile({ file, datasetKey: 'masterWorkbook', datasets: mergedDatasets, nextUploadedFiles })
       setCorrelatividades(academicDatasets.datasets.correlatividades)
@@ -412,7 +490,18 @@ export function useCronogramaFiles({
         setCargaHorariaDocente?.(teacherDatasets.datasets.cargaHorariaDocente)
       }
       if (studentDatasets) setAlumnos(studentDatasets.rows)
-      toast.success(`Carga maestra guardada: ${summary.planesEstudio} materias importadas, ${academicDatasets.datasets.planesEstudio.length} materias totales.`)
+      const message = `Carga maestra guardada: ${summary.planesEstudio} materias importadas, ${academicDatasets.datasets.planesEstudio.length} materias totales.`
+      toast.success(message)
+      showImportantNotice({
+        tone: 'success',
+        title: 'Plantilla maestra cargada',
+        message: 'La base académica quedó actualizada en el workspace activo.',
+        details: [
+          `${summary.planesEstudio} materias importadas.`,
+          `${academicDatasets.datasets.planesEstudio.length} materias totales en el sistema.`,
+          willRequireReview ? 'Hay un cronograma previo: revisá si corresponde regenerarlo.' : '',
+        ],
+      })
     } catch (error) {
       toast.error(`No se pudo cargar la plantilla maestra: ${error.message}`)
     } finally {
@@ -431,7 +520,19 @@ export function useCronogramaFiles({
       await persistFile({ file, datasetKey: 'docentesWorkbook', datasets: merged.datasets, nextUploadedFiles })
       setDocentes(merged.datasets.docentes); setDocenteMateria(merged.datasets.docenteMateria); setHorariosDocentes(merged.datasets.horariosDocentes)
       setDisponibilidadDocente?.(merged.datasets.disponibilidadDocente); setCargaHorariaDocente?.(merged.datasets.cargaHorariaDocente)
-      toast.success(`Carga docente acumulativa guardada: ${merged.created.docentes} docentes nuevos, ${merged.created.docenteMateria} titularidades nuevas, ${merged.created.horariosDocentes} horarios nuevos. Total: ${merged.datasets.docentes.length} docentes.`)
+      const message = `Carga docente acumulativa guardada: ${merged.created.docentes} docentes nuevos, ${merged.created.docenteMateria} titularidades nuevas, ${merged.created.horariosDocentes} horarios nuevos. Total: ${merged.datasets.docentes.length} docentes.`
+      toast.success(message)
+      showImportantNotice({
+        tone: 'success',
+        title: 'Plantilla docente cargada',
+        message: 'El padrón docente y sus asignaciones quedaron actualizados.',
+        details: [
+          `${merged.created.docentes} docentes nuevos.`,
+          `${merged.created.docenteMateria} titularidades nuevas.`,
+          `${merged.created.horariosDocentes} horarios nuevos.`,
+          `${merged.datasets.docentes.length} docentes totales.`,
+        ],
+      })
     } catch (error) { toast.error(`No se pudo cargar la plantilla de docentes: ${error.message}`) } finally { event.target.value = '' }
   }
 
@@ -446,7 +547,19 @@ export function useCronogramaFiles({
       const nextUploadedFiles = { ...snapshotPayload?.uploadedFiles, alumnosWorkbook: file.name }
       await persistFile({ file, datasetKey: 'alumnosWorkbook', datasets: mergedDatasets, nextUploadedFiles })
       setAlumnos(merged.rows)
-      toast.success(`Carga acumulativa guardada: ${merged.created} nuevos, ${merged.updated} actualizados, ${merged.rows.length} alumnos totales.`)
+      const message = `Carga acumulativa guardada: ${merged.created} nuevos, ${merged.updated} actualizados, ${merged.preserved} conservados, ${merged.rows.length} alumnos totales.`
+      toast.success(message)
+      showImportantNotice({
+        tone: 'success',
+        title: 'Plantilla de alumnos cargada',
+        message: 'El padrón de alumnos quedó actualizado sin borrar registros anteriores.',
+        details: [
+          `${merged.created} alumnos nuevos.`,
+          `${merged.updated} alumnos actualizados.`,
+          `${merged.preserved} alumnos existentes conservados porque no vinieron en la planilla.`,
+          `${merged.rows.length} alumnos totales.`,
+        ],
+      })
     } catch (error) { toast.error(`No se pudo cargar la plantilla de alumnos: ${error.message}`) } finally { event.target.value = '' }
   }
 

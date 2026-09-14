@@ -45,13 +45,37 @@ function canUseRemoteAcademicData({ institutionId, useRemote }) {
   return Boolean(useRemote && institutionId && isSupabaseConfigured && supabase)
 }
 
-function shouldReadRelational(config) {
-  return Boolean(
-    config?.hybridReadEnabled ||
-    config?.relationalPrimaryEnabled ||
-    config?.readMode === 'hybrid_read' ||
-    config?.readMode === 'relational_primary',
+function isMissingRpcError(error, functionName) {
+  const message = clean(error?.message).toLowerCase()
+  return (
+    error?.code === '42883' ||
+    error?.code === 'PGRST202' ||
+    error?.code === 'PGRST204' ||
+    message.includes(functionName.toLowerCase()) ||
+    message.includes('could not find the function') ||
+    message.includes('no se encontro la funcion')
   )
+}
+
+async function fetchStudentPortalGrades({ institutionId, workspaceKey, studentId }) {
+  if (typeof supabase?.rpc === 'function') {
+    const { data, error } = await supabase.rpc('academic_get_student_portal_grades', {
+      p_institution_id: institutionId,
+      p_workspace_key: workspaceKey,
+    })
+
+    if (!error) return { data, error: null }
+    if (!isMissingRpcError(error, 'academic_get_student_portal_grades')) return { data: [], error }
+  }
+
+  return await supabase
+    .from('student_grades')
+    .select('id, institution_id, workspace_key, student_id, student_record_id, subject_enrollment_id, exam_enrollment_id, subject_id, program_id, grade_type, attempt_number, grade_value, grade_label, grade_scale, academic_status, observations, grading_period, legacy_snapshot_id, lock_version, created_at, updated_at')
+    .eq('institution_id', institutionId)
+    .eq('workspace_key', workspaceKey)
+    .eq('student_id', studentId)
+    .is('deleted_at', null)
+    .order('updated_at', { ascending: false })
 }
 
 export function overlaySnapshotWithRelationalAcademicData({
@@ -144,7 +168,7 @@ export async function fetchAcademicRelationalSnapshotOverlay({
     }
   }
 
-  const readRelationalEnrollments = shouldReadRelational(transitionConfig)
+  const readRelationalEnrollments = true
   const [
     { data: subjectRows, error: subjectError },
     { data: examRows, error: examError },
@@ -174,14 +198,7 @@ export async function fetchAcademicRelationalSnapshotOverlay({
     // RPC segura. Por eso las calificaciones propias deben leerse siempre de
     // la fuente relacional, incluso mientras inscripciones y mesas continúan
     // en snapshot_only durante la transición.
-    supabase
-      .from('student_grades')
-      .select('id, institution_id, workspace_key, student_id, student_record_id, subject_enrollment_id, exam_enrollment_id, subject_id, program_id, grade_type, attempt_number, grade_value, grade_label, grade_scale, academic_status, observations, grading_period, legacy_snapshot_id, lock_version, created_at, updated_at')
-      .eq('institution_id', institutionId)
-      .eq('workspace_key', workspaceKey)
-      .eq('student_id', studentId)
-      .is('deleted_at', null)
-      .order('updated_at', { ascending: false }),
+    fetchStudentPortalGrades({ institutionId, workspaceKey, studentId }),
   ])
 
   if (subjectError || examError || gradeError) {

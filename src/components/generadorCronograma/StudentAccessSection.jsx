@@ -1,6 +1,7 @@
 import { KeyRound, UserPlus, UsersRound } from 'lucide-react'
 
 function StudentAccessSection({
+  extraActions = null,
   alumnos,
   isLoading,
   lastResult,
@@ -38,6 +39,7 @@ function StudentAccessSection({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {extraActions}
           <button
             className="btn-primary min-w-56"
             disabled={!canProvision}

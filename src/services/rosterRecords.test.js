@@ -70,6 +70,29 @@ describe('rosterRecords service', () => {
     }))
   })
 
+  it('preserva profile_id de alumnos manuales con acceso creado', () => {
+    const records = buildStudentRecordsFromSnapshot({
+      institutionId: 'inst-1',
+      workspaceKey: 'main',
+      snapshot: {
+        alumnos: [{
+          email: 'ana@example.com',
+          nombre: 'Ana',
+          apellido: 'Perez',
+          carrera: 'PROFESORADO DE INGLES',
+          profile_id: 'profile-1',
+          user_id: 'profile-1',
+        }],
+      },
+    })
+
+    expect(records[0]).toEqual(expect.objectContaining({
+      profile_id: 'profile-1',
+      email: 'ana@example.com',
+      career: 'PROFESORADO DE INGLES',
+    }))
+  })
+
   it('construye una identidad tecnica estable cuando el alumno no tiene email', () => {
     const records = buildStudentRecordsFromSnapshot({
       institutionId: 'inst-1',

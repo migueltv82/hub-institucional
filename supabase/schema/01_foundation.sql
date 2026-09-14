@@ -95,6 +95,32 @@ create table if not exists public.admin_audit_logs (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.deleted_person_records (
+  id uuid primary key default gen_random_uuid(),
+  institution_id uuid references public.institutions(id) on delete set null,
+  workspace_key text not null default 'main',
+  person_type text not null,
+  person_id text,
+  profile_id uuid references public.profiles(user_id) on delete set null,
+  email text,
+  dni text,
+  display_name text not null default '',
+  role text,
+  status text,
+  deleted_by uuid references public.profiles(user_id) on delete set null default auth.uid(),
+  deleted_by_email text,
+  deletion_source text not null default 'admin_panel',
+  deletion_reason text not null default '',
+  raw_payload jsonb not null default '{}'::jsonb,
+  restored_at timestamptz,
+  restored_by uuid references public.profiles(user_id) on delete set null,
+  restored_by_email text,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (btrim(workspace_key) <> ''),
+  check (person_type in ('student', 'teacher', 'admin', 'staff')),
+  check (btrim(deletion_source) <> '')
+);
+
 alter table public.admin_audit_logs
   drop constraint if exists admin_audit_logs_status_check;
 
@@ -143,6 +169,22 @@ create index if not exists idx_admin_audit_logs_actor_created_at
 
 create index if not exists idx_admin_audit_logs_action_status
   on public.admin_audit_logs (action, status);
+
+create index if not exists idx_deleted_person_records_workspace_type_created
+  on public.deleted_person_records (institution_id, workspace_key, person_type, created_at desc);
+
+create index if not exists idx_deleted_person_records_profile_id
+  on public.deleted_person_records (profile_id)
+  where profile_id is not null;
+
+create index if not exists idx_deleted_person_records_email
+  on public.deleted_person_records (lower(email))
+  where email is not null;
+
+alter table public.deleted_person_records
+  add column if not exists restored_at timestamptz,
+  add column if not exists restored_by uuid references public.profiles(user_id) on delete set null,
+  add column if not exists restored_by_email text;
 
 -- ============================================================
 -- Alta automatica de perfil al crear un usuario de Auth
@@ -607,6 +649,7 @@ declare
   actor_email text;
   target_profile public.profiles%rowtype;
   membership_row record;
+  membership_rows jsonb := '[]'::jsonb;
   removed_memberships integer := 0;
 begin
   actor_user_id := public.foundation_require_super_admin();
@@ -639,6 +682,60 @@ begin
     end if;
   end loop;
 
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'institution_id', membership.institution_id,
+        'role', membership.role,
+        'created_at', membership.created_at
+      )
+      order by membership.created_at
+    ),
+    '[]'::jsonb
+  )
+  into membership_rows
+  from public.memberships membership
+  where membership.user_id = target_user_id;
+
+  select profile.email
+  into actor_email
+  from public.profiles profile
+  where profile.user_id = actor_user_id;
+
+  insert into public.deleted_person_records (
+    institution_id,
+    workspace_key,
+    person_type,
+    person_id,
+    profile_id,
+    email,
+    display_name,
+    role,
+    status,
+    deleted_by,
+    deleted_by_email,
+    deletion_source,
+    raw_payload
+  )
+  values (
+    null,
+    'main',
+    'admin',
+    target_user_id::text,
+    target_user_id,
+    target_profile.email,
+    coalesce(target_profile.display_name, target_profile.email, ''),
+    target_profile.account_role,
+    case when target_profile.is_blocked then 'blocked' else 'active' end,
+    actor_user_id,
+    actor_email,
+    'super_admin_users',
+    jsonb_build_object(
+      'profile', to_jsonb(target_profile),
+      'memberships', membership_rows
+    )
+  );
+
   delete from public.memberships
   where user_id = target_user_id;
 
@@ -646,11 +743,6 @@ begin
 
   delete from public.profiles
   where user_id = target_user_id;
-
-  select profile.email
-  into actor_email
-  from public.profiles profile
-  where profile.user_id = actor_user_id;
 
   insert into public.admin_audit_logs (
     actor_user_id,
@@ -696,6 +788,7 @@ alter table public.institutions enable row level security;
 alter table public.profiles enable row level security;
 alter table public.memberships enable row level security;
 alter table public.admin_audit_logs enable row level security;
+alter table public.deleted_person_records enable row level security;
 alter table public.app_settings enable row level security;
 
 drop policy if exists "profiles can read themselves" on public.profiles;
@@ -774,6 +867,63 @@ on public.admin_audit_logs
 for select
 to authenticated
 using (public.is_super_admin());
+
+drop policy if exists "deleted person records members read" on public.deleted_person_records;
+drop policy if exists "deleted person records editors insert" on public.deleted_person_records;
+drop policy if exists "deleted person records editors restore" on public.deleted_person_records;
+drop policy if exists "deleted person records super admins manage" on public.deleted_person_records;
+
+create policy "deleted person records members read"
+on public.deleted_person_records
+for select
+to authenticated
+using (
+  public.is_super_admin()
+  or (
+    institution_id is not null
+    and public.is_member_of_institution(institution_id)
+  )
+);
+
+create policy "deleted person records editors insert"
+on public.deleted_person_records
+for insert
+to authenticated
+with check (
+  public.is_super_admin()
+  or (
+    institution_id is not null
+    and public.is_member_of_institution(institution_id, array['owner', 'admin', 'editor'])
+  )
+);
+
+create policy "deleted person records editors restore"
+on public.deleted_person_records
+for update
+to authenticated
+using (
+  public.is_super_admin()
+  or (
+    institution_id is not null
+    and public.is_member_of_institution(institution_id, array['owner', 'admin', 'editor'])
+  )
+)
+with check (
+  public.is_super_admin()
+  or (
+    institution_id is not null
+    and public.is_member_of_institution(institution_id, array['owner', 'admin', 'editor'])
+  )
+);
+
+create policy "deleted person records super admins manage"
+on public.deleted_person_records
+for all
+to authenticated
+using (public.is_super_admin())
+with check (public.is_super_admin());
+
+grant select, insert, update on public.deleted_person_records to authenticated;
 
 drop policy if exists "public can read public app settings" on public.app_settings;
 drop policy if exists "super admins manage app settings" on public.app_settings;

@@ -6,6 +6,7 @@ import { useAuth } from './auth/AuthContext.jsx'
 import ProtectedSuperAdminRoute from './components/ProtectedSuperAdminRoute.jsx'
 import PwaInstallPrompt from './components/PwaInstallPrompt.jsx'
 import ThemeToggle from './components/ThemeToggle.jsx'
+import ImportantNoticeCenter from './components/ImportantNoticeCenter.jsx'
 import { fetchPublicAppStatus } from './services/appConfig.js'
 import { useAppTheme } from './hooks/useAppTheme.js'
 
@@ -102,8 +103,10 @@ function App() {
           style: theme === 'dark'
             ? { background: '#172320', color: '#f1f5f9', border: '1px solid #33413d' }
             : undefined,
+          duration: 6000,
         }}
       />
+      <ImportantNoticeCenter />
       <PwaInstallPrompt isAuthenticated={isAuthenticated} />
       <Suspense fallback={(
         <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center p-4 md:p-6">

@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
-import { getCareerValues } from './careerCatalog.js'
+import { getCareerValues, resolveCareerDisplayName } from './careerCatalog.js'
 import { buildStudentRecordsFromSnapshot, buildTeacherRecordsFromSnapshot } from './rosterRecords.js'
 import {
   createEmptyWorkspaceSnapshot,
@@ -21,7 +21,8 @@ function normalizeText(value) {
 }
 
 function resolveCareerLabel(value) {
-  return clean(value) || 'Sin carrera'
+  const cleaned = clean(value)
+  return resolveCareerDisplayName(cleaned) || cleaned || 'Sin carrera'
 }
 
 function getTeacherCareers(record) {

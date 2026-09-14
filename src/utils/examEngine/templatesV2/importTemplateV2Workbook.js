@@ -116,6 +116,42 @@ function parseBooleanLike(value, fallback = true) {
   return fallback
 }
 
+function normalizeIdentityPart(value) {
+  return clean(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+}
+
+function firstClean(...values) {
+  for (const value of values) {
+    const cleaned = clean(value)
+    if (cleaned) return cleaned
+  }
+  return ''
+}
+
+function getStudentImportIdentity(row = {}) {
+  const explicitId = firstClean(row.alumno_id, row.alumnoId, row.id)
+  if (explicitId) return explicitId
+
+  const dni = normalizeIdentityPart(firstClean(row.dni, row.documento, row.document_number, row.documentNumber))
+  if (dni) return `dni-${dni}`
+
+  const email = normalizeIdentityPart(firstClean(row.email, row.correo, row.mail, row.login_email, row.loginEmail))
+  if (email) return `email-${email}`
+
+  const legajo = normalizeIdentityPart(firstClean(row.legajo, row.matricula, row.student_number, row.studentNumber))
+  if (legajo) return `legajo-${legajo}`
+
+  return ''
+}
+
+function hasStudentRosterIdentity(row = {}) {
+  return Boolean(getStudentImportIdentity(row))
+}
+
 // planesEstudio ya trae cada materia con su carrera resuelta (nombre), por
 // eso alcanza con leer carrera_id/carrera de esas filas para armar el mapa.
 function buildCareerById(planesEstudio = []) {
@@ -224,17 +260,19 @@ export async function parseTemplateV2MasterWorkbook(file) {
   const disponibilidadDocente = buildAvailabilityRows(source.disponibilidad_docente, teacherById)
 
   const alumnos = uniqueRows(source.alumnos_inscripciones.map((row) => {
+    const studentIdentity = getStudentImportIdentity(row)
     const subject = resolvedSubject(row)
     return {
       ...row,
-      id: row.alumno_id,
+      id: studentIdentity,
+      alumno_id: clean(row.alumno_id) || studentIdentity,
       carrera_id: subject.carrera_id,
       materia_codigo: subject.materia_codigo,
       materia_nombre: subject.materia_nombre,
       carrera: careerName(subject),
       materia: subjectCode(subject),
     }
-  }).filter((row) => clean(row.alumno_id)), (row) => clean(row.alumno_id))
+  }).filter(hasStudentRosterIdentity), (row) => getStudentImportIdentity(row))
 
   const correlativityGroups = new Map()
   source.correlatividades.forEach((row) => {
@@ -396,6 +434,7 @@ export async function parseTemplateV2StudentsWorkbook(file, { planesEstudio = []
   const subjectById = buildSubjectById(planesEstudio)
   const careerById = buildCareerById(planesEstudio)
   const alumnos = uniqueRows(source.alumnos_inscripciones.map((row) => {
+    const studentIdentity = getStudentImportIdentity(row)
     const subject = subjectById.get(clean(row.materia_id)) ?? row
     const code = subjectCode(subject) || subjectCode(row)
     const name = subjectName(subject) || subjectName(row)
@@ -403,7 +442,8 @@ export async function parseTemplateV2StudentsWorkbook(file, { planesEstudio = []
     return {
       ...row,
       ...subject,
-      id: row.alumno_id,
+      id: studentIdentity,
+      alumno_id: clean(row.alumno_id) || studentIdentity,
       plan_id: clean(subject.plan_id ?? subject.planId ?? row.plan_id),
       carrera_id: careerId,
       carrera: clean(subject.carrera) || careerById.get(careerId) || '',
@@ -413,6 +453,6 @@ export async function parseTemplateV2StudentsWorkbook(file, { planesEstudio = []
       materia: code,
       nombreMateria: name,
     }
-  }).filter((row) => clean(row.alumno_id)), (row) => clean(row.alumno_id))
+  }).filter(hasStudentRosterIdentity), (row) => getStudentImportIdentity(row))
   return { datasets: { alumnos }, summary: { alumnos: alumnos.length } }
 }

@@ -145,6 +145,7 @@ export function buildStudentRecordsFromSnapshot({ snapshot, institutionId, works
     records.set(recordKey, {
       institution_id: institutionId,
       workspace_key: workspaceKey,
+      profile_id: clean(student?.profile_id || student?.profileId || student?.user_id || student?.userId || student?.student_id || student?.studentId) || null,
       email,
       full_name: getStudentFullName(student) || email,
       first_name: clean(student?.nombre || student?.first_name),

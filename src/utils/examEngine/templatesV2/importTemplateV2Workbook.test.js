@@ -307,6 +307,56 @@ describe('parseTemplateV2StudentsWorkbook', () => {
     ])
   })
 
+  it('importa alumnos nuevos sin alumno_id usando DNI o email como identidad', async () => {
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('alumnos_inscripciones')
+    sheet.addRow([
+      'alumno_id',
+      'apellido',
+      'nombre',
+      'dni',
+      'email',
+      'telefono',
+      'carrera_id',
+      'plan_id',
+      'materia_id',
+      'materia_codigo',
+      'materia_nombre',
+    ])
+    sheet.addRow([
+      '',
+      'GOMEZ',
+      'LUCIA',
+      '44.555.666',
+      'lucia@example.com',
+      '381555111',
+      'TUR',
+      'TUR-PLAN',
+      '',
+      '',
+      '',
+    ])
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const result = await parseTemplateV2StudentsWorkbook(workbookFile(buffer, 'ALUMNOS.xlsx'), {
+      planesEstudio: [{
+        carrera_id: 'TUR',
+        carrera: 'TECNICO SUPERIOR EN TURISMO',
+      }],
+    })
+
+    expect(result.datasets.alumnos).toEqual([
+      expect.objectContaining({
+        id: 'dni-44555666',
+        alumno_id: 'dni-44555666',
+        dni: '44.555.666',
+        email: 'lucia@example.com',
+        carrera_id: 'TUR',
+        carrera: 'TECNICO SUPERIOR EN TURISMO',
+      }),
+    ])
+  })
+
   it('explica cuando se sube una planilla vieja sin alumnos_inscripciones', async () => {
     const workbook = new ExcelJS.Workbook()
     const alumnos = workbook.addWorksheet('Alumnos')

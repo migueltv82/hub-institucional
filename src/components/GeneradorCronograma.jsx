@@ -10,6 +10,11 @@ import { EXAM_GENERATION_TYPES } from '../utils/examEngine/constants.js'
 import { crearRankingDocentesPorHoras } from '../utils/examEngine/scheduleDashboardUtils.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
 import { buildCareerCatalog } from '../services/careerCatalog.js'
+import {
+  archiveDeletedPerson,
+  fetchDeletedPersonRecords,
+  markDeletedPersonRestored,
+} from '../services/deletedPersonRecords.js'
 import { downloadSourceFiles } from '../services/sourceFiles.js'
 import {
   getStudentDraftIdentity,
@@ -17,8 +22,9 @@ import {
   validateStudentDraft,
   validateTeacherDraft,
 } from '../services/rosterDrafts.js'
-import { provisionStudentAccess } from '../services/studentAccess.js'
+import { applyStudentAccessResultsToRows, provisionStudentAccess } from '../services/studentAccess.js'
 import { fetchInstitutionAcademicCanonicalData } from '../services/academicCanonicalData.js'
+import { showImportantNotice } from '../services/importantNotice.js'
 import {
   resetStudentAcademicRecords,
   resetStudentAcademicSnapshotData,
@@ -29,6 +35,7 @@ import { useCronogramaExports } from '../hooks/useCronogramaExports.js'
 import { useCronogramaFiles } from '../hooks/useCronogramaFiles.js'
 import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence.js'
 import AssetsSection from './generadorCronograma/AssetsSection.jsx'
+import DeletedPersonRecordsSection from './generadorCronograma/DeletedPersonRecordsSection.jsx'
 import { isDevAuditSnapshotRoleAuthorized } from './generadorCronograma/devAuditSnapshotAccess.js'
 import InstitutionAdminOverview from './generadorCronograma/InstitutionAdminOverview.jsx'
 import StudentAccessSection from './generadorCronograma/StudentAccessSection.jsx'
@@ -140,6 +147,9 @@ function GeneradorCronograma() {
   const [selectedStudentCareer, setSelectedStudentCareer] = useState('')
   const [isProvisioningTeachers, setIsProvisioningTeachers] = useState(false)
   const [teacherAccessResult, setTeacherAccessResult] = useState(null)
+  const [deletedPersonRecords, setDeletedPersonRecords] = useState([])
+  const [isLoadingDeletedPersons, setIsLoadingDeletedPersons] = useState(false)
+  const [restoringDeletedPersonId, setRestoringDeletedPersonId] = useState('')
   const [academicSnapshotData, setAcademicSnapshotData] = useState({})
   const [institutionAcademicData, setInstitutionAcademicData] = useState({
     institutionId: '', loaded: false, grades: [], studentRecords: [],
@@ -150,6 +160,7 @@ function GeneradorCronograma() {
   const [adminReviewPromotions, setAdminReviewPromotions] = useState([])
   const [adminReviewApprovalRequests, setAdminReviewApprovalRequests] = useState([])
   const [adminReviewSecondApprovals, setAdminReviewSecondApprovals] = useState([])
+  const [examEngineV21State, setExamEngineV21State] = useState(null)
   const [activeWorkspaceView, setActiveWorkspaceView] = useState(readStoredWorkspaceView)
   const [hasOpenedExamEngineV21, setHasOpenedExamEngineV21] = useState(false)
   const [activeDashboardSection, setActiveDashboardSection] = useState('overview')
@@ -188,6 +199,7 @@ function GeneradorCronograma() {
     setAdminReviewPromotions(snapshot.adminReviewPromotions ?? [])
     setAdminReviewApprovalRequests(snapshot.adminReviewApprovalRequests ?? [])
     setAdminReviewSecondApprovals(snapshot.adminReviewSecondApprovals ?? [])
+    setExamEngineV21State(snapshot.examEngineV21State ?? null)
     setAcademicSnapshotData(
       academicSnapshotKeys.reduce((accumulator, key) => {
         if (snapshot[key] !== undefined) {
@@ -256,6 +268,7 @@ function GeneradorCronograma() {
     adminReviewPromotions,
     adminReviewApprovalRequests,
     adminReviewSecondApprovals,
+    examEngineV21State,
     requiereRegeneracion,
   }), [
     academicSnapshotData,
@@ -264,6 +277,7 @@ function GeneradorCronograma() {
     adminReviewPromotions,
     adminReviewApprovalRequests,
     adminReviewSecondApprovals,
+    examEngineV21State,
     alumnos,
     correlatividades,
     cronograma,
@@ -455,7 +469,7 @@ function GeneradorCronograma() {
     workspaceClearCounts,
   ])
 
-  const publicarCronogramaFinalDesdeMotor = useCallback((publishedCronograma = []) => {
+  const publicarCronogramaFinalDesdeMotor = useCallback(async (publishedCronograma = []) => {
     if (!canEditWorkspace) {
       toast.error('Tu rol actual no permite publicar el cronograma final.')
       return false
@@ -466,10 +480,40 @@ function GeneradorCronograma() {
       return false
     }
 
+    const nextSnapshot = {
+      ...snapshotPayload,
+      cronograma: publishedCronograma,
+      requiereRegeneracion: false,
+    }
+
     setCronograma(publishedCronograma)
     setRequiereRegeneracion(false)
-    return true
-  }, [canEditWorkspace])
+
+    try {
+      await saveSnapshotNow(nextSnapshot)
+      return true
+    } catch (error) {
+      toast.error(`No se pudo guardar el cronograma final: ${error.message}`)
+      return false
+    }
+  }, [canEditWorkspace, saveSnapshotNow, snapshotPayload])
+
+  const persistirEstadoMotorMesas = useCallback(async (nextState) => {
+    setExamEngineV21State(nextState)
+
+    try {
+      await saveSnapshotNow({
+        ...snapshotPayload,
+        examEngineV21State: nextState,
+      }, {
+        syncOperational: false,
+      })
+      return true
+    } catch (error) {
+      toast.error(`No se pudo guardar el avance del motor de mesas: ${error.message}`)
+      return false
+    }
+  }, [saveSnapshotNow, snapshotPayload])
 
   const reiniciarProcesoMesasDesdeMotor = useCallback(() => {
     if (!canEditWorkspace) {
@@ -478,6 +522,7 @@ function GeneradorCronograma() {
     }
 
     setCronograma([])
+    setExamEngineV21State(null)
     setAcademicSnapshotData((current) => ({
       ...current,
       examEnrollments: [],
@@ -495,12 +540,31 @@ function GeneradorCronograma() {
       })
       setStudentAccessResult(result)
 
+      const hasLinkedResults = Array.isArray(result.results) && result.results.some((entry) => entry?.user_id)
+      if (hasLinkedResults) {
+        const nextAlumnos = applyStudentAccessResultsToRows(alumnos, result.results)
+        setAlumnos(nextAlumnos)
+        await saveSnapshotNow({ ...snapshotPayload, alumnos: nextAlumnos })
+      }
+
       if (result.failed > 0) {
         toast.error(`Accesos procesados con ${result.failed} errores. Revisa DNI/email en el padron.`)
         return
       }
 
       toast.success(`Accesos listos: ${result.created} creados y ${result.updated} actualizados.`)
+      showImportantNotice({
+        tone: 'success',
+        title: 'Accesos de alumnos listos',
+        message: 'Los usuarios del portal alumno fueron procesados desde el padrÃ³n.',
+        details: [
+          `${result.created} accesos creados.`,
+          `${result.updated} accesos actualizados.`,
+          result.skippedExisting ? `${result.skippedExisting} alumnos omitidos porque ya tenÃ­an acceso vinculado.` : '',
+          result.batches > 1 ? `Procesado en ${result.batches} tandas para evitar lÃ­mites de Supabase.` : '',
+          'Si agregaste alumnos nuevos, ya podÃ©s entregarles email y DNI como credenciales iniciales.',
+        ],
+      })
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -525,6 +589,16 @@ function GeneradorCronograma() {
       }
 
       toast.success(`Accesos docentes listos: ${result.created} creados y ${result.updated} actualizados.`)
+      showImportantNotice({
+        tone: 'success',
+        title: 'Accesos docentes listos',
+        message: 'Los usuarios del portal docente fueron procesados desde el padrÃ³n.',
+        details: [
+          `${result.created} accesos creados.`,
+          `${result.updated} accesos actualizados.`,
+          'Los docentes ya pueden ingresar al portal con las credenciales configuradas.',
+        ],
+      })
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -532,7 +606,40 @@ function GeneradorCronograma() {
     }
   }
 
-  function crearAlumno(nextStudent) {
+  const cargarBajasPadron = useCallback(async () => {
+    if (!activeInstitutionId || !useRemoteWorkspace) {
+      setDeletedPersonRecords([])
+      return []
+    }
+
+    setIsLoadingDeletedPersons(true)
+    try {
+      const records = await fetchDeletedPersonRecords({
+        institutionId: activeInstitutionId,
+        workspaceKey,
+        personTypes: ['student', 'teacher', 'admin'],
+        useRemote: useRemoteWorkspace,
+      })
+      setDeletedPersonRecords(records)
+      return records
+    } catch (error) {
+      toast.error(`No se pudieron cargar las bajas: ${error.message}`)
+      return []
+    } finally {
+      setIsLoadingDeletedPersons(false)
+    }
+  }, [activeInstitutionId, useRemoteWorkspace, workspaceKey])
+
+  useEffect(() => {
+    if (!['students', 'teachers'].includes(activeWorkspaceView)) return
+    const timeoutId = window.setTimeout(() => {
+      cargarBajasPadron()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [activeWorkspaceView, cargarBajasPadron])
+
+  async function crearAlumno(nextStudent) {
     const validation = validateStudentDraft({
       draft: nextStudent,
       students: alumnos,
@@ -543,12 +650,21 @@ function GeneradorCronograma() {
       return false
     }
 
-    setAlumnos((current) => [...current, validation.student])
+    const nextAlumnos = [...alumnos, validation.student]
+    setAlumnos(nextAlumnos)
+
+    try {
+      await saveSnapshotNow({ ...snapshotPayload, alumnos: nextAlumnos })
+    } catch (error) {
+      toast.error(`Alumno agregado localmente, pero no se pudo guardar el alta: ${error.message}`)
+      return false
+    }
+
     toast.success('Alumno agregado al padron.')
     return true
   }
 
-  function actualizarAlumno(studentKey, nextStudent) {
+  async function actualizarAlumno(studentKey, nextStudent) {
     const currentStudent = alumnos.find((student, index) => getStudentKey(student, index) === studentKey)
 
     if (!currentStudent) {
@@ -570,33 +686,128 @@ function GeneradorCronograma() {
       return false
     }
 
-    setAlumnos((current) => current.map((student, index) => (
+    const previousCareer = normalizeValue(currentStudent.carrera ?? currentStudent.career ?? currentStudent.carrera_nombre)
+    const nextCareer = normalizeValue(validation.student.carrera ?? validation.student.career ?? validation.student.carrera_nombre)
+    const changedCareer = Boolean(previousCareer && nextCareer && previousCareer !== nextCareer)
+    const nextAlumnos = alumnos.map((student, index) => (
       getStudentKey(student, index) === studentKey
         ? {
           ...student,
           ...validation.student,
         }
         : student
-    )))
-    toast.success('Alumno actualizado.')
+    ))
+
+    setAlumnos(nextAlumnos)
+
+    try {
+      await saveSnapshotNow({ ...snapshotPayload, alumnos: nextAlumnos })
+    } catch (error) {
+      toast.error(`Alumno actualizado localmente, pero no se pudo guardar el cambio: ${error.message}`)
+      return false
+    }
+
+    if (changedCareer) {
+      showImportantNotice({
+        tone: 'success',
+        title: 'Alumno movido de carrera',
+        message: `${validation.student.full_name || validation.student.email || 'El alumno'} fue actualizado correctamente.`,
+        details: [
+          `Carrera anterior: ${currentStudent.carrera ?? currentStudent.career ?? currentStudent.carrera_nombre ?? 'Sin carrera'}.`,
+          `Nueva carrera: ${validation.student.carrera}.`,
+          'El acceso del alumno se conserva; no se crea una cuenta nueva.',
+        ],
+      })
+    }
+
+    toast.success(changedCareer ? 'Alumno actualizado y movido de carrera.' : 'Alumno actualizado.')
     return true
   }
 
-  function borrarAlumno(studentKey) {
+  async function borrarAlumno(studentKey) {
     const student = alumnos.find((entry, index) => getStudentKey(entry, index) === studentKey)
 
     if (!student) {
-      toast.error('No se encontró el alumno que intentás eliminar.')
-      return
+      toast.error('No se encontro el alumno que intentas eliminar.')
+      return false
     }
 
-    if (!confirmStudentDeletion(student)) return
+    if (!confirmStudentDeletion(student)) return false
 
-    setAlumnos((current) => current.filter((student, index) => getStudentKey(student, index) !== studentKey))
-    toast.success('Alumno eliminado del padrón.')
+    try {
+      await archiveDeletedPerson({
+        institutionId: activeInstitutionId,
+        workspaceKey,
+        personType: 'student',
+        person: student,
+        deletedByEmail: user?.email,
+        deletionSource: 'student_roster',
+        useRemote: useRemoteWorkspace,
+      })
+    } catch (error) {
+      toast.error(`No se elimino el alumno porque no se pudo registrar la baja: ${error.message}`)
+      return false
+    }
+
+    const nextAlumnos = alumnos.filter((student, index) => getStudentKey(student, index) !== studentKey)
+
+    try {
+      await saveSnapshotNow({ ...snapshotPayload, alumnos: nextAlumnos })
+    } catch (error) {
+      toast.error(`La baja fue auditada, pero no se pudo guardar el padron actualizado: ${error.message}`)
+      return false
+    }
+
+    setAlumnos(nextAlumnos)
+    toast.success('Alumno eliminado del padron.')
+    return true
   }
 
-  function crearDocente(nextTeacher) {
+  async function restaurarAlumnoDesdeBaja(record) {
+    const restoredStudent = record?.raw_payload
+
+    if (!restoredStudent || typeof restoredStudent !== 'object') {
+      toast.error('La baja no tiene datos suficientes para restaurar el alumno.')
+      return false
+    }
+
+    const validation = validateStudentDraft({
+      draft: restoredStudent,
+      students: alumnos,
+    })
+
+    if (!validation.ok) {
+      toast.error(validation.error)
+      return false
+    }
+
+    const nextAlumnos = [...alumnos, {
+      ...restoredStudent,
+      ...validation.student,
+      estado: validation.student.estado || restoredStudent.estado || 'activo',
+    }]
+
+    setRestoringDeletedPersonId(record.id)
+    try {
+      await saveSnapshotNow({ ...snapshotPayload, alumnos: nextAlumnos })
+      await markDeletedPersonRestored({
+        id: record.id,
+        restoredByEmail: user?.email,
+        useRemote: useRemoteWorkspace,
+      })
+      setAlumnos(nextAlumnos)
+      setDeletedPersonRecords((current) => current.filter((entry) => entry.id !== record.id))
+      toast.success('Alumno restaurado en el padron.')
+      return true
+    } catch (error) {
+      toast.error(`No se pudo restaurar el alumno: ${error.message}`)
+      return false
+    } finally {
+      setRestoringDeletedPersonId('')
+    }
+  }
+
+  async function crearDocente(nextTeacher) {
     const validation = validateTeacherDraft({
       draft: nextTeacher,
       teachers: docentes,
@@ -607,7 +818,16 @@ function GeneradorCronograma() {
       return false
     }
 
-    setDocentes((current) => [...current, validation.teacher])
+    const nextDocentes = [...docentes, validation.teacher]
+    setDocentes(nextDocentes)
+
+    try {
+      await saveSnapshotNow({ ...snapshotPayload, docentes: nextDocentes })
+    } catch (error) {
+      toast.error(`Docente agregado localmente, pero no se pudo guardar el alta: ${error.message}`)
+      return false
+    }
+
     toast.success('Docente agregado al padron.')
     return true
   }
@@ -672,46 +892,137 @@ function GeneradorCronograma() {
     return true
   }
 
-  function borrarDocente(teacherIdentity) {
-    if (!window.confirm('Borrar este docente y todos sus bloques de horarios?')) return
+  async function borrarDocente(teacherIdentity) {
+    if (!window.confirm('Borrar este docente y todos sus bloques de horarios?')) return false
 
     const currentTeacher = docentes.find(
       (teacher) => getTeacherProfileIdentity(teacher) === teacherIdentity,
     )
-    const target = normalizeValue(
-      currentTeacher?.full_name || [currentTeacher?.nombre, currentTeacher?.apellido].filter(Boolean).join(' '),
-    )
-    const targetDni = normalizeValue(currentTeacher?.dni)
 
-    setDocentes((current) => current.filter((teacher) => {
-      return getTeacherProfileIdentity(teacher) !== teacherIdentity
-    }))
-    setHorariosDocentes((current) => current.filter((schedule) => {
+    if (!currentTeacher) {
+      toast.error('No se encontro el docente que intentas eliminar.')
+      return false
+    }
+
+    const target = normalizeValue(
+      currentTeacher.full_name || [currentTeacher.nombre, currentTeacher.apellido].filter(Boolean).join(' '),
+    )
+    const targetDni = normalizeValue(currentTeacher.dni)
+
+    try {
+      await archiveDeletedPerson({
+        institutionId: activeInstitutionId,
+        workspaceKey,
+        personType: 'teacher',
+        person: currentTeacher,
+        deletedByEmail: user?.email,
+        deletionSource: 'teacher_roster',
+        useRemote: useRemoteWorkspace,
+      })
+    } catch (error) {
+      toast.error(`No se elimino el docente porque no se pudo registrar la baja: ${error.message}`)
+      return false
+    }
+
+    const nextDocentes = docentes.filter((teacher) => getTeacherProfileIdentity(teacher) !== teacherIdentity)
+    const nextHorariosDocentes = horariosDocentes.filter((schedule) => {
       const scheduleTeacher = normalizeValue(schedule.profesor || schedule.docente || schedule.nombre)
       const scheduleDni = normalizeValue(schedule.dni || schedule.documento)
       return !(
         (targetDni && scheduleDni === targetDni) ||
         scheduleTeacher === target
       )
-    }))
-    setDisponibilidadDocente((current) => current.filter((row) => {
+    })
+    const nextDisponibilidadDocente = disponibilidadDocente.filter((row) => {
       const rowTeacher = normalizeValue(row.docente || row.profesor || row.nombre)
       const rowDni = normalizeValue(row.dni_docente || row.dni || row.documento)
       return !(
         (targetDni && rowDni === targetDni) ||
         rowTeacher === target
       )
-    }))
-    setCargaHorariaDocente((current) => current.filter((row) => {
+    })
+    const nextCargaHorariaDocente = cargaHorariaDocente.filter((row) => {
       const rowTeacher = normalizeValue(row.docente || row.profesor || row.nombre)
       const rowDni = normalizeValue(row.dni_docente || row.dni || row.documento)
       return !(
         (targetDni && rowDni === targetDni) ||
         rowTeacher === target
       )
-    }))
+    })
+
+    try {
+      await saveSnapshotNow({
+        ...snapshotPayload,
+        docentes: nextDocentes,
+        horariosDocentes: nextHorariosDocentes,
+        disponibilidadDocente: nextDisponibilidadDocente,
+        cargaHorariaDocente: nextCargaHorariaDocente,
+      })
+    } catch (error) {
+      toast.error(`La baja fue auditada, pero no se pudo guardar el padron actualizado: ${error.message}`)
+      return false
+    }
+
+    setDocentes(nextDocentes)
+    setHorariosDocentes(nextHorariosDocentes)
+    setDisponibilidadDocente(nextDisponibilidadDocente)
+    setCargaHorariaDocente(nextCargaHorariaDocente)
     setRequiereRegeneracion(true)
-    toast.success('Docente borrado de horarios.')
+    toast.success('Docente eliminado del padron y sus horarios.')
+    return true
+  }
+
+  async function restaurarDocenteDesdeBaja(record) {
+    const restoredTeacher = record?.raw_payload
+
+    if (!restoredTeacher || typeof restoredTeacher !== 'object') {
+      toast.error('La baja no tiene datos suficientes para restaurar el docente.')
+      return false
+    }
+
+    const validation = validateTeacherDraft({
+      draft: restoredTeacher,
+      teachers: docentes,
+    })
+
+    if (!validation.ok) {
+      toast.error(validation.error)
+      return false
+    }
+
+    const nextDocentes = [...docentes, {
+      ...restoredTeacher,
+      ...validation.teacher,
+      estado: validation.teacher.estado || restoredTeacher.estado || 'activo',
+    }]
+
+    setRestoringDeletedPersonId(record.id)
+    try {
+      await saveSnapshotNow({ ...snapshotPayload, docentes: nextDocentes })
+      await markDeletedPersonRestored({
+        id: record.id,
+        restoredByEmail: user?.email,
+        useRemote: useRemoteWorkspace,
+      })
+      setDocentes(nextDocentes)
+      setDeletedPersonRecords((current) => current.filter((entry) => entry.id !== record.id))
+      setRequiereRegeneracion(true)
+      toast.success('Docente restaurado en el padron.')
+      return true
+    } catch (error) {
+      toast.error(`No se pudo restaurar el docente: ${error.message}`)
+      return false
+    } finally {
+      setRestoringDeletedPersonId('')
+    }
+  }
+
+  async function restaurarPersonaDesdeBaja(record) {
+    if (record?.person_type === 'student') return restaurarAlumnoDesdeBaja(record)
+    if (record?.person_type === 'teacher') return restaurarDocenteDesdeBaja(record)
+
+    toast.error('La restauracion de administrativos requiere recuperar el usuario de Auth desde el panel superadmin.')
+    return false
   }
 
   function createLocalId(prefix) {
@@ -1430,7 +1741,7 @@ function GeneradorCronograma() {
                     canEditWorkspace={canEditWorkspace}
                     canManageDataSource={isSuperAdmin}
                     isRelationalWorkspaceSource={isRelationalWorkspaceSource}
-                    description="Subí la plantilla general de alumnos. La carga agrega registros nuevos y actualiza los existentes."
+                    description="SubÃ­ la plantilla general de alumnos. La carga agrega registros nuevos y actualiza los existentes."
                     onUploadStudents={onUploadStudents}
                     scope="students"
                     title="Carga de alumnos"
@@ -1473,27 +1784,39 @@ function GeneradorCronograma() {
                         useRemoteWorkspace={useRemoteWorkspace}
                         workspaceKey={workspaceKey}
                       />
-                      <details className="soft-card">
-                      <summary className="cursor-pointer font-extrabold text-slate-900">
-                        Accesos del padrón
-                      </summary>
-                      <div className="mt-4 space-y-4">
-                        <StudentAccessSection
-                          alumnos={alumnos}
-                          isLoading={isProvisioningStudents}
-                          lastResult={studentAccessResult}
-                          onProvisionStudents={crearAccesosAlumnos}
-                          useRemoteWorkspace={useRemoteWorkspace}
-                        />
-                      </div>
-                      </details>
                     </>
                   ) : (
                     <>
+                      <StudentAccessSection
+                        alumnos={alumnos}
+                        extraActions={(
+                          <StudentRosterSection
+                            academicData={{ planesEstudio }}
+                            alumnos={alumnos}
+                            canEditWorkspace={canEditWorkspace}
+                            careerOptions={careerOptions}
+                            createOnly
+                            onCreateStudent={crearAlumno}
+                          />
+                        )}
+                        isLoading={isProvisioningStudents}
+                        lastResult={studentAccessResult}
+                        onProvisionStudents={crearAccesosAlumnos}
+                        useRemoteWorkspace={useRemoteWorkspace}
+                      />
                       <StudentCareerDashboard
                         alumnos={alumnos}
                         onSelectCareer={setSelectedStudentCareer}
                         planesEstudio={planesEstudio}
+                      />
+                      <DeletedPersonRecordsSection
+                        records={deletedPersonRecords.filter((record) => record.person_type === 'student')}
+                        isLoading={isLoadingDeletedPersons}
+                        onRefresh={cargarBajasPadron}
+                        onRestore={restaurarPersonaDesdeBaja}
+                        restoringId={restoringDeletedPersonId}
+                        title="Alumnos eliminados"
+                        description="Alumnos dados de baja del padron activo. Restaurar recupera los datos guardados antes de la eliminacion."
                       />
                       {!isRelationalWorkspaceSource && (
                         <StudentSubjectEnrollmentSection
@@ -1548,6 +1871,15 @@ function GeneradorCronograma() {
                     lastAccessResult={teacherAccessResult}
                     useRemoteWorkspace={useRemoteWorkspace}
                   />
+                  <DeletedPersonRecordsSection
+                    records={deletedPersonRecords.filter((record) => record.person_type === 'teacher')}
+                    isLoading={isLoadingDeletedPersons}
+                    onRefresh={cargarBajasPadron}
+                    onRestore={restaurarPersonaDesdeBaja}
+                    restoringId={restoringDeletedPersonId}
+                    title="Docentes eliminados"
+                    description="Docentes dados de baja del padron activo. Restaurar recupera el perfil docente guardado antes de la eliminacion."
+                  />
                 </>
               )}
             </>
@@ -1561,6 +1893,7 @@ function GeneradorCronograma() {
                 institutionId={activeInstitutionId}
                 mode={isRelationalWorkspaceSource ? 'preview' : undefined}
                 onGoToUploads={() => selectWorkspaceView('dashboard')}
+                onExamEngineStateChange={persistirEstadoMotorMesas}
                 onPublishOfficialSchedule={publicarCronogramaFinalDesdeMotor}
                 onResetExamProcess={reiniciarProcesoMesasDesdeMotor}
                 uploadedFiles={examEngineUploadedFiles}

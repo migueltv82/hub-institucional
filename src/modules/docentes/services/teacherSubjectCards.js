@@ -262,7 +262,7 @@ export function mapGroupToSubject(group) {
   }
 }
 
-export function mergeTeacherSubjects({ assignedSubjects = EMPTY_ARRAY, subjectGroups = EMPTY_ARRAY }) {
+export function mergeTeacherSubjects({ assignedSubjects = EMPTY_ARRAY, subjectGroups = EMPTY_ARRAY, includeAssignedOnly = true }) {
   const subjectsByExactKey = new Map()
 
   function subjectHasGenericProgram(subject) {
@@ -284,7 +284,7 @@ export function mergeTeacherSubjects({ assignedSubjects = EMPTY_ARRAY, subjectGr
     return candidates.length === 1 ? candidates[0][0] : ''
   }
 
-  function upsertSubject(subject) {
+  function upsertSubject(subject, { allowInsert = true } = {}) {
     const exactKey = subjectExactKey(subject)
     if (!exactKey || exactKey === '::' || subjectCodeAliases(subject).length === 0) return
 
@@ -312,11 +312,13 @@ export function mergeTeacherSubjects({ assignedSubjects = EMPTY_ARRAY, subjectGr
       }
     }
 
+    if (!allowInsert) return
+
     subjectsByExactKey.set(exactKey, subject)
   }
 
   subjectGroups.map(mapGroupToSubject).forEach(upsertSubject)
-  assignedSubjects.forEach(upsertSubject)
+  assignedSubjects.forEach((subject) => upsertSubject(subject, { allowInsert: includeAssignedOnly }))
 
   return Array.from(subjectsByExactKey.values())
     .filter((subject) => clean(subject.subjectId))

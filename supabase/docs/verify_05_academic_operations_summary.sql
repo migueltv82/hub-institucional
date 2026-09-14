@@ -327,7 +327,10 @@ begin
       ('upsert_subject_enrollment_from_portal'),
       ('academic_teacher_create_class_session'),
       ('academic_teacher_upsert_attendance_records'),
-      ('academic_teacher_upsert_student_grade')
+      ('academic_teacher_upsert_student_grade'),
+      ('academic_get_teacher_subject_rosters'),
+      ('academic_get_student_subject_teacher_notices'),
+      ('academic_get_student_portal_grades')
   )
   select count(*)::integer
   into v_found
@@ -343,8 +346,8 @@ begin
   values (
     120,
     'academic_operations_rpcs_present',
-    case when v_found = 4 then 'OK' else 'FAIL' end,
-    format('found=%s/4 expected RPCs', v_found)
+    case when v_found = 7 then 'OK' else 'FAIL' end,
+    format('found=%s/7 expected RPCs', v_found)
   );
 
   with expected(expected_function_name) as (
@@ -352,7 +355,10 @@ begin
       ('upsert_subject_enrollment_from_portal'),
       ('academic_teacher_create_class_session'),
       ('academic_teacher_upsert_attendance_records'),
-      ('academic_teacher_upsert_student_grade')
+      ('academic_teacher_upsert_student_grade'),
+      ('academic_get_teacher_subject_rosters'),
+      ('academic_get_student_subject_teacher_notices'),
+      ('academic_get_student_portal_grades')
   )
   select count(distinct expected.expected_function_name)::integer
   into v_found
@@ -370,8 +376,8 @@ begin
   values (
     130,
     'academic_operations_rpcs_authenticated_grants',
-    case when v_found = 4 then 'OK' else 'FAIL' end,
-    format('found=%s/4 expected EXECUTE grants', v_found)
+    case when v_found = 7 then 'OK' else 'FAIL' end,
+    format('found=%s/7 expected EXECUTE grants', v_found)
   );
 
   with expected(expected_table_name, expected_policy_name) as (

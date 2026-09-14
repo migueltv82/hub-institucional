@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { ArrowLeft, CircleDollarSign, Download, Pencil, Printer, RefreshCw, ShieldAlert, Trash2, UserPlus, UserRound, X } from 'lucide-react'
 import PaginationControls from '../PaginationControls.jsx'
-import { getPrimaryCareer } from '../../services/careerCatalog.js'
+import { getPrimaryCareer, resolveCareerDisplayName } from '../../services/careerCatalog.js'
 import { getStudentProfilePhoto } from '../../modules/alumnos/services/studentProfile.js'
 import { fetchStudentRecords } from '../../services/rosterRecords.js'
 import { canonicalizeStudent } from '../../services/academicCanonicalData.js'
@@ -652,6 +652,25 @@ function buildStudentForm(student, planesEstudio = []) {
   }
 }
 
+function resolveCareerOptionLabel(career) {
+  const cleaned = clean(career)
+  return resolveCareerDisplayName(cleaned) || cleaned
+}
+
+function buildStudentCareerOptions(careers = []) {
+  const byKey = new Map()
+
+  careers.forEach((career) => {
+    const label = resolveCareerOptionLabel(career)
+    const key = normalizeText(label)
+    if (!label || !key || byKey.has(key)) return
+    byKey.set(key, label)
+  })
+
+  return Array.from(byKey.values())
+    .sort((left, right) => left.localeCompare(right, 'es', { sensitivity: 'base' }))
+}
+
 function StudentEditModal({
   adeudaCuota = false,
   canManageFinancialStatus = false,
@@ -662,17 +681,18 @@ function StudentEditModal({
   mode = 'edit',
   onChange,
   onClose,
+  onDelete,
   onOpenAcademicDetail,
   onSubmit,
   onToggleFinancialStatus,
 }) {
   if (!isOpen) return null
   const isCreating = mode === 'create'
-  const availableCareerOptions = Array.from(new Set([
+  const selectedCareer = resolveCareerOptionLabel(getPrimaryCareer(form))
+  const availableCareerOptions = buildStudentCareerOptions([
     ...careerOptions,
-    getPrimaryCareer(form),
-  ].filter(Boolean)))
-    .sort((left, right) => left.localeCompare(right, 'es', { sensitivity: 'base' }))
+    selectedCareer,
+  ])
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
@@ -697,7 +717,6 @@ function StudentEditModal({
             ['anio', 'Anio'],
             ['email', 'Email'],
             ['telefono', 'Telefono'],
-            ['estado', 'Estado'],
           ].map(([field, label]) => (
             <label key={field} className="block">
               <span className="text-sm font-semibold text-slate-700">{label}</span>
@@ -705,8 +724,18 @@ function StudentEditModal({
             </label>
           ))}
           <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Estado</span>
+            <select className="input-base mt-2" value={form.estado} onChange={onChange('estado')}>
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
+              {form.estado && !['activo', 'inactivo'].includes(form.estado) && (
+                <option value={form.estado}>{form.estado}</option>
+              )}
+            </select>
+          </label>
+          <label className="block">
             <span className="text-sm font-semibold text-slate-700">Carrera</span>
-            <select className="input-base mt-2" value={form.carrera} onChange={onChange('carrera')}>
+            <select className="input-base mt-2" value={selectedCareer} onChange={onChange('carrera')}>
               <option value="">Selecciona una carrera</option>
               {availableCareerOptions.map((career) => (
                 <option key={career} value={career}>
@@ -758,10 +787,20 @@ function StudentEditModal({
         )}
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-          {!isCreating && onOpenAcademicDetail ? (
-            <button type="button" className="btn-secondary" onClick={onOpenAcademicDetail}>
-              Ver ficha académica
-            </button>
+          {!isCreating ? (
+            <div className="flex flex-wrap gap-2">
+              {onOpenAcademicDetail ? (
+                <button type="button" className="btn-secondary" onClick={onOpenAcademicDetail}>
+                  Ver ficha académica
+                </button>
+              ) : null}
+              {onDelete ? (
+                <button type="button" className="btn-secondary text-red-700" onClick={onDelete}>
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar alumno
+                </button>
+              ) : null}
+            </div>
           ) : <span />}
           <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" onClick={onClose}>Cancelar</button>
@@ -1345,6 +1384,7 @@ function StudentRosterSection({
   canManageStudentFinancialStatus = false,
   careerFilter = '',
   careerOptions = [],
+  createOnly = false,
   embedded = false,
   institutionId = null,
   isRefreshingAcademicData = false,
@@ -1475,11 +1515,17 @@ function StudentRosterSection({
     }))
   }
 
-  const submitEdit = () => {
+  const submitEdit = async () => {
+    const normalizedCareer = resolveCareerOptionLabel(form.carrera)
+    const nextForm = {
+      ...form,
+      carrera: normalizedCareer,
+    }
+
     if (modalMode === 'create') {
-      const created = onCreateStudent?.({
-        ...form,
-        full_name: [form.nombre, form.apellido].filter(Boolean).join(' '),
+      const created = await onCreateStudent?.({
+        ...nextForm,
+        full_name: [nextForm.nombre, nextForm.apellido].filter(Boolean).join(' '),
       })
 
       if (created !== false) {
@@ -1493,11 +1539,11 @@ function StudentRosterSection({
 
     const nextStudent = {
       ...editingStudent.student,
-      ...form,
-      full_name: [form.nombre, form.apellido].filter(Boolean).join(' '),
+      ...nextForm,
+      full_name: [nextForm.nombre, nextForm.apellido].filter(Boolean).join(' '),
     }
 
-    const updated = onUpdateStudent?.(editingStudent.key, nextStudent)
+    const updated = await onUpdateStudent?.(editingStudent.key, nextStudent)
 
     if (updated !== false) {
       cancelEditing()
@@ -1548,6 +1594,38 @@ function StudentRosterSection({
         onResetAcademicRecords={onResetAcademicRecords}
         onUpdateAcademicRecords={onUpdateAcademicRecords}
       />
+    )
+  }
+
+  if (createOnly) {
+    return (
+      <>
+        <button
+          type="button"
+          className="btn-secondary min-w-56"
+          onClick={startCreating}
+          disabled={!canEditWorkspace || careerOptions.length === 0}
+        >
+          <UserPlus className="h-4 w-4" />
+          Nuevo alumno
+        </button>
+
+        <StudentEditModal
+          adeudaCuota={false}
+          canManageFinancialStatus={false}
+          careerOptions={careerOptions}
+          financialStatusPending={false}
+          form={form}
+          isOpen={modalMode === 'create'}
+          mode={modalMode}
+          onChange={handleFormChange}
+          onClose={cancelEditing}
+          onDelete={null}
+          onOpenAcademicDetail={null}
+          onSubmit={submitEdit}
+          onToggleFinancialStatus={null}
+        />
+      </>
     )
   }
 
@@ -1618,6 +1696,10 @@ function StudentRosterSection({
           mode={modalMode}
           onChange={handleFormChange}
           onClose={cancelEditing}
+          onDelete={editingStudent ? async () => {
+            const deleted = await onDeleteStudent?.(editingStudent.key)
+            if (deleted !== false) cancelEditing()
+          } : null}
           onOpenAcademicDetail={editingStudent ? () => { setSelectedStudent(editingStudent.student); cancelEditing() } : null}
           onSubmit={submitEdit}
           onToggleFinancialStatus={toggleEditingStudentFinancialStatus}
@@ -1747,6 +1829,10 @@ function StudentRosterSection({
         mode={modalMode}
         onChange={handleFormChange}
         onClose={cancelEditing}
+        onDelete={editingStudent ? async () => {
+          const deleted = await onDeleteStudent?.(editingStudent.key)
+          if (deleted !== false) cancelEditing()
+        } : null}
         onOpenAcademicDetail={editingStudent ? () => { setSelectedStudent(editingStudent.student); cancelEditing() } : null}
         onSubmit={submitEdit}
         onToggleFinancialStatus={toggleEditingStudentFinancialStatus}

@@ -23,17 +23,21 @@ function queryFor(tableName) {
 vi.mock('../../../lib/supabase.js', () => ({
   isSupabaseConfigured: true,
   supabase: {
-    rpc: vi.fn(async () => ({
-      data: {
-        stage: 'snapshot_only',
-        read_mode: 'snapshot_only',
-        write_mode: 'snapshot_only',
-        hybrid_read_enabled: false,
-        relational_primary_enabled: false,
-        snapshot_fallback_enabled: true,
-      },
-      error: null,
-    })),
+    rpc: vi.fn(async (functionName) => (
+      functionName === 'academic_get_student_portal_grades'
+        ? { data: mocks.grades, error: null }
+        : {
+            data: {
+              stage: 'snapshot_only',
+              read_mode: 'snapshot_only',
+              write_mode: 'snapshot_only',
+              hybrid_read_enabled: false,
+              relational_primary_enabled: false,
+              snapshot_fallback_enabled: true,
+            },
+            error: null,
+          }
+    )),
     from: vi.fn((tableName) => {
       mocks.tablesRead.push(tableName)
       return queryFor(tableName)
@@ -68,7 +72,7 @@ describe('fetchAcademicRelationalSnapshotOverlay', () => {
       useRemote: true,
     })
 
-    expect(mocks.tablesRead).toEqual(['student_grades'])
+    expect(mocks.tablesRead).toEqual(['subject_enrollments', 'exam_enrollments'])
     expect(result.relationalData.grades).toEqual([
       expect.objectContaining({
         subject_id: 'ING06',
