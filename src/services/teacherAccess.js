@@ -1,6 +1,9 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 import { getCareerValues } from './careerCatalog.js'
 
+const TEACHER_ACCESS_BATCH_SIZE = 20
+const TEACHER_ACCESS_CONCURRENCY = 2
+
 function clean(value) {
   return String(value ?? '').trim()
 }
@@ -37,6 +40,62 @@ function normalize(value) {
 
 function asArray(value) {
   return Array.isArray(value) ? value : []
+}
+
+function chunkRows(rows = [], size = TEACHER_ACCESS_BATCH_SIZE) {
+  const chunks = []
+  for (let index = 0; index < rows.length; index += size) {
+    chunks.push(rows.slice(index, index + size))
+  }
+  return chunks
+}
+
+function emptyAccessResult() {
+  return {
+    success: true,
+    created: 0,
+    updated: 0,
+    failed: 0,
+    results: [],
+    errors: [],
+    batches: 0,
+  }
+}
+
+function mergeAccessResult(total, next = {}) {
+  return {
+    ...total,
+    success: total.success !== false && next.success !== false,
+    created: total.created + (Number(next.created) || 0),
+    updated: total.updated + (Number(next.updated) || 0),
+    failed: total.failed + (Number(next.failed) || 0),
+    results: [
+      ...(Array.isArray(total.results) ? total.results : []),
+      ...(Array.isArray(next.results) ? next.results : []),
+    ],
+    errors: [
+      ...(Array.isArray(total.errors) ? total.errors : []),
+      ...(Array.isArray(next.errors) ? next.errors : []),
+    ],
+    batches: total.batches + (Number(next.batches) || 1),
+  }
+}
+
+async function mapWithConcurrency(items = [], concurrency = 1, mapper) {
+  const results = new Array(items.length)
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(items[index], index)
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  return results
 }
 
 function getTeacherDni(teacher) {
@@ -248,32 +307,47 @@ export async function provisionTeacherAccess({ institutionId, schedules, teacher
     throw new Error('La creacion de accesos docentes requiere una sesion remota con Supabase configurado.')
   }
 
-  const { data, error } = await supabase.functions.invoke('admin-users', {
-    body: {
-      action: 'bulk_create_teachers',
-      institution_id: institutionId,
-      teachers,
-    },
-  })
+  async function invokeTeacherBatch(teacherBatch) {
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: {
+        action: 'bulk_create_teachers',
+        institution_id: institutionId,
+        teachers: teacherBatch,
+      },
+    })
 
-  if (error) {
-    let detail = error.message
+    if (error) {
+      let detail = error.message
 
-    try {
-      if (error.context && typeof error.context.json === 'function') {
-        const errorBody = await error.context.json()
-        detail = errorBody?.error ?? errorBody?.message ?? detail
+      try {
+        if (error.context && typeof error.context.json === 'function') {
+          const errorBody = await error.context.json()
+          detail = errorBody?.error ?? errorBody?.message ?? detail
+        }
+      } catch {
+        // Supabase puede no permitir leer el body dos veces.
       }
-    } catch {
-      // Supabase puede no permitir leer el body dos veces.
+
+      throw new Error(`No se pudieron crear los accesos docentes. ${detail}`)
     }
 
-    throw new Error(`No se pudieron crear los accesos docentes. ${detail}`)
+    if (data?.error) {
+      throw new Error(data.error)
+    }
+
+    return data
   }
 
-  if (data?.error) {
-    throw new Error(data.error)
+  let result = emptyAccessResult()
+  const batchResults = await mapWithConcurrency(
+    chunkRows(teachers),
+    TEACHER_ACCESS_CONCURRENCY,
+    invokeTeacherBatch,
+  )
+
+  for (const batchResult of batchResults) {
+    result = mergeAccessResult(result, batchResult)
   }
 
-  return data
+  return result
 }

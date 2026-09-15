@@ -1,7 +1,24 @@
-import { describe, expect, it } from 'vitest'
-import { getTeachersFromProfiles } from './teacherAccess.js'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getTeachersFromProfiles, provisionTeacherAccess } from './teacherAccess.js'
+
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+}))
+
+vi.mock('../lib/supabase.js', () => ({
+  isSupabaseConfigured: true,
+  supabase: {
+    functions: {
+      invoke: mocks.invoke,
+    },
+  },
+}))
 
 describe('teacherAccess service', () => {
+  beforeEach(() => {
+    mocks.invoke.mockReset()
+  })
+
   it('arma la lista de docentes desde la planilla y la enriquece con materias', () => {
     const teachers = getTeachersFromProfiles(
       [{
@@ -132,5 +149,34 @@ describe('teacherAccess service', () => {
     }])
 
     expect(teachers).toEqual([])
+  })
+
+  it('procesa accesos docentes en tandas concurrentes acotadas', async () => {
+    mocks.invoke
+      .mockResolvedValueOnce({ data: { success: true, created: 20, updated: 0, failed: 0, results: [], errors: [] }, error: null })
+      .mockResolvedValueOnce({ data: { success: true, created: 20, updated: 0, failed: 0, results: [], errors: [] }, error: null })
+      .mockResolvedValueOnce({ data: { success: true, created: 5, updated: 0, failed: 0, results: [], errors: [] }, error: null })
+
+    const teacherProfiles = Array.from({ length: 45 }, (_, index) => ({
+      full_name: `Docente ${index + 1}`,
+      dni: `30000${index + 1}`,
+    }))
+
+    const result = await provisionTeacherAccess({
+      institutionId: 'inst-1',
+      teacherProfiles,
+      schedules: [],
+      useRemote: true,
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      created: 45,
+      updated: 0,
+      failed: 0,
+      batches: 3,
+    })
+    expect(mocks.invoke).toHaveBeenCalledTimes(3)
+    expect(mocks.invoke.mock.calls.map(([, args]) => args.body.teachers.length)).toEqual([20, 20, 5])
   })
 })

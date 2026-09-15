@@ -484,6 +484,32 @@ async function findAuthUserByEmail(adminClient: ReturnType<typeof createClient>,
   return null
 }
 
+async function findAuthUsersByEmails(adminClient: ReturnType<typeof createClient>, emails: string[]) {
+  const pendingEmails = new Set(emails.map((email) => email.toLowerCase()).filter(Boolean))
+  const usersByEmail = new Map<string, Awaited<ReturnType<typeof findAuthUserByEmail>>>()
+  if (pendingEmails.size === 0) return usersByEmail
+
+  let page = 1
+  const perPage = 1000
+
+  while (page <= 20 && pendingEmails.size > 0) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage })
+    if (error) throw error
+
+    for (const user of data.users) {
+      const email = user.email?.toLowerCase()
+      if (!email || !pendingEmails.has(email)) continue
+      usersByEmail.set(email, user)
+      pendingEmails.delete(email)
+    }
+
+    if (data.users.length < perPage) return usersByEmail
+    page += 1
+  }
+
+  return usersByEmail
+}
+
 async function deleteAuthUsersByEmail(adminClient: ReturnType<typeof createClient>, email: string) {
   const normalizedEmail = email.toLowerCase()
   let page = 1
@@ -720,17 +746,23 @@ async function createOrReuseStudentAuthUser({
   email,
   password,
   displayName,
+  existingUser,
+  skipExistingUserLookup = false,
 }: {
   adminClient: ReturnType<typeof createClient>
   email: string
   password: string
   displayName: string
+  existingUser?: Awaited<ReturnType<typeof findAuthUserByEmail>>
+  skipExistingUserLookup?: boolean
 }) {
   if (password.length < 6) {
     throw badRequest(`El DNI usado como contrasena para ${email} debe tener al menos 6 caracteres.`)
   }
 
-  const existingUser = await findAuthUserByEmail(adminClient, email)
+  if (!skipExistingUserLookup && !existingUser) {
+    existingUser = await findAuthUserByEmail(adminClient, email)
+  }
 
   if (existingUser) {
     const { data: existingProfile, error: profileLookupError } = await adminClient
@@ -789,18 +821,24 @@ async function createOrReuseTeacherAuthUser({
   password,
   displayName,
   dni,
+  existingUser,
+  skipExistingUserLookup = false,
 }: {
   adminClient: ReturnType<typeof createClient>
   email: string
   password: string
   displayName: string
   dni: string
+  existingUser?: Awaited<ReturnType<typeof findAuthUserByEmail>>
+  skipExistingUserLookup?: boolean
 }) {
   if (password.length < 6) {
     throw badRequest(`El DNI usado como contrasena para ${displayName} debe tener al menos 6 caracteres.`)
   }
 
-  const existingUser = await findAuthUserByEmail(adminClient, email)
+  if (!skipExistingUserLookup && !existingUser) {
+    existingUser = await findAuthUserByEmail(adminClient, email)
+  }
 
   if (existingUser) {
     const { data: existingProfile, error: profileLookupError } = await adminClient
@@ -1049,6 +1087,16 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof createCli
 
   const results: Array<Record<string, unknown>> = []
   const errors: Array<Record<string, unknown>> = []
+  const authUsersByEmail = await findAuthUsersByEmails(
+    adminClient,
+    students.flatMap((student) => {
+      try {
+        return [normalizeEmail(student.email ?? student.correo ?? student.mail)]
+      } catch {
+        return []
+      }
+    }),
+  )
 
   for (const [index, student] of students.entries()) {
     const rowNumber = index + 2
@@ -1067,7 +1115,10 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof createCli
         email,
         password,
         displayName,
+        existingUser: authUsersByEmail.get(email) ?? null,
+        skipExistingUserLookup: true,
       })
+      authUsersByEmail.set(email, user)
 
       const { error: profileError } = await adminClient
         .from('profiles')
@@ -1151,6 +1202,13 @@ async function handleBulkCreateTeachers(adminClient: ReturnType<typeof createCli
 
   const results: Array<Record<string, unknown>> = []
   const errors: Array<Record<string, unknown>> = []
+  const authUsersByEmail = await findAuthUsersByEmails(
+    adminClient,
+    teachers.flatMap((teacher) => {
+      const dni = getTeacherPassword(teacher.dni ?? teacher.documento)
+      return dni ? [getTeacherTechnicalEmail({ dni, institutionId })] : []
+    }),
+  )
 
   for (const [index, teacher] of teachers.entries()) {
     const rowNumber = index + 2
@@ -1174,7 +1232,10 @@ async function handleBulkCreateTeachers(adminClient: ReturnType<typeof createCli
         password: dni,
         displayName,
         dni,
+        existingUser: authUsersByEmail.get(email) ?? null,
+        skipExistingUserLookup: true,
       })
+      authUsersByEmail.set(email, user)
 
       const { error: profileError } = await adminClient
         .from('profiles')

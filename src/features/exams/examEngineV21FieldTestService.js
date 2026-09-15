@@ -651,6 +651,38 @@ export function createConfirmedFinalReviewRows(tribunalRows = []) {
   }))
 }
 
+function reviewStatusEntriesForMesa(mesaStatus = {}) {
+  return ['titular', 'vocal1', 'vocal2']
+    .map((roleKey) => mesaStatus?.[roleKey])
+    .filter(Boolean)
+}
+
+export function createConfirmedFinalReviewRowsFromTeacherStatus(tribunalRows = [], teacherReviewSummary = {}) {
+  const statusByMesaId = new Map(
+    asArray(teacherReviewSummary?.mesas)
+      .map((mesa) => [clean(mesa.draftMesaId), mesa])
+      .filter(([draftMesaId]) => Boolean(draftMesaId)),
+  )
+
+  return asArray(tribunalRows).flatMap((row) => {
+    const draftMesaId = clean(row.draftMesaId)
+    const mesaStatus = statusByMesaId.get(draftMesaId)
+    const entries = reviewStatusEntriesForMesa(mesaStatus)
+
+    if (!entries.length || entries.some((entry) => clean(entry.status) !== 'confirmed')) {
+      return []
+    }
+
+    return [{
+      draftMesaId,
+      vocal1: row.vocal1,
+      vocal2: row.vocal2,
+      estadoFinal: 'FINAL_CONFIRMED',
+      tribunalMinimoAceptado: row.estado === 'TRIBUNAL_MINIMUM' ? 'si' : '',
+    }]
+  })
+}
+
 export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], options = {}) {
   const publishedAt = clean(options.generatedAt) || new Date().toISOString()
 
@@ -721,9 +753,13 @@ export function summarizeTeacherReviewStatus(reviewRows = [], assignmentRows = [
     const entry = byMesa.get(mesaId) ?? {}
     entry[roleKey] = {
       nombre: clean(row.metadata?.[roleKey]),
+      teacherId: clean(row.teacher_id),
+      role: clean(row.role),
+      examTableId: mesaId,
       status: clean(row.confirmation_status) || 'pending',
       notas: clean(row.teacher_notes),
       confirmedAt: row.confirmed_at ?? null,
+      objectionDeadline: row.objection_deadline ?? null,
       reassignmentStatus: clean(row.reassignment_status) || 'none',
       requestedExamTableId: clean(row.requested_exam_table_id),
       requestedRole: clean(row.requested_role),

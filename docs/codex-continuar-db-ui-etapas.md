@@ -322,4 +322,80 @@ Mejora futura pendiente - comunicaciones institucionales y mensajeria interna:
 - Modelo probable: `message_threads`, `message_participants`, `message_entries`, `message_read_receipts` y, si conviene separar avisos masivos, `institution_announcements`.
 - Regla de seguridad minima: ningun alumno debe poder descubrir usuarios por fuera de su institucion, materias activas o conversaciones en las que participa. Los avisos masivos deben ser creados solo por administracion.
 
+Actualizacion 2026-09-14 - etapa 6: cierre de loop revision docente -> cronograma final:
+
+- Se completo el puente funcional entre la revision docente real y la revision final del admin. El panel de **Revision docente** ahora permite:
+  - refrescar confirmaciones/objeciones;
+  - confirmar como admin una asignacion docente puntual;
+  - confirmar como admin todas las asignaciones pendientes de una mesa;
+  - armar la revision final solo con las mesas que tienen todas sus asignaciones publicadas en `confirmed`.
+- El boton automatico historico **Confirmar sin cambios** se mantiene como bypass total/manual, pero el nuevo boton **Confirmar mesas listas** evita publicar mesas objetadas o pendientes por accidente.
+- `publishExamTeacherAssignmentsForReview()` ahora guarda `objection_deadline` a 24 horas desde la publicacion del precronograma.
+- Las lecturas admin/docente llaman de forma perezosa a `academic_reconcile_expired_exam_confirmations`. Si la RPC aun no esta aplicada, no rompe la lectura; cuando exista, confirma automaticamente las filas `pending` vencidas.
+- Se agrego `confirmExamAssignmentAsAdmin()` contra la RPC `academic_admin_confirm_exam_assignment`.
+- `supabase/docs/repair_06_exam_teacher_assignments.sql` fue actualizado para agregar `objection_deadline`, indice de vencimientos, `academic_reconcile_expired_exam_confirmations`, `academic_admin_confirm_exam_assignment`, grants y `notify pgrst, 'reload schema'`.
+- Antes del smoke remoto hay que volver a ejecutar `supabase/docs/repair_06_exam_teacher_assignments.sql` en el SQL Editor de Supabase, aunque la tabla ya exista, porque ahora agrega columna/RPCs nuevas.
+- Validaciones locales ejecutadas: `npm.cmd test -- src\services\examTeacherAssignments.test.js src\modules\docentes\services\teacherExamAssignments.test.js src\features\exams\examEngineV21FieldTestService.test.js src\features\exams\components\TeacherConfirmationStatusPanel.test.jsx src\features\exams\ExamEngineV21FieldTestPage.test.jsx`, `npm.cmd run lint` y `npm.cmd run build` pasaron.
+- Proximo smoke funcional:
+  1. Re-ejecutar `supabase/docs/repair_06_exam_teacher_assignments.sql`.
+  2. En `/app`, publicar o reutilizar el precronograma ya enviado a docentes.
+  3. Entrar como docente, confirmar una mesa y objetar otra.
+  4. Volver al admin, abrir **Envio a docentes**, presionar **Actualizar** y verificar contadores.
+  5. Usar **Confirmar mesas listas** para pasar solo las mesas totalmente confirmadas a **Cronograma final**.
+  6. Para una mesa pendiente/objetada que se quiera incluir igual, usar **Confirmar** en el rol o **Confirmar mesa** y volver a presionar **Confirmar mesas listas**.
+  7. Presionar **Publicar cronograma**.
+  8. Ejecutar `supabase/docs/verify_03_workspace_functional_counts.sql`; `legacy_exam_sessions` y fuente `cronograma` deben quedar mayores a 0.
+
+Actualizacion 2026-09-14 - smoke docente parcial y bloqueo remoto etapa 6:
+
+- Se reviso `git status` antes de tocar archivos: hay cambios locales sin commitear ya esperados en 13 archivos del flujo de etapa 6, sin untracked nuevos.
+- Smoke remoto parcial desde esta maquina: el login docente contra la institucion `3f9dd1a0-19b8-462f-bdd8-7e849d90ae04`, workspace `main`, funciona con cuenta tecnica docente. En `/app/mesas` el portal muestra el **Precronograma en revision** con 7 mesas publicadas para ese docente y botones **Confirmar** / **Objetar** visibles.
+- Se ejercio una confirmacion docente por la misma RPC que usa la UI (`academic_teacher_confirm_exam_assignment`) sobre una mesa publicada. La lectura posterior dejo la fila en `confirmation_status = confirmed` con `confirmed_at` presente.
+- Estado global leido con sesion docente miembro: `exam_teacher_assignments` tiene 294 asignaciones activas, 98 mesas distintas, 287 pendientes, 7 confirmadas y 0 mesas completas. Con estos datos, **Confirmar mesas listas** todavia no deberia promover filas a revision final salvo que se confirmen mas docentes o un admin use el bypass por rol/mesa.
+- Bloqueo remoto confirmado: la tabla remota todavia no tiene la columna `objection_deadline` (`42703`). Antes de probar vencimientos, auto-confirmacion por plazo o botones admin nuevos, volver a ejecutar `supabase/docs/repair_06_exam_teacher_assignments.sql` en el SQL Editor de Supabase. Si se quiere que las filas ya publicadas tengan plazo, republicar el precronograma despues de aplicar el SQL.
+- Correccion local posterior: publicar el precronograma ahora reintenta sin `objection_deadline` si Supabase devuelve que esa columna no existe en el schema cache. Esto desbloquea la publicacion contra esquemas remotos viejos, pero los plazos y RPCs admin nuevas siguen requiriendo aplicar `supabase/docs/repair_06_exam_teacher_assignments.sql`.
+- Correccion local posterior 2: confirmar una mesa como admin ahora reintenta con un `update` directo sobre `exam_teacher_assignments` si falta la RPC `academic_admin_confirm_exam_assignment`. El fallback usa solo columnas base y queda protegido por RLS; si el usuario no tiene rol `owner`/`admin`/`editor` o superadmin, seguira fallando. Aplicar `supabase/docs/repair_06_exam_teacher_assignments.sql` sigue siendo necesario para dejar activa la RPC oficial.
+- No se pudo cerrar el tramo admin desde esta sesion: CUA no expuso navegador disponible, no hay service role ni credenciales admin locales en `.env`, y la cuenta docente usada tiene membership `viewer`. Queda pendiente abrir el admin real, presionar **Actualizar**, confirmar/esperar mesas hasta tener al menos una mesa completa, usar **Confirmar mesas listas** y publicar el cronograma final.
+
+Actualizacion 2026-09-14 - performance de confirmaciones y creacion de accesos:
+
+- Causa de la demora al confirmar mesas como admin: el frontend estaba confirmando una asignacion docente por vez y, con la RPC `academic_admin_confirm_exam_assignment` ausente en el schema cache remoto, cada rol hacia primero una llamada RPC fallida y despues el fallback. En mesas con varios docentes eso multiplicaba viajes a Supabase.
+- Correccion local aplicada: el admin ahora usa `confirmExamAssignmentsAsAdmin()`, agrupa confirmaciones por mesa y, si la RPC falta, hace un `update` directo por mesa con todos los docentes pendientes. Tambien recuerda que la RPC falta para no repetir el error de schema cache en cada click.
+- Causa de la demora en creacion de accesos: la Edge Function `admin-users` buscaba usuarios Auth por email fila por fila, y las llamadas grandes podian quedar demasiado pesadas.
+- Correccion local aplicada: `studentAccess` y `teacherAccess` procesan tandas chicas con concurrencia acotada; `teacherAccess` ya no manda todos los docentes en una sola invocacion. Ademas `admin-users` precarga/cachea usuarios Auth por tanda para evitar un `listUsers` por cada alumno/docente.
+- Efecto esperado: confirmar una mesa y crear accesos deberia volver a sentirse mucho mas rapido. La mejora de frontend aplica al refrescar la app local; la mejora interna de `admin-users` requiere redeploy de esa Edge Function para impactar en remoto.
+- Validaciones locales ejecutadas: `npm.cmd test -- src\services\examTeacherAssignments.test.js src\features\exams\ExamEngineV21FieldTestPage.test.jsx src\services\studentAccess.test.js src\services\teacherAccess.test.js`, `npm.cmd test -- src\services\adminUsersEdgeFunctionSecurity.test.js`, `npm.cmd run lint` y `npm.cmd run build` pasaron.
+
+Actualizacion 2026-09-14 - decision sobre disponibilidad docente de etapa 3:
+
+- Decision tecnica: `teacher_availability_records` no se debe materializar automaticamente desde `horariosDocentes`. Los horarios representan clases/carga docente; la disponibilidad para mesas es una declaracion operativa distinta.
+- La materializacion valida queda por dos vias ya existentes: importar la hoja `disponibilidad_docente` de la plantilla maestra o cargar filas desde **Docentes > Disponibilidad manual**. El guardado del workspace sincroniza esas filas hacia `teacher_availability_records`.
+- La grilla/resumen derivado desde horarios sigue siendo informacion visual de apoyo y no cuenta como fuente persistida de `teacher_availability_records`.
+- Para cerrar completamente este pendiente historico de etapa 3, agregar o importar al menos una disponibilidad explicita real, guardar el workspace y volver a ejecutar `supabase/docs/verify_03_workspace_functional_counts.sql`; ahi `teacher_availability_records` y `disponibilidadDocente` deberian quedar mayores a 0. Si la institucion decide no declarar disponibilidad explicita, dejarlo documentado como disponibilidad visual derivada no persistida y no exigir filas en esa tabla.
+
+Estado practico para continuar en casa:
+
+- Al llegar a casa, abrir el repo local `hub-institucional` y traer este trabajo con `git pull`.
+- No repetir smokes de etapa 5: portal alumno, persistencia de inscripciones, notas, conexion docente-alumno y **Companieros** ya quedaron cerrados funcionalmente.
+- Refrescar/reiniciar la app local para tomar los cambios de frontend. Las confirmaciones admin de mesas ahora deberian ser mucho mas rapidas porque se agrupan por mesa y no repiten la RPC faltante en cada rol.
+- En Supabase remoto, volver a ejecutar `supabase/docs/repair_06_exam_teacher_assignments.sql` desde el SQL Editor. Aunque el frontend ya tiene fallbacks, este SQL deja el esquema correcto: `objection_deadline`, reconciliacion por vencimiento y RPC admin oficial.
+- Redeployar `supabase/functions/admin-users/index.ts` para que la mejora de performance de creacion de accesos impacte en remoto. Sin ese deploy, el frontend ya manda tandas mas chicas, pero la Edge Function remota puede seguir haciendo busquedas Auth viejas.
+- Smoke pendiente de etapa 6:
+  1. Entrar al admin en `/app`.
+  2. Publicar o reutilizar el precronograma enviado a docentes.
+  3. Entrar como docente y confirmar u objetar alguna mesa desde `/app/mesas`.
+  4. Volver al admin, abrir **Envio a docentes** y presionar **Actualizar**.
+  5. Usar **Confirmar mesas listas** para pasar a revision final solo mesas con todas sus asignaciones confirmadas.
+  6. Si se quiere forzar una mesa pendiente u objetada, usar **Confirmar** por rol o **Confirmar mesa** y luego volver a presionar **Confirmar mesas listas**.
+  7. Presionar **Publicar cronograma**.
+  8. Ejecutar `supabase/docs/verify_03_workspace_functional_counts.sql`.
+- Criterio de cierre para cronograma real: en la verificacion, `workspace_snapshots.payload.cronograma` y `legacy_exam_sessions` deben quedar con filas mayores a 0.
+- Pendiente historico de etapa 3: `teacher_workload_records` ya quedo confirmado con 177 filas. `teacher_availability_records` solo debe exigirse si la institucion carga/importa disponibilidad explicita; no se va a materializar automaticamente desde horarios docentes.
+- Si al confirmar mesas vuelve a aparecer `Could not find the function public.academic_admin_confirm_exam_assignment(...) in the schema cache`, el fallback local deberia completar igual la confirmacion. Si no completa, revisar permisos del usuario admin y confirmar que tenga membership `owner`/`admin`/`editor` o superadmin.
+- Si al publicar precronograma vuelve a aparecer `Could not find the 'objection_deadline' column`, el fallback local deberia republicar sin esa columna. Aplicar el repair SQL sigue siendo el cierre correcto para no depender del fallback.
+
+Prompt recomendado para retomar en casa:
+
+> Continuemos desde `docs/codex-continuar-db-ui-etapas.md` en el repo `hub-institucional`. Ya estan cerrados etapa 5, carga horaria docente y los fixes locales de performance para confirmacion de mesas/accesos. Primero revisa `git status`, confirma que estoy sobre el commit pusheado mas reciente, y retomemos el smoke pendiente de etapa 6: aplicar `supabase/docs/repair_06_exam_teacher_assignments.sql` si aun no se aplico, redeployar `supabase/functions/admin-users/index.ts` si necesito performance remota de accesos, confirmar/objetar mesas desde docente, refrescar en admin, usar **Confirmar mesas listas**, publicar cronograma y correr `supabase/docs/verify_03_workspace_functional_counts.sql`. No repetir smokes de etapa 5 salvo regresion.
+
 

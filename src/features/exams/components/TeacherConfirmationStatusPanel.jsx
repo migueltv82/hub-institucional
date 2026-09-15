@@ -12,7 +12,12 @@ const ROLE_LABELS = {
   vocal2: 'Vocal 2',
 }
 
-function RoleStatus({ entry, role }) {
+function mesaPendingEntries(mesa = {}) {
+  return [mesa.titular, mesa.vocal1, mesa.vocal2]
+    .filter((entry) => entry?.teacherId && entry.status !== 'confirmed')
+}
+
+function RoleStatus({ canConfirmAsAdmin = false, disabled = false, entry, onConfirmAsAdmin, role }) {
   if (!entry) {
     return (
       <div className="text-xs font-bold text-slate-400">
@@ -45,14 +50,29 @@ function RoleStatus({ entry, role }) {
           Cambio solicitado para {entry.requestedDate || 'otra fecha'}. Requiere resolucion administrativa.
         </p>
       ) : null}
+      {canConfirmAsAdmin && entry.teacherId && entry.status !== 'confirmed' ? (
+        <button
+          className="btn-secondary mt-2 px-2 py-1 text-xs"
+          disabled={disabled}
+          onClick={() => onConfirmAsAdmin?.(entry.examTableId, entry.teacherId)}
+          type="button"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Confirmar
+        </button>
+      ) : null}
     </div>
   )
 }
 
 function TeacherConfirmationStatusPanel({
   counts = { confirmed: 0, pending: 0, objected: 0, total: 0 },
+  canConfirmAsAdmin = false,
   isLoading = false,
   mesas = [],
+  onConfirmAssignmentAsAdmin,
+  onConfirmMesaAsAdmin,
+  onConfirmReadyMesas,
   onRefresh,
 }) {
   return (
@@ -66,10 +86,23 @@ function TeacherConfirmationStatusPanel({
             — para ellos seguí usando la importación manual de abajo.
           </p>
         </div>
-        <button className="btn-secondary" disabled={isLoading} type="button" onClick={onRefresh}>
-          <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Actualizar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {onConfirmReadyMesas ? (
+            <button
+              className="btn-primary"
+              disabled={isLoading || !mesas.length}
+              type="button"
+              onClick={onConfirmReadyMesas}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Confirmar mesas listas
+            </button>
+          ) : null}
+          <button className="btn-secondary" disabled={isLoading} type="button" onClick={onRefresh}>
+            <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-3">
@@ -96,10 +129,39 @@ function TeacherConfirmationStatusPanel({
                 <p className="text-xs font-bold text-slate-500">{mesa.carrera} · {mesa.fecha}</p>
               </div>
               <div className="mt-2 grid gap-3 md:grid-cols-3">
-                <RoleStatus entry={mesa.titular} role="titular" />
-                <RoleStatus entry={mesa.vocal1} role="vocal1" />
-                <RoleStatus entry={mesa.vocal2} role="vocal2" />
+                <RoleStatus
+                  canConfirmAsAdmin={canConfirmAsAdmin}
+                  disabled={isLoading}
+                  entry={mesa.titular}
+                  role="titular"
+                  onConfirmAsAdmin={onConfirmAssignmentAsAdmin}
+                />
+                <RoleStatus
+                  canConfirmAsAdmin={canConfirmAsAdmin}
+                  disabled={isLoading}
+                  entry={mesa.vocal1}
+                  role="vocal1"
+                  onConfirmAsAdmin={onConfirmAssignmentAsAdmin}
+                />
+                <RoleStatus
+                  canConfirmAsAdmin={canConfirmAsAdmin}
+                  disabled={isLoading}
+                  entry={mesa.vocal2}
+                  role="vocal2"
+                  onConfirmAsAdmin={onConfirmAssignmentAsAdmin}
+                />
               </div>
+              {canConfirmAsAdmin && mesaPendingEntries(mesa).length > 0 ? (
+                <button
+                  className="btn-secondary mt-3 px-2 py-1 text-xs"
+                  disabled={isLoading}
+                  onClick={() => onConfirmMesaAsAdmin?.(mesa.draftMesaId)}
+                  type="button"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Confirmar mesa
+                </button>
+              ) : null}
             </article>
           ))}
         </div>

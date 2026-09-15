@@ -17,6 +17,7 @@ import TribunalReviewTable from './components/TribunalReviewTable.jsx'
 import { useInteractiveTribunalSession } from './hooks/useInteractiveTribunalSession.js'
 import { downloadDraftScheduleReviewPdf } from './draftSchedulePdfExport.js'
 import {
+  confirmExamAssignmentsAsAdmin,
   fetchExamTeacherAssignmentsForReview,
   publishExamTeacherAssignmentsForReview,
   resetExamProcessForWorkspace,
@@ -28,6 +29,7 @@ import {
   buildExamCallConfigFromForm,
   buildExamEngineV21DataFromWorkspace,
   buildPublishedCronogramaFromFinalTribunals,
+  createConfirmedFinalReviewRowsFromTeacherStatus,
   createConfirmedFinalReviewRows,
   createConfirmedTeacherReviewRows,
   createDefaultExamCallConfigForm,
@@ -318,16 +320,16 @@ function ExamEngineV21FieldTestPage({
     tribunalSession.resetSelections()
   }
 
-  async function refreshTeacherReviewStatus() {
-    if (isPreview) return
+  async function refreshTeacherReviewStatus({ silent = false } = {}) {
+    if (isPreview) return null
     if (!institutionId) {
-      toast.error('Falta la institucion activa.')
-      return
+      if (!silent) toast.error('Falta la institucion activa.')
+      return null
     }
 
     if (!tribunalReviewExport?.rows?.length) {
-      toast.error('Primero publica el precronograma para revision docente.')
-      return
+      if (!silent) toast.error('Primero publica el precronograma para revision docente.')
+      return null
     }
 
     try {
@@ -339,15 +341,17 @@ function ExamEngineV21FieldTestPage({
       })
 
       if (!result.success) {
-        toast.error(result.error)
-        return
+        if (!silent) toast.error(result.error)
+        return null
       }
 
       const nextTeacherReviewStatus = summarizeTeacherReviewStatus(tribunalReviewExport.rows, result.rows)
       setTeacherReviewStatus(nextTeacherReviewStatus)
       void persistExamEngineState({ teacherReviewStatus: nextTeacherReviewStatus })
+      return nextTeacherReviewStatus
     } catch (error) {
-      toast.error(error.message)
+      if (!silent) toast.error(error.message)
+      return null
     } finally {
       setIsFetchingTeacherReviewStatus(false)
     }
@@ -728,6 +732,82 @@ function ExamEngineV21FieldTestPage({
     importFinalReviewRows(createConfirmedFinalReviewRows(tribunalReviewExport?.rows ?? []))
   }
 
+  async function confirmReadyMesasFromTeacherReview() {
+    if (!tribunalReviewExport?.rows?.length) {
+      toast.error('Primero publica el precronograma para revision docente.')
+      return
+    }
+
+    try {
+      setIsBusy(true)
+      const nextTeacherReviewStatus = await refreshTeacherReviewStatus({ silent: true })
+      if (!nextTeacherReviewStatus) {
+        toast.error('No se pudo leer el estado docente actualizado.')
+        return
+      }
+
+      const confirmedRows = createConfirmedFinalReviewRowsFromTeacherStatus(
+        tribunalReviewExport.rows,
+        nextTeacherReviewStatus,
+      )
+
+      if (!confirmedRows.length) {
+        toast.error('No hay mesas con todas sus confirmaciones docentes.')
+        return
+      }
+
+      importFinalReviewRows(confirmedRows)
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  function getTeacherReviewEntriesForMesa(examTableId) {
+    const mesa = teacherReviewStatus?.mesas?.find((item) => item.draftMesaId === examTableId)
+    return [mesa?.titular, mesa?.vocal1, mesa?.vocal2]
+      .filter((entry) => entry?.teacherId && entry.status !== 'confirmed')
+  }
+
+  async function confirmAssignmentsAsAdmin(entries = []) {
+    if (!canPublishOfficialSchedule) {
+      toast.error('Tu rol actual no permite confirmar mesas como admin.')
+      return
+    }
+
+    const targets = entries.filter((entry) => entry?.examTableId && entry?.teacherId)
+    if (!targets.length) {
+      toast.error('No hay confirmaciones pendientes para esa mesa.')
+      return
+    }
+
+    try {
+      setIsBusy(true)
+      const result = await confirmExamAssignmentsAsAdmin({
+        institutionId,
+        workspaceKey,
+        entries: targets,
+      })
+
+      if (!result.success) {
+        toast.error(result.error)
+        return
+      }
+
+      toast.success(targets.length === 1 ? 'Confirmacion admin registrada.' : 'Mesa confirmada por admin.')
+      await refreshTeacherReviewStatus({ silent: true })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  function confirmAssignmentAsAdmin(examTableId, teacherId) {
+    void confirmAssignmentsAsAdmin([{ examTableId, teacherId }])
+  }
+
+  function confirmMesaAsAdmin(examTableId) {
+    void confirmAssignmentsAsAdmin(getTeacherReviewEntriesForMesa(examTableId))
+  }
+
   async function publishOfficialSchedule() {
     if (isPreview) return
     if (!finalResult?.finalTribunals?.length) {
@@ -1037,8 +1117,12 @@ function ExamEngineV21FieldTestPage({
 
           {!isPreview && <TeacherConfirmationStatusPanel
             counts={teacherReviewStatus?.counts ?? { confirmed: 0, pending: 0, objected: 0, total: 0 }}
-            isLoading={isFetchingTeacherReviewStatus}
+            canConfirmAsAdmin={canPublishOfficialSchedule}
+            isLoading={isFetchingTeacherReviewStatus || isBusy}
             mesas={teacherReviewStatus?.mesas ?? []}
+            onConfirmAssignmentAsAdmin={confirmAssignmentAsAdmin}
+            onConfirmMesaAsAdmin={confirmMesaAsAdmin}
+            onConfirmReadyMesas={confirmReadyMesasFromTeacherReview}
             onRefresh={refreshTeacherReviewStatus}
           />}
 

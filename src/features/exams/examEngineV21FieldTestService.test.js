@@ -6,6 +6,7 @@ import {
   buildPublishedCronogramaFromFinalTribunals,
   buildUnresolvedTitularRows,
   createConfirmedFinalReviewRows,
+  createConfirmedFinalReviewRowsFromTeacherStatus,
   createConfirmedTeacherReviewRows,
   createDefaultExamCallConfigForm,
   rowsToCsv,
@@ -317,6 +318,60 @@ describe('examEngineV21FieldTestService', () => {
       expect.objectContaining({ titular: null, vocal1: null, vocal2: null }),
     ])
     expect(summary.counts).toEqual({ confirmed: 0, pending: 0, objected: 0, total: 0 })
+  })
+
+  it('arma revision final solo con mesas completamente confirmadas por docentes publicados', () => {
+    const tribunalRows = [
+      { draftMesaId: 'draft:1', vocal1: 'Bruno', vocal2: 'Carla', estado: 'TRIBUNAL_COMPLETE' },
+      { draftMesaId: 'draft:2', vocal1: 'Dario', vocal2: 'Elena', estado: 'TRIBUNAL_COMPLETE' },
+      { draftMesaId: 'draft:3', vocal1: 'Fede', vocal2: '', estado: 'TRIBUNAL_MINIMUM' },
+      { draftMesaId: 'draft:4', vocal1: 'Gala', vocal2: 'Hugo', estado: 'TRIBUNAL_COMPLETE' },
+    ]
+    const teacherReviewSummary = {
+      mesas: [
+        {
+          draftMesaId: 'draft:1',
+          titular: { status: 'confirmed' },
+          vocal1: { status: 'confirmed' },
+          vocal2: { status: 'confirmed' },
+        },
+        {
+          draftMesaId: 'draft:2',
+          titular: { status: 'confirmed' },
+          vocal1: { status: 'objected' },
+          vocal2: { status: 'confirmed' },
+        },
+        {
+          draftMesaId: 'draft:3',
+          titular: { status: 'confirmed' },
+          vocal1: { status: 'confirmed' },
+          vocal2: null,
+        },
+        {
+          draftMesaId: 'draft:4',
+          titular: null,
+          vocal1: null,
+          vocal2: null,
+        },
+      ],
+    }
+
+    expect(createConfirmedFinalReviewRowsFromTeacherStatus(tribunalRows, teacherReviewSummary)).toEqual([
+      {
+        draftMesaId: 'draft:1',
+        vocal1: 'Bruno',
+        vocal2: 'Carla',
+        estadoFinal: 'FINAL_CONFIRMED',
+        tribunalMinimoAceptado: '',
+      },
+      {
+        draftMesaId: 'draft:3',
+        vocal1: 'Fede',
+        vocal2: '',
+        estadoFinal: 'FINAL_CONFIRMED',
+        tribunalMinimoAceptado: 'si',
+      },
+    ])
   })
 
   it('serializa filas normalizadas como CSV descargable', () => {

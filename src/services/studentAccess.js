@@ -2,6 +2,7 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 
 const STUDENT_ACCESS_BATCH_SIZE = 20
 const MIN_STUDENT_ACCESS_BATCH_SIZE = 1
+const STUDENT_ACCESS_CONCURRENCY = 2
 
 function clean(value) {
   return String(value ?? '').trim()
@@ -112,6 +113,23 @@ function mergeAccessResult(total, next = {}) {
   }
 }
 
+async function mapWithConcurrency(items = [], concurrency = 1, mapper) {
+  const results = new Array(items.length)
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(items[index], index)
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  return results
+}
+
 async function readInvokeErrorDetail(error) {
   let detail = error?.message || 'Error desconocido.'
 
@@ -201,12 +219,17 @@ export async function provisionStudentAccess({ institutionId, students, useRemot
   let result = emptyAccessResult()
   const normalizedStudents = pending.map(normalizeStudentForAccess)
 
-  for (const studentBatch of chunkRows(normalizedStudents)) {
-    const batchResult = await invokeStudentBatch({
+  const batchResults = await mapWithConcurrency(
+    chunkRows(normalizedStudents),
+    STUDENT_ACCESS_CONCURRENCY,
+    (studentBatch) => invokeStudentBatch({
       institutionId,
       students: studentBatch,
       batchSize: STUDENT_ACCESS_BATCH_SIZE,
-    })
+    }),
+  )
+
+  for (const batchResult of batchResults) {
     result = mergeAccessResult(result, batchResult)
   }
 

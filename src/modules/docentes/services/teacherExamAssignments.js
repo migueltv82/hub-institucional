@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../../../lib/supabase.js'
+import { reconcileExpiredExamConfirmations } from '../../../services/examTeacherAssignments.js'
 
 function clean(value) {
   return String(value ?? '').trim()
@@ -15,6 +16,7 @@ function canUseRemoteExamAssignments({ institutionId }) {
 function isMissingReassignmentColumns(error) {
   const message = `${error?.message ?? ''} ${error?.details ?? ''}`.toLowerCase()
   return error?.code === '42703' || error?.code === 'PGRST204' || (
+    message.includes('objection_deadline') ||
     message.includes('requested_exam_table_id') ||
     message.includes('requested_role') ||
     message.includes('requested_date') ||
@@ -39,11 +41,16 @@ function buildTeacherAssignmentsQuery({ institutionId, workspaceKey, teacherUser
 export async function fetchTeacherExamAssignments({ institutionId, workspaceKey = 'main', teacherUserId }) {
   if (!canUseRemoteExamAssignments({ institutionId }) || !clean(teacherUserId)) return []
 
+  const reconciliation = await reconcileExpiredExamConfirmations({ institutionId, workspaceKey })
+  if (!reconciliation.success) {
+    console.warn('No se pudieron reconciliar vencimientos de mesas docentes.', reconciliation.error)
+  }
+
   let { data, error } = await buildTeacherAssignmentsQuery({
     institutionId,
     workspaceKey,
     teacherUserId,
-    select: 'id, exam_table_id, role, confirmation_status, teacher_notes, confirmed_at, requested_exam_table_id, requested_role, requested_date, reassignment_status, metadata, created_at, updated_at',
+    select: 'id, exam_table_id, role, confirmation_status, teacher_notes, confirmed_at, objection_deadline, requested_exam_table_id, requested_role, requested_date, reassignment_status, metadata, created_at, updated_at',
   })
 
   // Compatibilidad durante el intervalo entre desplegar el frontend y aplicar

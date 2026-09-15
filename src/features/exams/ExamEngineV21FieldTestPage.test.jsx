@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const serviceMocks = vi.hoisted(() => ({
+  confirmExamAssignmentsAsAdmin: vi.fn(),
+  confirmExamAssignmentAsAdmin: vi.fn(),
   fetchExamTeacherAssignmentsForReview: vi.fn(),
   publishExamTeacherAssignmentsForReview: vi.fn(),
   resetExamProcessForWorkspace: vi.fn(),
@@ -66,6 +68,8 @@ describe('ExamEngineV21FieldTestPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     serviceMocks.fetchExamTeacherAssignmentsForReview.mockResolvedValue({ success: true, rows: [] })
+    serviceMocks.confirmExamAssignmentsAsAdmin.mockResolvedValue({ success: true, data: {} })
+    serviceMocks.confirmExamAssignmentAsAdmin.mockResolvedValue({ success: true, data: {} })
     serviceMocks.publishExamTeacherAssignmentsForReview.mockResolvedValue({
       success: true,
       published: 0,
