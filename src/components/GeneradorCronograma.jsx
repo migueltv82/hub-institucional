@@ -37,18 +37,13 @@ import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence.js'
 import AssetsSection from './generadorCronograma/AssetsSection.jsx'
 import DeletedPersonRecordsSection from './generadorCronograma/DeletedPersonRecordsSection.jsx'
 import { isDevAuditSnapshotRoleAuthorized } from './generadorCronograma/devAuditSnapshotAccess.js'
-import InstitutionAdminOverview from './generadorCronograma/InstitutionAdminOverview.jsx'
 import StudentAccessSection from './generadorCronograma/StudentAccessSection.jsx'
 import StudentCareerDashboard from './generadorCronograma/StudentCareerDashboard.jsx'
-import StudentRosterSection from './generadorCronograma/StudentRosterSection.jsx'
 import StudentSubjectEnrollmentSection from './generadorCronograma/StudentSubjectEnrollmentSection.jsx'
-import TeacherRosterSection from './generadorCronograma/TeacherRosterSection.jsx'
 import TribunalMatrixDiagnosis from './generadorCronograma/TribunalMatrixDiagnosis.jsx'
-import UploadsSection from './generadorCronograma/UploadsSection.jsx'
 import WorkspaceDangerZone from './generadorCronograma/WorkspaceDangerZone.jsx'
 import WorkspaceNotice from './generadorCronograma/WorkspaceNotice.jsx'
 import WorkspaceSidebar from './generadorCronograma/WorkspaceSidebar.jsx'
-import ExamEngineV21FieldTestPage from '../features/exams/ExamEngineV21FieldTestPage.jsx'
 import {
   createInitialRegularCallRanges,
   initialFiles,
@@ -77,6 +72,12 @@ const academicSnapshotKeys = [
 ]
 const ACTIVE_WORKSPACE_VIEW_KEY = 'mesaflow.active-workspace-view'
 const VALID_WORKSPACE_VIEWS = new Set(['dashboard', 'students', 'teachers', 'exam-engine-v21'])
+
+const InstitutionAdminOverview = lazy(() => import('./generadorCronograma/InstitutionAdminOverview.jsx'))
+const StudentRosterSection = lazy(() => import('./generadorCronograma/StudentRosterSection.jsx'))
+const TeacherRosterSection = lazy(() => import('./generadorCronograma/TeacherRosterSection.jsx'))
+const UploadsSection = lazy(() => import('./generadorCronograma/UploadsSection.jsx'))
+const ExamEngineV21FieldTestPage = lazy(() => import('../features/exams/ExamEngineV21FieldTestPage.jsx'))
 
 const DevAuditSnapshotExport = import.meta.env.DEV
   ? lazy(() => import('./generadorCronograma/DevAuditSnapshotExport.jsx'))
@@ -1470,8 +1471,9 @@ function GeneradorCronograma() {
         />
 
         <div className="admin-workspace-main min-w-0 space-y-5 p-3 sm:p-4 md:space-y-6 md:p-6 xl:p-8">
-          {activeWorkspaceView === 'dashboard' ? (
-            <>
+          <Suspense fallback={<WorkspaceNotice tone="sky">Cargando modulo...</WorkspaceNotice>}>
+            {activeWorkspaceView === 'dashboard' ? (
+              <>
               <div className="space-y-2">
                 <WorkspaceNotice tone="sky">
                   Organiza el trabajo por secciones. Cambiar de seccion no borra archivos, fechas ni cronogramas.
@@ -1699,9 +1701,9 @@ function GeneradorCronograma() {
                   ) : null}
                 </Suspense>
               )}
-            </>
-          ) : activeWorkspaceView === 'exam-engine-v21' ? null : (
-            <>
+              </>
+            ) : activeWorkspaceView === 'exam-engine-v21' ? null : (
+              <>
               <section className="rise-in admin-module-heading">
                 <span className="soft-title">Modulo</span>
                 <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -1882,26 +1884,27 @@ function GeneradorCronograma() {
                   />
                 </>
               )}
-            </>
-          )}
+              </>
+            )}
 
-          {hasOpenedExamEngineV21 ? (
-            <div className={activeWorkspaceView === 'exam-engine-v21' ? '' : 'hidden'}>
-              <ExamEngineV21FieldTestPage
-                canPublishOfficialSchedule={canEditWorkspace}
-                dataReady={examEngineDataReady}
-                institutionId={activeInstitutionId}
-                mode={isRelationalWorkspaceSource ? 'preview' : undefined}
-                onGoToUploads={() => selectWorkspaceView('dashboard')}
-                onExamEngineStateChange={persistirEstadoMotorMesas}
-                onPublishOfficialSchedule={publicarCronogramaFinalDesdeMotor}
-                onResetExamProcess={reiniciarProcesoMesasDesdeMotor}
-                uploadedFiles={examEngineUploadedFiles}
-                workspaceKey={workspaceKey}
-                workspaceSnapshot={snapshotPayload}
-              />
-            </div>
-          ) : null}
+            {hasOpenedExamEngineV21 ? (
+              <div className={activeWorkspaceView === 'exam-engine-v21' ? '' : 'hidden'}>
+                <ExamEngineV21FieldTestPage
+                  canPublishOfficialSchedule={canEditWorkspace}
+                  dataReady={examEngineDataReady}
+                  institutionId={activeInstitutionId}
+                  mode={isRelationalWorkspaceSource ? 'preview' : undefined}
+                  onGoToUploads={() => selectWorkspaceView('dashboard')}
+                  onExamEngineStateChange={persistirEstadoMotorMesas}
+                  onPublishOfficialSchedule={publicarCronogramaFinalDesdeMotor}
+                  onResetExamProcess={reiniciarProcesoMesasDesdeMotor}
+                  uploadedFiles={examEngineUploadedFiles}
+                  workspaceKey={workspaceKey}
+                  workspaceSnapshot={snapshotPayload}
+                />
+              </div>
+            ) : null}
+          </Suspense>
         </div>
       </div>
     </section>

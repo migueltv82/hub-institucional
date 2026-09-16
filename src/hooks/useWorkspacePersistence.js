@@ -20,6 +20,7 @@ import {
 const WORKSPACE_KEY = 'main'
 const WRITABLE_REMOTE_ROLES = new Set(['owner', 'admin', 'editor', 'superadmin'])
 const DEBUG_WORKSPACE_PERSISTENCE = import.meta.env.DEV
+const AUTOSAVE_FAILURE_BACKOFF_MS = 30_000
 const RELATIONAL_WORKSPACE_SOURCE = 'academic-relational-schema'
 const RELATIONAL_UPLOADED_FILES = {
   masterWorkbook: 'schema-relacional',
@@ -58,6 +59,15 @@ function logWorkspacePersistenceDiagnostic(level, event, details = {}) {
   logger(`[workspace-persistence] ${event}`, details)
 }
 
+function shouldBackoffAutosave(error) {
+  const message = String(error?.message ?? error ?? '').toLowerCase()
+  return message.includes('failed to fetch') ||
+    message.includes('network') ||
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('canceling statement due to statement timeout')
+}
+
 function buildWorkspaceSnapshotFromRelationalSnapshot(snapshot = {}) {
   const emptySnapshot = createEmptyWorkspaceSnapshot()
   return {
@@ -93,6 +103,8 @@ export function useWorkspacePersistence({
   const [workspaceSource, setWorkspaceSource] = useState('workspace-snapshot')
   const skipAutoSaveRef = useRef(true)
   const dirtySnapshotRef = useRef(false)
+  const autosaveInFlightRef = useRef(false)
+  const autosaveBackoffUntilRef = useRef(0)
   const latestSaveContextRef = useRef(null)
   const hasContextInstitutions = Array.isArray(contextInstitutions)
   const institutions = hasContextInstitutions ? contextInstitutions : localInstitutions
@@ -149,6 +161,7 @@ export function useWorkspacePersistence({
     setLastSyncedAt(result.updatedAt)
     setWorkspaceSource(result.source)
     setSyncStatus(result.source === 'supabase' ? 'saved' : 'local-only')
+    autosaveBackoffUntilRef.current = 0
     return result
   }, [activeInstitutionId, canWriteRemoteWorkspace, ownerEmail, ownerUserId, snapshotPayload, useRemoteWorkspace])
 
@@ -379,10 +392,39 @@ export function useWorkspacePersistence({
     }
 
     dirtySnapshotRef.current = true
+    if (autosaveInFlightRef.current) {
+      logWorkspacePersistenceDiagnostic('info', 'autosave:skipped-in-flight', {
+        activeInstitutionId,
+        mode: getPersistenceMode({ activeInstitutionId, useRemoteWorkspace }),
+        useRemoteWorkspace,
+        workspaceKey: WORKSPACE_KEY,
+        counts: getSnapshotCounts(snapshotPayload),
+      })
+      return
+    }
+
+    const backoffRemaining = autosaveBackoffUntilRef.current - Date.now()
+    if (useRemoteWorkspace && backoffRemaining > 0) {
+      logWorkspacePersistenceDiagnostic('info', 'autosave:skipped-backoff', {
+        activeInstitutionId,
+        mode: getPersistenceMode({ activeInstitutionId, useRemoteWorkspace }),
+        backoffRemaining,
+        useRemoteWorkspace,
+        workspaceKey: WORKSPACE_KEY,
+        counts: getSnapshotCounts(snapshotPayload),
+      })
+      return
+    }
 
     let cancelled = false
     const timeoutId = window.setTimeout(async () => {
       try {
+        if (autosaveInFlightRef.current) return
+
+        const timeoutBackoffRemaining = autosaveBackoffUntilRef.current - Date.now()
+        if (useRemoteWorkspace && timeoutBackoffRemaining > 0) return
+
+        autosaveInFlightRef.current = true
         setSyncStatus(useRemoteWorkspace ? 'syncing' : 'local-only')
 
         const { updatedAt, source } = await saveWorkspaceSnapshot({
@@ -393,6 +435,7 @@ export function useWorkspacePersistence({
           payload: snapshotPayload,
           useRemote: useRemoteWorkspace,
           syncOperational: false,
+          allowLargeRemotePayload: false,
         })
 
         if (cancelled) return
@@ -413,8 +456,13 @@ export function useWorkspacePersistence({
         setLastSyncedAt(updatedAt)
         setWorkspaceSource(source)
         setSyncStatus(source === 'supabase' ? 'saved' : 'local-only')
+        autosaveBackoffUntilRef.current = 0
       } catch (error) {
         if (cancelled) return
+
+        if (useRemoteWorkspace && shouldBackoffAutosave(error)) {
+          autosaveBackoffUntilRef.current = Date.now() + AUTOSAVE_FAILURE_BACKOFF_MS
+        }
 
         logWorkspacePersistenceDiagnostic('warn', 'autosave:error', {
           activeInstitutionId,
@@ -426,6 +474,8 @@ export function useWorkspacePersistence({
         })
         setSyncStatus('error')
         toast.error(`No se pudo guardar el workspace en Supabase: ${error.message}`)
+      } finally {
+        autosaveInFlightRef.current = false
       }
     }, 700)
 
@@ -453,8 +503,11 @@ export function useWorkspacePersistence({
     const flushPendingSnapshot = () => {
       const context = latestSaveContextRef.current
       if (!dirtySnapshotRef.current || !context?.activeInstitutionId || !context.canWriteRemoteWorkspace) return
+      if (autosaveInFlightRef.current) return
+      if (context.useRemoteWorkspace && autosaveBackoffUntilRef.current > Date.now()) return
 
       dirtySnapshotRef.current = false
+      autosaveInFlightRef.current = true
       void saveWorkspaceSnapshot({
         institutionId: context.activeInstitutionId,
         workspaceKey: WORKSPACE_KEY,
@@ -463,8 +516,11 @@ export function useWorkspacePersistence({
         payload: context.payload,
         useRemote: context.useRemoteWorkspace,
         syncOperational: false,
+        allowLargeRemotePayload: false,
       }).catch(() => {
         dirtySnapshotRef.current = true
+      }).finally(() => {
+        autosaveInFlightRef.current = false
       })
     }
     const handleVisibilityChange = () => {

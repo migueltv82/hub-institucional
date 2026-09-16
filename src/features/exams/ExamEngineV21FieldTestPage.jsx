@@ -31,19 +31,17 @@ import {
   buildPublishedCronogramaFromFinalTribunals,
   createConfirmedFinalReviewRowsFromTeacherStatus,
   createConfirmedFinalReviewRows,
-  createConfirmedTeacherReviewRows,
   createDefaultExamCallConfigForm,
   downloadRowsAsCsv,
   parseReviewRowsFile,
   resolveFinalUiState,
-  runDraftScheduleStep,
-  runRelationalPreviewDraftStep,
+  runExamEngineV21DraftWorkflow,
   runFinalReviewStep,
-  runReviewedScheduleStep,
   summarizeReviewedSchedule,
   summarizeTeacherReviewStatus,
   validateExamCallConfigForm,
 } from './examEngineV21FieldTestService.js'
+import { runExamEngineV21DraftWorkflowInWorker } from '../../workers/examEngineV21WorkerClient.js'
 
 // Un solo stepper que SI controla que seccion se ve, con solo 4 pasos:
 // Configurar llamado -> Armar mesas -> Envio a docentes -> Cronograma final.
@@ -59,6 +57,23 @@ const WIZARD_STEPS = [
   { id: 'review', title: 'EnvÃ­o a docentes', description: 'PublicÃ¡ el precronograma completo para que lo confirmen.' },
   { id: 'final', title: 'Cronograma final', description: 'RevisÃ¡ las confirmaciones y publicÃ¡ la versiÃ³n definitiva.' },
 ]
+
+const DRAFT_WORKER_SYNC_FALLBACK_CODES = new Set([
+  'WORKER_NOT_SUPPORTED',
+  'WORKER_RUNTIME_ERROR',
+])
+
+async function runDraftWorkflowInBackground(payload) {
+  try {
+    return await runExamEngineV21DraftWorkflowInWorker(payload)
+  } catch (error) {
+    if (DRAFT_WORKER_SYNC_FALLBACK_CODES.has(error?.code)) {
+      return runExamEngineV21DraftWorkflow(payload)
+    }
+
+    throw error
+  }
+}
 
 function resolveCurrentStepId(uiState) {
   if (uiState === FIELD_TEST_UI_STATES.CONFIGURING_CALL) return 'config'
@@ -463,21 +478,21 @@ function ExamEngineV21FieldTestPage({
     try {
       setIsBusy(true)
       const examCallConfig = buildExamCallConfigFromForm(configForm)
-      const data = buildExamEngineV21DataFromWorkspace({
+      const generatedAt = new Date().toISOString()
+      setPreviewErrors([])
+      const workflow = await runDraftWorkflowInBackground({
         workspaceSnapshot,
         examCallConfig,
         includeCurrentCronogramaAssignments,
+        isPreview,
+        generatedAt,
       })
-      setPreviewErrors([])
-      const result = isPreview ? runRelationalPreviewDraftStep({ data, examCallConfig, generatedAt: new Date().toISOString() }) : runDraftScheduleStep({
-        docentes: data.docentes,
-        materias: data.materias,
-        examCallConfig,
-        generatedAt: new Date().toISOString(),
-      })
+      const data = workflow.data
+      const result = workflow.draft
+      const reviewed = workflow.reviewed
 
-      if (isPreview && result.errors.length) {
-        setPreviewErrors(result.errors)
+      if (isPreview && workflow.previewErrors?.length) {
+        setPreviewErrors(workflow.previewErrors)
         return
       }
 
@@ -488,18 +503,8 @@ function ExamEngineV21FieldTestPage({
         throw new Error(`No se pudo generar el precronograma: ${firstReason}`)
       }
 
-      const reviewed = runReviewedScheduleStep({
-        originalDraftSchedule: result.draftResult.draftSchedule,
-        reviewedRows: createConfirmedTeacherReviewRows(result.draftExport.rows),
-        docentes: data.docentes,
-        examCallConfig,
-      })
       const nextEngineData = { ...data, examCallConfig }
-      const nextWarnings = buildDataWarnings({
-        docentes: data.docentes,
-        materias: data.materias,
-        draftResult: result.draftResult,
-      })
+      const nextWarnings = workflow.dataWarnings
 
       clearDownstreamFromDraft()
       setEngineData(nextEngineData)

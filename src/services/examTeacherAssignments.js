@@ -4,6 +4,7 @@ import { buildTeacherLoginEmail } from './rosterRecords.js'
 import { buildTeacherReassignmentOptions } from '../features/exams/teacherReassignmentOptions.js'
 
 const OBJECTION_WINDOW_MS = 24 * 60 * 60 * 1000
+const RESET_PROCESS_RPC_TIMEOUT_MS = 5_000
 let adminConfirmRpcUnavailable = false
 
 function clean(value) {
@@ -48,6 +49,23 @@ function isMissingExamConfirmationWorkflowFunction(error) {
     errorText.includes('could not find the function') ||
     errorText.includes('academic_reconcile_expired_exam_confirmations') ||
     errorText.includes('academic_admin_confirm_exam_assignment')
+}
+
+function getErrorMessage(error) {
+  return clean(error?.message || error)
+}
+
+function skipFailedReconciliation(error, reason = 'remote_error') {
+  const message = getErrorMessage(error)
+  return {
+    success: true,
+    skippedReconciliation: true,
+    reason,
+    warning: message
+      ? `No se pudo reconciliar el vencimiento de confirmaciones docentes. ${message}`
+      : 'No se pudo reconciliar el vencimiento de confirmaciones docentes.',
+    data: null,
+  }
 }
 
 function withoutObjectionDeadline(rows = []) {
@@ -365,22 +383,25 @@ export async function reconcileExpiredExamConfirmations({
     return { success: true, skippedRemote: true, data: null }
   }
 
-  const { data, error } = await supabase.rpc('academic_reconcile_expired_exam_confirmations', {
-    target_institution_id: institutionId,
-    target_workspace_key: workspaceKey,
-    target_exam_table_id: clean(examTableId),
-  })
+  let data = null
+  let error = null
+
+  try {
+    ;({ data, error } = await supabase.rpc('academic_reconcile_expired_exam_confirmations', {
+      target_institution_id: institutionId,
+      target_workspace_key: workspaceKey,
+      target_exam_table_id: clean(examTableId),
+    }))
+  } catch (caughtError) {
+    return skipFailedReconciliation(caughtError, 'request_failed')
+  }
 
   if (error) {
     if (isMissingExamConfirmationWorkflowFunction(error)) {
-      return { success: true, skippedMissingRpc: true, data: null }
+      return skipFailedReconciliation(error, 'missing_rpc')
     }
 
-    return {
-      success: false,
-      error: `No se pudo reconciliar el vencimiento de confirmaciones docentes. ${error.message}`,
-      data: null,
-    }
+    return skipFailedReconciliation(error)
   }
 
   return { success: true, data: data ?? null }
@@ -633,6 +654,41 @@ function isMissingExamProcessResetFunction(error) {
     errorText.includes('could not find the function')
 }
 
+function isRecoverableExamProcessResetError(error) {
+  const errorText = `${error?.message ?? error ?? ''} ${error?.details ?? ''} ${error?.hint ?? ''}`.toLowerCase()
+  return errorText.includes('canceling statement due to statement timeout') ||
+    errorText.includes('statement timeout') ||
+    errorText.includes('rpc timeout') ||
+    errorText.includes('failed to fetch') ||
+    errorText.includes('network request failed') ||
+    errorText.includes('networkerror')
+}
+
+function buildSkippedRemoteResetResult(error) {
+  return {
+    success: true,
+    skippedRemote: true,
+    warning: getErrorMessage(error),
+    summary: {
+      workspace_cronograma_cleared: 0,
+      teacher_assignments_reset: 0,
+      exam_enrollments_reset: 0,
+      legacy_exam_sessions_deleted: 0,
+    },
+  }
+}
+
+function withTimeout(promise, timeoutMs, errorMessage) {
+  let timeoutId
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => resolve({ data: null, error: new Error(errorMessage) }), timeoutMs)
+  })
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId)
+  })
+}
+
 export async function resetExamProcessForWorkspace({
   institutionId,
   workspaceKey = 'main',
@@ -654,12 +710,30 @@ export async function resetExamProcessForWorkspace({
     }
   }
 
-  const { data, error } = await supabase.rpc('academic_admin_reset_exam_process', {
-    target_institution_id: institutionId,
-    target_workspace_key: workspaceKey,
-  })
+  let data = null
+  let error = null
+
+  try {
+    ;({ data, error } = await withTimeout(
+      supabase.rpc('academic_admin_reset_exam_process', {
+        target_institution_id: institutionId,
+        target_workspace_key: workspaceKey,
+      }),
+      RESET_PROCESS_RPC_TIMEOUT_MS,
+      'reset process rpc timeout',
+    ))
+  } catch (caughtError) {
+    if (isRecoverableExamProcessResetError(caughtError)) {
+      return buildSkippedRemoteResetResult(caughtError)
+    }
+    throw caughtError
+  }
 
   if (error) {
+    if (isRecoverableExamProcessResetError(error)) {
+      return buildSkippedRemoteResetResult(error)
+    }
+
     const migrationHint = isMissingExamProcessResetFunction(error)
       ? ' Ejecuta supabase/docs/repair_06_exam_process_reset_rpc.sql en Supabase y vuelve a intentar.'
       : ''

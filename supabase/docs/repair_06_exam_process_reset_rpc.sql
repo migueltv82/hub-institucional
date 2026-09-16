@@ -4,8 +4,10 @@
 -- Ejecutar en Supabase SQL Editor cuando el frontend informe:
 -- "Could not find the function public.academic_admin_reset_exam_process".
 --
--- La RPC limpia el cronograma oficial del workspace y deja sin efecto
--- los datos operativos de mesas para poder volver a iniciar el flujo.
+-- La RPC deja sin efecto los datos operativos de mesas para poder volver a
+-- iniciar el flujo. El frontend limpia el cronograma/estado del wizard en el
+-- workspace snapshot; evitar mutar aqui el JSONB completo previene timeouts
+-- cuando el snapshot operativo es grande.
 -- Es idempotente y tolera bases donde exam_enrollments o
 -- exam_teacher_assignments todavia no existan.
 -- ============================================================
@@ -36,52 +38,7 @@ begin
     raise exception 'No autorizado para reiniciar el proceso de mesas de esta institucion';
   end if;
 
-  update public.workspace_snapshots
-  set
-    payload = jsonb_set(
-      jsonb_set(
-        jsonb_set(
-          jsonb_set(
-            jsonb_set(
-              jsonb_set(
-                jsonb_set(
-                  coalesce(payload, '{}'::jsonb),
-                  '{cronograma}',
-                  '[]'::jsonb,
-                  true
-                ),
-                '{examEnrollments}',
-                '[]'::jsonb,
-                true
-              ),
-              '{adminReviewDecisions}',
-              '[]'::jsonb,
-              true
-            ),
-            '{adminReviewDrafts}',
-            '[]'::jsonb,
-            true
-          ),
-          '{adminReviewPromotions}',
-          '[]'::jsonb,
-          true
-        ),
-        '{adminReviewApprovalRequests}',
-        '[]'::jsonb,
-        true
-      ),
-      '{adminReviewSecondApprovals}',
-      '[]'::jsonb,
-      true
-    ) || jsonb_build_object(
-      'examEngineV21State', null,
-      'requiereRegeneracion', false
-    ),
-    updated_at = timezone('utc', now())
-  where institution_id = target_institution_id
-    and workspace_key = normalized_workspace_key;
-
-  get diagnostics workspace_cronograma_cleared = row_count;
+  workspace_cronograma_cleared := 0;
 
   if to_regclass('public.exam_teacher_assignments') is not null then
     update public.exam_teacher_assignments

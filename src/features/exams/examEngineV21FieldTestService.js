@@ -562,6 +562,58 @@ export function runDraftScheduleStep({ docentes, materias, examCallConfig, gener
   }
 }
 
+export function runExamEngineV21DraftWorkflow({
+  workspaceSnapshot = {},
+  examCallConfig = {},
+  includeCurrentCronogramaAssignments = false,
+  isPreview = false,
+  generatedAt = new Date().toISOString(),
+} = {}) {
+  const data = buildExamEngineV21DataFromWorkspace({
+    workspaceSnapshot,
+    examCallConfig,
+    includeCurrentCronogramaAssignments,
+  })
+  const draft = isPreview
+    ? runRelationalPreviewDraftStep({ data, examCallConfig, generatedAt })
+    : runDraftScheduleStep({
+      docentes: data.docentes,
+      materias: data.materias,
+      examCallConfig,
+      generatedAt,
+    })
+
+  if (isPreview && draft.errors.length) {
+    return {
+      data,
+      draft,
+      reviewed: null,
+      dataWarnings: [],
+      previewErrors: draft.errors,
+    }
+  }
+
+  const reviewed = runReviewedScheduleStep({
+    originalDraftSchedule: draft.draftResult.draftSchedule,
+    reviewedRows: createConfirmedTeacherReviewRows(draft.draftExport.rows),
+    docentes: data.docentes,
+    examCallConfig,
+  })
+  const dataWarnings = buildDataWarnings({
+    docentes: data.docentes,
+    materias: data.materias,
+    draftResult: draft.draftResult,
+  })
+
+  return {
+    data,
+    draft,
+    reviewed,
+    dataWarnings,
+    previewErrors: [],
+  }
+}
+
 export function runReviewedScheduleStep({
   originalDraftSchedule,
   reviewedRows,

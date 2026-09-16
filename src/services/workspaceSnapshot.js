@@ -34,6 +34,9 @@ const REMOTE_WORKSPACE_CLEAR_TABLES = [
   'teacher_records',
 ]
 const MISSING_WORKSPACE_CLEAR_SCHEMA_ERROR_CODES = new Set(['42P01', '42703', 'PGRST204', 'PGRST205'])
+const MAX_LOCAL_SNAPSHOT_BYTES = 4_000_000
+const MAX_REMOTE_AUTOSAVE_SNAPSHOT_BYTES = MAX_LOCAL_SNAPSHOT_BYTES
+const disabledLocalSnapshotWrites = new Set()
 
 // Este snapshot agrupa todo el estado operativo que antes vivia solo en memoria del cliente.
 const emptySnapshot = {
@@ -659,6 +662,15 @@ function getLocalSnapshotStorageKey({ institutionId, workspaceKey }) {
   return `${LOCAL_SNAPSHOT_PREFIX}:${institutionId ?? 'demo'}:${workspaceKey}`
 }
 
+function isLocalStorageQuotaError(error) {
+  const message = String(error?.message ?? error ?? '').toLowerCase()
+  return error?.name === 'QuotaExceededError' ||
+    error?.code === 22 ||
+    error?.code === 1014 ||
+    message.includes('quota') ||
+    message.includes('exceeded the quota')
+}
+
 function readLocalSnapshot(params) {
   const storageKey = getLocalSnapshotStorageKey(params)
 
@@ -714,14 +726,52 @@ function writeLocalSnapshot(params, payload, explicitUpdatedAt = null) {
   const storageKey = getLocalSnapshotStorageKey(params)
   const normalizedPayload = normalizeWorkspaceSnapshot(payload)
 
-  try {
-    localStorage.setItem(
+  if (disabledLocalSnapshotWrites.has(storageKey)) {
+    logWorkspaceSnapshotDiagnostic('info', 'save:local-skipped-quota', {
+      counts: getSnapshotCounts(normalizedPayload),
+      destination: 'localStorage',
       storageKey,
-      JSON.stringify({
-        payload: normalizedPayload,
-        updatedAt,
-      }),
-    )
+      source: 'local',
+      updatedAt,
+    })
+    return {
+      updatedAt,
+      source: 'local',
+      skippedLocalWrite: true,
+      serializedSize: null,
+    }
+  }
+
+  const serializedSnapshot = JSON.stringify({
+    payload: normalizedPayload,
+    updatedAt,
+  })
+
+  if (serializedSnapshot.length > MAX_LOCAL_SNAPSHOT_BYTES) {
+    disabledLocalSnapshotWrites.add(storageKey)
+    try {
+      localStorage.removeItem(storageKey)
+    } catch {
+      // La limpieza del cache local es best-effort.
+    }
+    logWorkspaceSnapshotDiagnostic('warn', 'save:local-skipped-too-large', {
+      counts: getSnapshotCounts(normalizedPayload),
+      destination: 'localStorage',
+      size: serializedSnapshot.length,
+      storageKey,
+      source: 'local',
+      updatedAt,
+    })
+    return {
+      updatedAt,
+      source: 'local',
+      skippedLocalWrite: true,
+      serializedSize: serializedSnapshot.length,
+    }
+  }
+
+  try {
+    localStorage.setItem(storageKey, serializedSnapshot)
     logWorkspaceSnapshotDiagnostic('info', 'save:local-ok', {
       counts: getSnapshotCounts(normalizedPayload),
       destination: 'localStorage',
@@ -730,6 +780,15 @@ function writeLocalSnapshot(params, payload, explicitUpdatedAt = null) {
       updatedAt,
     })
   } catch (error) {
+    if (isLocalStorageQuotaError(error)) {
+      disabledLocalSnapshotWrites.add(storageKey)
+      try {
+        localStorage.removeItem(storageKey)
+      } catch {
+        // La limpieza del cache local es best-effort.
+      }
+    }
+
     logWorkspaceSnapshotDiagnostic('warn', 'save:local-error', {
       counts: getSnapshotCounts(normalizedPayload),
       destination: 'localStorage',
@@ -743,6 +802,7 @@ function writeLocalSnapshot(params, payload, explicitUpdatedAt = null) {
   return {
     updatedAt,
     source: 'local',
+    serializedSize: serializedSnapshot.length,
   }
 }
 
@@ -910,6 +970,7 @@ export async function saveWorkspaceSnapshot({
   payload,
   useRemote,
   syncOperational = true,
+  allowLargeRemotePayload = true,
 }) {
   if (!canUseRemoteWorkspace({ institutionId, useRemote })) {
     try {
@@ -931,10 +992,35 @@ export async function saveWorkspaceSnapshot({
 
   const normalizedPayload = normalizeWorkspaceSnapshot(payload)
   const updatedAt = new Date().toISOString()
+  const storageKey = getLocalSnapshotStorageKey({ institutionId, workspaceKey })
+  const localWritesWereDisabled = disabledLocalSnapshotWrites.has(storageKey)
 
   // El respaldo local es sincrono y ocurre antes de esperar la red. Si la vista
   // se desmonta o se recarga, la siguiente hidratacion conserva este estado.
-  writeLocalSnapshot({ institutionId, workspaceKey }, normalizedPayload, updatedAt)
+  const localSaveResult = writeLocalSnapshot({ institutionId, workspaceKey }, normalizedPayload, updatedAt)
+
+  const shouldSkipLargeRemoteAutosave = !allowLargeRemotePayload && (
+    localWritesWereDisabled ||
+    Number(localSaveResult.serializedSize) > MAX_REMOTE_AUTOSAVE_SNAPSHOT_BYTES
+  )
+
+  if (shouldSkipLargeRemoteAutosave) {
+    logWorkspaceSnapshotDiagnostic('warn', 'save:supabase-skipped-too-large-autosave', {
+      counts: getSnapshotCounts(normalizedPayload),
+      destination: TABLE_NAME,
+      hasInstitutionId: Boolean(institutionId),
+      serializedSize: localSaveResult.serializedSize,
+      source: 'local',
+      useRemote,
+      workspaceKey,
+    })
+
+    return {
+      updatedAt,
+      source: 'local',
+      skippedRemoteWrite: true,
+    }
+  }
 
   // Se usa upsert para que el mismo workspace se actualice sin requerir un create inicial.
   const { error } = await supabase.from(TABLE_NAME).upsert({

@@ -301,6 +301,7 @@ describe('useWorkspacePersistence', () => {
       payload: changedSnapshot,
       useRemote: false,
       syncOperational: false,
+      allowLargeRemotePayload: false,
     })
     expect(result.current.syncStatus).toBe('local-only')
   })

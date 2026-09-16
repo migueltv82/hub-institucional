@@ -314,7 +314,28 @@ describe('reconcileExpiredExamConfirmations', () => {
 
     const result = await reconcileExpiredExamConfirmations({ institutionId: 'inst-1' })
 
-    expect(result).toEqual({ success: true, skippedMissingRpc: true, data: null })
+    expect(result).toMatchObject({
+      success: true,
+      skippedReconciliation: true,
+      reason: 'missing_rpc',
+      data: null,
+    })
+  })
+
+  it('no bloquea el flujo si la reconciliacion falla por red', async () => {
+    const { reconcileExpiredExamConfirmations } = await loadService({
+      rpcImplementation: () => Promise.reject(new TypeError('Failed to fetch')),
+    })
+
+    const result = await reconcileExpiredExamConfirmations({ institutionId: 'inst-1' })
+
+    expect(result).toMatchObject({
+      success: true,
+      skippedReconciliation: true,
+      reason: 'request_failed',
+      data: null,
+    })
+    expect(result.warning).toContain('Failed to fetch')
   })
 })
 
@@ -504,6 +525,60 @@ describe('resetExamProcessForWorkspace', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('repair_06_exam_process_reset_rpc.sql')
+  })
+
+  it('permite continuar con reset local si la RPC remota de reset agota el timeout', async () => {
+    const { resetExamProcessForWorkspace } = await loadService({
+      rpcImplementation: () => Promise.resolve({
+        data: null,
+        error: { message: 'canceling statement due to statement timeout' },
+      }),
+    })
+
+    const result = await resetExamProcessForWorkspace({ institutionId: 'inst-1' })
+
+    expect(result).toMatchObject({
+      success: true,
+      skippedRemote: true,
+      warning: 'canceling statement due to statement timeout',
+      summary: {
+        workspace_cronograma_cleared: 0,
+        teacher_assignments_reset: 0,
+        exam_enrollments_reset: 0,
+        legacy_exam_sessions_deleted: 0,
+      },
+    })
+  })
+
+  it('permite continuar con reset local si la RPC remota de reset falla por red', async () => {
+    const { resetExamProcessForWorkspace } = await loadService({
+      rpcImplementation: () => Promise.reject(new TypeError('Failed to fetch')),
+    })
+
+    const result = await resetExamProcessForWorkspace({ institutionId: 'inst-1' })
+
+    expect(result).toMatchObject({
+      success: true,
+      skippedRemote: true,
+      warning: 'Failed to fetch',
+    })
+  })
+
+  it('no espera indefinidamente si la RPC remota de reset queda colgada', async () => {
+    vi.useFakeTimers()
+    const { resetExamProcessForWorkspace } = await loadService({
+      rpcImplementation: () => new Promise(() => {}),
+    })
+
+    const pendingReset = resetExamProcessForWorkspace({ institutionId: 'inst-1' })
+    await vi.advanceTimersByTimeAsync(5_000)
+    const result = await pendingReset
+
+    expect(result).toMatchObject({
+      success: true,
+      skippedRemote: true,
+      warning: 'reset process rpc timeout',
+    })
   })
 
   it('no intenta tocar Supabase si la app esta en modo local', async () => {
