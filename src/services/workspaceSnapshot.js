@@ -21,6 +21,7 @@ const REMOTE_WORKSPACE_CLEAR_TABLES = [
   'student_grades',
   'subject_class_sessions',
   'subject_enrollments',
+  'exam_engine_v21_states',
   'exam_enrollments',
   'exam_teacher_assignments',
   'subject_teacher_assignments',

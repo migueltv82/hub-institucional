@@ -29,6 +29,7 @@ import {
   resetStudentAcademicRecords,
   resetStudentAcademicSnapshotData,
 } from '../services/studentAcademicReset.js'
+import { saveExamEngineV21State } from '../services/examEngineV21State.js'
 import { getTeachersFromProfiles, provisionTeacherAccess } from '../services/teacherAccess.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { useCronogramaExports } from '../hooks/useCronogramaExports.js'
@@ -125,6 +126,8 @@ function GeneradorCronograma() {
     activeInstitutionId: authActiveInstitutionId,
     setActiveInstitutionId: setAuthActiveInstitutionId,
   } = useAuth()
+  const ownerEmail = user?.email ?? null
+  const ownerUserId = user?.id ?? null
   const [horariosDocentes, setHorariosDocentes] = useState([])
   const [docenteMateria, setDocenteMateria] = useState([])
   const [disponibilidadDocente, setDisponibilidadDocente] = useState([])
@@ -269,7 +272,6 @@ function GeneradorCronograma() {
     adminReviewPromotions,
     adminReviewApprovalRequests,
     adminReviewSecondApprovals,
-    examEngineV21State,
     requiereRegeneracion,
   }), [
     academicSnapshotData,
@@ -278,7 +280,6 @@ function GeneradorCronograma() {
     adminReviewPromotions,
     adminReviewApprovalRequests,
     adminReviewSecondApprovals,
-    examEngineV21State,
     alumnos,
     correlatividades,
     cronograma,
@@ -298,6 +299,10 @@ function GeneradorCronograma() {
     selectedSpecialSubjectKeys,
     uploadedFiles,
   ])
+  const examEngineWorkspaceSnapshot = useMemo(() => ({
+    ...snapshotPayload,
+    examEngineV21State,
+  }), [snapshotPayload, examEngineV21State])
 
   const {
     activeInstitution,
@@ -317,8 +322,8 @@ function GeneradorCronograma() {
   } = useWorkspacePersistence({
     isRemoteSession,
     isSuperAdmin,
-    ownerEmail: user?.email ?? null,
-    ownerUserId: user?.id ?? null,
+    ownerEmail,
+    ownerUserId,
     onHydrate: hydrateWorkspaceState,
     snapshotPayload,
     contextInstitutions: authInstitutions,
@@ -503,18 +508,20 @@ function GeneradorCronograma() {
     setExamEngineV21State(nextState)
 
     try {
-      await saveSnapshotNow({
-        ...snapshotPayload,
-        examEngineV21State: nextState,
-      }, {
-        syncOperational: false,
+      await saveExamEngineV21State({
+        institutionId: activeInstitutionId,
+        workspaceKey,
+        ownerEmail,
+        ownerUserId,
+        state: nextState,
+        useRemote: useRemoteWorkspace,
       })
       return true
     } catch (error) {
       toast.error(`No se pudo guardar el avance del motor de mesas: ${error.message}`)
       return false
     }
-  }, [saveSnapshotNow, snapshotPayload])
+  }, [activeInstitutionId, ownerEmail, ownerUserId, useRemoteWorkspace, workspaceKey])
 
   const reiniciarProcesoMesasDesdeMotor = useCallback(() => {
     if (!canEditWorkspace) {
@@ -1900,8 +1907,8 @@ function GeneradorCronograma() {
                   onResetExamProcess={reiniciarProcesoMesasDesdeMotor}
                   uploadedFiles={examEngineUploadedFiles}
                   workspaceKey={workspaceKey}
-                  workspaceSnapshot={snapshotPayload}
-                />
+                workspaceSnapshot={examEngineWorkspaceSnapshot}
+              />
               </div>
             ) : null}
           </Suspense>

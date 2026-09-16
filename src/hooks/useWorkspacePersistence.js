@@ -16,6 +16,10 @@ import {
   fetchRelationalExamSnapshot,
   fetchRelationalPreviewSetting,
 } from '../services/relationalExamPreview.js'
+import {
+  fetchExamEngineV21State,
+  saveExamEngineV21State,
+} from '../services/examEngineV21State.js'
 
 const WORKSPACE_KEY = 'main'
 const WRITABLE_REMOTE_ROLES = new Set(['owner', 'admin', 'editor', 'superadmin'])
@@ -179,6 +183,14 @@ export function useWorkspacePersistence({
         ownerUserId: ownerUserId ?? null,
         useRemote: useRemoteWorkspace,
       })
+      await saveExamEngineV21State({
+        institutionId: activeInstitutionId,
+        workspaceKey: WORKSPACE_KEY,
+        ownerEmail: ownerEmail ?? null,
+        ownerUserId: ownerUserId ?? null,
+        state: null,
+        useRemote: useRemoteWorkspace,
+      })
 
       dirtySnapshotRef.current = false
       skipAutoSaveRef.current = true
@@ -309,8 +321,19 @@ export function useWorkspacePersistence({
           workspaceKey: WORKSPACE_KEY,
           useRemote: useRemoteWorkspace,
         })
+        const engineStateResult = await fetchExamEngineV21State({
+          institutionId: activeInstitutionId,
+          workspaceKey: WORKSPACE_KEY,
+          useRemote: useRemoteWorkspace,
+          fallbackState: snapshot.examEngineV21State,
+        })
 
         if (cancelled) return
+
+        const hydratedSnapshot = {
+          ...snapshot,
+          examEngineV21State: engineStateResult.state ?? snapshot.examEngineV21State ?? null,
+        }
 
         logWorkspacePersistenceDiagnostic('info', 'hydrate:ok', {
           activeInstitutionId,
@@ -319,9 +342,10 @@ export function useWorkspacePersistence({
           updatedAt,
           useRemoteWorkspace,
           workspaceKey: WORKSPACE_KEY,
-          counts: getSnapshotCounts(snapshot),
+          engineStateSource: engineStateResult.source,
+          counts: getSnapshotCounts(hydratedSnapshot),
         })
-        onHydrate(snapshot)
+        onHydrate(hydratedSnapshot)
         dirtySnapshotRef.current = useRemoteWorkspace && source === 'local'
         setLastSyncedAt(updatedAt)
         setWorkspaceSource(source)
