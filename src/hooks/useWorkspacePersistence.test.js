@@ -5,6 +5,7 @@ import { useWorkspacePersistence } from './useWorkspacePersistence.js'
 const mocks = vi.hoisted(() => ({
   clearWorkspaceData: vi.fn(),
   fetchAccessibleInstitutions: vi.fn(),
+  fetchExamEngineV21State: vi.fn(),
   fetchRelationalExamSnapshot: vi.fn(),
   fetchRelationalPreviewSetting: vi.fn(),
   fetchWorkspaceSnapshot: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   persistActiveInstitutionId: vi.fn(),
   readStoredActiveInstitutionId: vi.fn(),
   saveWorkspaceSnapshot: vi.fn(),
+  saveExamEngineV21State: vi.fn(),
   toastError: vi.fn(),
 }))
 
@@ -53,6 +55,7 @@ vi.mock('../services/workspaceSnapshot.js', () => ({
     fechaInicio: '',
     fechaFin: '',
     cronograma: [],
+    examEngineV21State: null,
     requiereRegeneracion: false,
   }),
   fetchWorkspaceSnapshot: mocks.fetchWorkspaceSnapshot,
@@ -62,6 +65,11 @@ vi.mock('../services/workspaceSnapshot.js', () => ({
 vi.mock('../services/relationalExamPreview.js', () => ({
   fetchRelationalExamSnapshot: mocks.fetchRelationalExamSnapshot,
   fetchRelationalPreviewSetting: mocks.fetchRelationalPreviewSetting,
+}))
+
+vi.mock('../services/examEngineV21State.js', () => ({
+  fetchExamEngineV21State: mocks.fetchExamEngineV21State,
+  saveExamEngineV21State: mocks.saveExamEngineV21State,
 }))
 
 vi.mock('react-hot-toast', () => ({
@@ -87,6 +95,7 @@ const emptySnapshot = {
   fechaInicio: '',
   fechaFin: '',
   cronograma: [],
+  examEngineV21State: null,
   requiereRegeneracion: false,
 }
 
@@ -129,6 +138,16 @@ describe('useWorkspacePersistence', () => {
     mocks.fetchWorkspaceSnapshot.mockResolvedValue({
       snapshot: emptySnapshot,
       updatedAt: '2026-04-28T10:00:00.000Z',
+      source: 'local',
+    })
+    mocks.fetchExamEngineV21State.mockImplementation(({ fallbackState } = {}) => Promise.resolve({
+      state: fallbackState ?? null,
+      updatedAt: null,
+      source: 'workspace-snapshot',
+    }))
+    mocks.saveExamEngineV21State.mockResolvedValue({
+      state: null,
+      updatedAt: '2026-04-28T10:01:00.000Z',
       source: 'local',
     })
     mocks.saveWorkspaceSnapshot.mockResolvedValue({
@@ -301,6 +320,7 @@ describe('useWorkspacePersistence', () => {
       payload: changedSnapshot,
       useRemote: false,
       syncOperational: false,
+      allowLargeRemotePayload: false,
     })
     expect(result.current.syncStatus).toBe('local-only')
   })
@@ -369,6 +389,42 @@ describe('useWorkspacePersistence', () => {
     expect(result.current.syncStatus).toBe('saved')
   })
 
+  it('hidrata el estado del motor de mesas desde su storage liviano', async () => {
+    const onHydrate = vi.fn()
+    const engineState = { version: 1, uiState: 'REVIEWED_IMPORTED' }
+    mocks.fetchWorkspaceSnapshot.mockResolvedValue({
+      snapshot: { ...emptySnapshot, examEngineV21State: null },
+      updatedAt: '2026-04-28T10:00:00.000Z',
+      source: 'supabase',
+    })
+    mocks.fetchExamEngineV21State.mockResolvedValue({
+      state: engineState,
+      updatedAt: '2026-04-28T10:01:00.000Z',
+      source: 'supabase',
+    })
+
+    const { result } = renderPersistenceHook({
+      contextInstitutions: [{ id: 'institution-remote', name: 'Instituto Remoto', role: 'admin' }],
+      contextActiveInstitutionId: 'institution-remote',
+      isRemoteSession: true,
+      onHydrate,
+    })
+
+    await waitFor(() => {
+      expect(result.current.isHydrating).toBe(false)
+    })
+
+    expect(mocks.fetchExamEngineV21State).toHaveBeenCalledWith({
+      institutionId: 'institution-remote',
+      workspaceKey: 'main',
+      useRemote: true,
+      fallbackState: null,
+    })
+    expect(onHydrate).toHaveBeenCalledWith(expect.objectContaining({
+      examEngineV21State: engineState,
+    }))
+  })
+
   it('informa el error de carga y no hidrata despues de un fallo de red', async () => {
     const onHydrate = vi.fn()
     const networkCause = new Error('socket cerrado')
@@ -423,6 +479,14 @@ describe('useWorkspacePersistence', () => {
       workspaceKey: 'main',
       ownerEmail: 'admin@example.com',
       ownerUserId: 'user-1',
+      useRemote: true,
+    })
+    expect(mocks.saveExamEngineV21State).toHaveBeenCalledWith({
+      institutionId: 'institution-remote',
+      workspaceKey: 'main',
+      ownerEmail: 'admin@example.com',
+      ownerUserId: 'user-1',
+      state: null,
       useRemote: true,
     })
     expect(result.current.lastSyncedAt).toBe('2026-04-28T10:05:00.000Z')

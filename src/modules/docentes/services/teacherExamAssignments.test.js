@@ -42,12 +42,17 @@ afterEach(() => {
 describe('fetchTeacherExamAssignments', () => {
   it('carga las mesas publicadas para el docente autenticado', async () => {
     const rows = [{ id: 'a1', exam_table_id: 'draft:mesa-1', role: 'VOCAL_1', confirmation_status: 'pending' }]
-    const { fetchTeacherExamAssignments, from, queryBuilder } = await loadService({
+    const { fetchTeacherExamAssignments, from, rpc, queryBuilder } = await loadService({
       fromResult: { data: rows, error: null },
     })
 
     const result = await fetchTeacherExamAssignments({ institutionId: 'inst-1', teacherUserId: 'u1' })
 
+    expect(rpc).toHaveBeenCalledWith('academic_reconcile_expired_exam_confirmations', {
+      target_institution_id: 'inst-1',
+      target_workspace_key: 'main',
+      target_exam_table_id: '',
+    })
     expect(from).toHaveBeenCalledWith('exam_teacher_assignments')
     expect(queryBuilder.eq).toHaveBeenCalledWith('institution_id', 'inst-1')
     expect(queryBuilder.eq).toHaveBeenCalledWith('workspace_key', 'main')

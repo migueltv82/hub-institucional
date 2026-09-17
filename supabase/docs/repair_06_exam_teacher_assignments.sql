@@ -5,8 +5,9 @@
 -- "Could not find the table 'public.exam_teacher_assignments'".
 --
 -- Crea la tabla usada para publicar el precronograma a docentes,
--- las RPCs para confirmar/objetar desde el portal docente y la tabla
--- basica de inscripciones a mesas que usa el reset del proceso.
+-- las RPCs para confirmar/objetar desde el portal docente, el bypass
+-- administrativo puntual y la tabla basica de inscripciones a mesas que
+-- usa el reset del proceso.
 -- Es idempotente.
 -- ============================================================
 
@@ -35,6 +36,7 @@ create table if not exists public.exam_teacher_assignments (
   confirmation_status text not null default 'pending',
   teacher_notes text not null default '',
   confirmed_at timestamptz,
+  objection_deadline timestamptz,
   requested_exam_table_id text,
   requested_role text,
   requested_date text,
@@ -58,6 +60,7 @@ alter table public.exam_teacher_assignments
   add column if not exists confirmation_status text default 'pending',
   add column if not exists teacher_notes text default '',
   add column if not exists confirmed_at timestamptz,
+  add column if not exists objection_deadline timestamptz,
   add column if not exists requested_exam_table_id text,
   add column if not exists requested_role text,
   add column if not exists requested_date text,
@@ -100,6 +103,10 @@ create index if not exists idx_exam_teacher_assignments_teacher
 
 create index if not exists idx_exam_teacher_assignments_exam_table
   on public.exam_teacher_assignments (institution_id, workspace_key, exam_table_id, status);
+
+create index if not exists idx_exam_teacher_assignments_pending_deadline
+  on public.exam_teacher_assignments (institution_id, workspace_key, objection_deadline)
+  where status = 'active' and confirmation_status = 'pending';
 
 drop trigger if exists exam_teacher_assignments_touch_updated_at on public.exam_teacher_assignments;
 create trigger exam_teacher_assignments_touch_updated_at
@@ -367,7 +374,147 @@ begin
 end;
 $$;
 
+create or replace function public.academic_reconcile_expired_exam_confirmations(
+  target_institution_id uuid,
+  target_workspace_key text default 'main',
+  target_exam_table_id text default ''
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_user_id uuid := auth.uid();
+  normalized_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+  normalized_exam_table_id text := nullif(btrim(coalesce(target_exam_table_id, '')), '');
+  actor_is_admin boolean;
+  updated_count integer := 0;
+begin
+  if actor_user_id is null then
+    raise exception 'AUTH_REQUIRED' using errcode = '42501';
+  end if;
+
+  if target_institution_id is null then
+    raise exception 'Falta la institucion activa';
+  end if;
+
+  actor_is_admin := public.is_super_admin()
+    or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor']);
+
+  if not actor_is_admin and not exists (
+    select 1
+    from public.exam_teacher_assignments eta
+    where eta.institution_id = target_institution_id
+      and eta.workspace_key = normalized_workspace_key
+      and eta.teacher_id = actor_user_id
+      and eta.status = 'active'
+      and (normalized_exam_table_id is null or eta.exam_table_id = normalized_exam_table_id)
+  ) then
+    raise exception 'ACADEMIC_EXAM_RECONCILE_FORBIDDEN' using errcode = '42501';
+  end if;
+
+  update public.exam_teacher_assignments eta
+  set
+    confirmation_status = 'confirmed',
+    confirmed_at = timezone('utc', now()),
+    teacher_notes = case
+      when nullif(btrim(eta.teacher_notes), '') is null then 'Confirmada automaticamente por vencimiento del plazo.'
+      else eta.teacher_notes
+    end,
+    updated_at = timezone('utc', now())
+  where eta.institution_id = target_institution_id
+    and eta.workspace_key = normalized_workspace_key
+    and eta.status = 'active'
+    and eta.confirmation_status = 'pending'
+    and eta.objection_deadline is not null
+    and eta.objection_deadline <= timezone('utc', now())
+    and (normalized_exam_table_id is null or eta.exam_table_id = normalized_exam_table_id)
+    and (actor_is_admin or eta.teacher_id = actor_user_id);
+
+  get diagnostics updated_count = row_count;
+
+  return jsonb_build_object(
+    'updated', updated_count,
+    'workspace_key', normalized_workspace_key,
+    'exam_table_id', normalized_exam_table_id
+  );
+end;
+$$;
+
+create or replace function public.academic_admin_confirm_exam_assignment(
+  target_institution_id uuid,
+  target_workspace_key text default 'main',
+  target_exam_table_id text default '',
+  target_teacher_id uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_user_id uuid := auth.uid();
+  normalized_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+  updated_count integer := 0;
+begin
+  if actor_user_id is null then
+    raise exception 'AUTH_REQUIRED' using errcode = '42501';
+  end if;
+
+  if target_institution_id is null
+    or nullif(btrim(target_exam_table_id), '') is null
+    or target_teacher_id is null then
+    raise exception 'Falta la mesa o el docente a confirmar';
+  end if;
+
+  if not (
+    public.is_super_admin()
+    or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
+  ) then
+    raise exception 'ACADEMIC_ADMIN_CONFIRM_FORBIDDEN' using errcode = '42501';
+  end if;
+
+  update public.exam_teacher_assignments
+  set
+    confirmation_status = 'confirmed',
+    confirmed_at = timezone('utc', now()),
+    reassignment_status = 'none',
+    requested_exam_table_id = null,
+    requested_role = null,
+    requested_date = null,
+    metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object(
+      'admin_confirmed_by', actor_user_id,
+      'admin_confirmed_at', timezone('utc', now())
+    ),
+    updated_at = timezone('utc', now())
+  where institution_id = target_institution_id
+    and workspace_key = normalized_workspace_key
+    and exam_table_id = target_exam_table_id
+    and teacher_id = target_teacher_id
+    and status = 'active';
+
+  get diagnostics updated_count = row_count;
+
+  if updated_count = 0 then
+    raise exception 'No se encontro una asignacion docente activa para confirmar.';
+  end if;
+
+  return jsonb_build_object(
+    'updated', updated_count,
+    'exam_table_id', target_exam_table_id,
+    'teacher_id', target_teacher_id
+  );
+end;
+$$;
+
 revoke execute on function public.academic_teacher_confirm_exam_assignment(uuid, text, text, text, text) from public, anon;
 revoke execute on function public.academic_teacher_object_exam_assignment(uuid, text, text, text, text, text, text) from public, anon;
+revoke execute on function public.academic_reconcile_expired_exam_confirmations(uuid, text, text) from public, anon;
+revoke execute on function public.academic_admin_confirm_exam_assignment(uuid, text, text, uuid) from public, anon;
 grant execute on function public.academic_teacher_confirm_exam_assignment(uuid, text, text, text, text) to authenticated;
 grant execute on function public.academic_teacher_object_exam_assignment(uuid, text, text, text, text, text, text) to authenticated;
+grant execute on function public.academic_reconcile_expired_exam_confirmations(uuid, text, text) to authenticated;
+grant execute on function public.academic_admin_confirm_exam_assignment(uuid, text, text, uuid) to authenticated;
+
+notify pgrst, 'reload schema';

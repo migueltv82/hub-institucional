@@ -29,6 +29,7 @@ import {
   resetStudentAcademicRecords,
   resetStudentAcademicSnapshotData,
 } from '../services/studentAcademicReset.js'
+import { saveExamEngineV21State } from '../services/examEngineV21State.js'
 import { getTeachersFromProfiles, provisionTeacherAccess } from '../services/teacherAccess.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { useCronogramaExports } from '../hooks/useCronogramaExports.js'
@@ -37,18 +38,13 @@ import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence.js'
 import AssetsSection from './generadorCronograma/AssetsSection.jsx'
 import DeletedPersonRecordsSection from './generadorCronograma/DeletedPersonRecordsSection.jsx'
 import { isDevAuditSnapshotRoleAuthorized } from './generadorCronograma/devAuditSnapshotAccess.js'
-import InstitutionAdminOverview from './generadorCronograma/InstitutionAdminOverview.jsx'
 import StudentAccessSection from './generadorCronograma/StudentAccessSection.jsx'
 import StudentCareerDashboard from './generadorCronograma/StudentCareerDashboard.jsx'
-import StudentRosterSection from './generadorCronograma/StudentRosterSection.jsx'
 import StudentSubjectEnrollmentSection from './generadorCronograma/StudentSubjectEnrollmentSection.jsx'
-import TeacherRosterSection from './generadorCronograma/TeacherRosterSection.jsx'
 import TribunalMatrixDiagnosis from './generadorCronograma/TribunalMatrixDiagnosis.jsx'
-import UploadsSection from './generadorCronograma/UploadsSection.jsx'
 import WorkspaceDangerZone from './generadorCronograma/WorkspaceDangerZone.jsx'
 import WorkspaceNotice from './generadorCronograma/WorkspaceNotice.jsx'
 import WorkspaceSidebar from './generadorCronograma/WorkspaceSidebar.jsx'
-import ExamEngineV21FieldTestPage from '../features/exams/ExamEngineV21FieldTestPage.jsx'
 import {
   createInitialRegularCallRanges,
   initialFiles,
@@ -77,6 +73,12 @@ const academicSnapshotKeys = [
 ]
 const ACTIVE_WORKSPACE_VIEW_KEY = 'mesaflow.active-workspace-view'
 const VALID_WORKSPACE_VIEWS = new Set(['dashboard', 'students', 'teachers', 'exam-engine-v21'])
+
+const InstitutionAdminOverview = lazy(() => import('./generadorCronograma/InstitutionAdminOverview.jsx'))
+const StudentRosterSection = lazy(() => import('./generadorCronograma/StudentRosterSection.jsx'))
+const TeacherRosterSection = lazy(() => import('./generadorCronograma/TeacherRosterSection.jsx'))
+const UploadsSection = lazy(() => import('./generadorCronograma/UploadsSection.jsx'))
+const ExamEngineV21FieldTestPage = lazy(() => import('../features/exams/ExamEngineV21FieldTestPage.jsx'))
 
 const DevAuditSnapshotExport = import.meta.env.DEV
   ? lazy(() => import('./generadorCronograma/DevAuditSnapshotExport.jsx'))
@@ -124,6 +126,8 @@ function GeneradorCronograma() {
     activeInstitutionId: authActiveInstitutionId,
     setActiveInstitutionId: setAuthActiveInstitutionId,
   } = useAuth()
+  const ownerEmail = user?.email ?? null
+  const ownerUserId = user?.id ?? null
   const [horariosDocentes, setHorariosDocentes] = useState([])
   const [docenteMateria, setDocenteMateria] = useState([])
   const [disponibilidadDocente, setDisponibilidadDocente] = useState([])
@@ -268,7 +272,6 @@ function GeneradorCronograma() {
     adminReviewPromotions,
     adminReviewApprovalRequests,
     adminReviewSecondApprovals,
-    examEngineV21State,
     requiereRegeneracion,
   }), [
     academicSnapshotData,
@@ -277,7 +280,6 @@ function GeneradorCronograma() {
     adminReviewPromotions,
     adminReviewApprovalRequests,
     adminReviewSecondApprovals,
-    examEngineV21State,
     alumnos,
     correlatividades,
     cronograma,
@@ -297,6 +299,10 @@ function GeneradorCronograma() {
     selectedSpecialSubjectKeys,
     uploadedFiles,
   ])
+  const examEngineWorkspaceSnapshot = useMemo(() => ({
+    ...snapshotPayload,
+    examEngineV21State,
+  }), [snapshotPayload, examEngineV21State])
 
   const {
     activeInstitution,
@@ -316,8 +322,8 @@ function GeneradorCronograma() {
   } = useWorkspacePersistence({
     isRemoteSession,
     isSuperAdmin,
-    ownerEmail: user?.email ?? null,
-    ownerUserId: user?.id ?? null,
+    ownerEmail,
+    ownerUserId,
     onHydrate: hydrateWorkspaceState,
     snapshotPayload,
     contextInstitutions: authInstitutions,
@@ -502,18 +508,20 @@ function GeneradorCronograma() {
     setExamEngineV21State(nextState)
 
     try {
-      await saveSnapshotNow({
-        ...snapshotPayload,
-        examEngineV21State: nextState,
-      }, {
-        syncOperational: false,
+      await saveExamEngineV21State({
+        institutionId: activeInstitutionId,
+        workspaceKey,
+        ownerEmail,
+        ownerUserId,
+        state: nextState,
+        useRemote: useRemoteWorkspace,
       })
       return true
     } catch (error) {
       toast.error(`No se pudo guardar el avance del motor de mesas: ${error.message}`)
       return false
     }
-  }, [saveSnapshotNow, snapshotPayload])
+  }, [activeInstitutionId, ownerEmail, ownerUserId, useRemoteWorkspace, workspaceKey])
 
   const reiniciarProcesoMesasDesdeMotor = useCallback(() => {
     if (!canEditWorkspace) {
@@ -1470,8 +1478,9 @@ function GeneradorCronograma() {
         />
 
         <div className="admin-workspace-main min-w-0 space-y-5 p-3 sm:p-4 md:space-y-6 md:p-6 xl:p-8">
-          {activeWorkspaceView === 'dashboard' ? (
-            <>
+          <Suspense fallback={<WorkspaceNotice tone="sky">Cargando modulo...</WorkspaceNotice>}>
+            {activeWorkspaceView === 'dashboard' ? (
+              <>
               <div className="space-y-2">
                 <WorkspaceNotice tone="sky">
                   Organiza el trabajo por secciones. Cambiar de seccion no borra archivos, fechas ni cronogramas.
@@ -1699,9 +1708,9 @@ function GeneradorCronograma() {
                   ) : null}
                 </Suspense>
               )}
-            </>
-          ) : activeWorkspaceView === 'exam-engine-v21' ? null : (
-            <>
+              </>
+            ) : activeWorkspaceView === 'exam-engine-v21' ? null : (
+              <>
               <section className="rise-in admin-module-heading">
                 <span className="soft-title">Modulo</span>
                 <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -1882,26 +1891,27 @@ function GeneradorCronograma() {
                   />
                 </>
               )}
-            </>
-          )}
+              </>
+            )}
 
-          {hasOpenedExamEngineV21 ? (
-            <div className={activeWorkspaceView === 'exam-engine-v21' ? '' : 'hidden'}>
-              <ExamEngineV21FieldTestPage
-                canPublishOfficialSchedule={canEditWorkspace}
-                dataReady={examEngineDataReady}
-                institutionId={activeInstitutionId}
-                mode={isRelationalWorkspaceSource ? 'preview' : undefined}
-                onGoToUploads={() => selectWorkspaceView('dashboard')}
-                onExamEngineStateChange={persistirEstadoMotorMesas}
-                onPublishOfficialSchedule={publicarCronogramaFinalDesdeMotor}
-                onResetExamProcess={reiniciarProcesoMesasDesdeMotor}
-                uploadedFiles={examEngineUploadedFiles}
-                workspaceKey={workspaceKey}
-                workspaceSnapshot={snapshotPayload}
+            {hasOpenedExamEngineV21 ? (
+              <div className={activeWorkspaceView === 'exam-engine-v21' ? '' : 'hidden'}>
+                <ExamEngineV21FieldTestPage
+                  canPublishOfficialSchedule={canEditWorkspace}
+                  dataReady={examEngineDataReady}
+                  institutionId={activeInstitutionId}
+                  mode={isRelationalWorkspaceSource ? 'preview' : undefined}
+                  onGoToUploads={() => selectWorkspaceView('dashboard')}
+                  onExamEngineStateChange={persistirEstadoMotorMesas}
+                  onPublishOfficialSchedule={publicarCronogramaFinalDesdeMotor}
+                  onResetExamProcess={reiniciarProcesoMesasDesdeMotor}
+                  uploadedFiles={examEngineUploadedFiles}
+                  workspaceKey={workspaceKey}
+                workspaceSnapshot={examEngineWorkspaceSnapshot}
               />
-            </div>
-          ) : null}
+              </div>
+            ) : null}
+          </Suspense>
         </div>
       </div>
     </section>

@@ -17,6 +17,7 @@ import TribunalReviewTable from './components/TribunalReviewTable.jsx'
 import { useInteractiveTribunalSession } from './hooks/useInteractiveTribunalSession.js'
 import { downloadDraftScheduleReviewPdf } from './draftSchedulePdfExport.js'
 import {
+  confirmExamAssignmentsAsAdmin,
   fetchExamTeacherAssignmentsForReview,
   publishExamTeacherAssignmentsForReview,
   resetExamProcessForWorkspace,
@@ -28,20 +29,19 @@ import {
   buildExamCallConfigFromForm,
   buildExamEngineV21DataFromWorkspace,
   buildPublishedCronogramaFromFinalTribunals,
+  createConfirmedFinalReviewRowsFromTeacherStatus,
   createConfirmedFinalReviewRows,
-  createConfirmedTeacherReviewRows,
   createDefaultExamCallConfigForm,
   downloadRowsAsCsv,
   parseReviewRowsFile,
   resolveFinalUiState,
-  runDraftScheduleStep,
-  runRelationalPreviewDraftStep,
+  runExamEngineV21DraftWorkflow,
   runFinalReviewStep,
-  runReviewedScheduleStep,
   summarizeReviewedSchedule,
   summarizeTeacherReviewStatus,
   validateExamCallConfigForm,
 } from './examEngineV21FieldTestService.js'
+import { runExamEngineV21DraftWorkflowInWorker } from '../../workers/examEngineV21WorkerClient.js'
 
 // Un solo stepper que SI controla que seccion se ve, con solo 4 pasos:
 // Configurar llamado -> Armar mesas -> Envio a docentes -> Cronograma final.
@@ -57,6 +57,23 @@ const WIZARD_STEPS = [
   { id: 'review', title: 'EnvÃ­o a docentes', description: 'PublicÃ¡ el precronograma completo para que lo confirmen.' },
   { id: 'final', title: 'Cronograma final', description: 'RevisÃ¡ las confirmaciones y publicÃ¡ la versiÃ³n definitiva.' },
 ]
+
+const DRAFT_WORKER_SYNC_FALLBACK_CODES = new Set([
+  'WORKER_NOT_SUPPORTED',
+  'WORKER_RUNTIME_ERROR',
+])
+
+async function runDraftWorkflowInBackground(payload) {
+  try {
+    return await runExamEngineV21DraftWorkflowInWorker(payload)
+  } catch (error) {
+    if (DRAFT_WORKER_SYNC_FALLBACK_CODES.has(error?.code)) {
+      return runExamEngineV21DraftWorkflow(payload)
+    }
+
+    throw error
+  }
+}
 
 function resolveCurrentStepId(uiState) {
   if (uiState === FIELD_TEST_UI_STATES.CONFIGURING_CALL) return 'config'
@@ -318,16 +335,16 @@ function ExamEngineV21FieldTestPage({
     tribunalSession.resetSelections()
   }
 
-  async function refreshTeacherReviewStatus() {
-    if (isPreview) return
+  async function refreshTeacherReviewStatus({ silent = false } = {}) {
+    if (isPreview) return null
     if (!institutionId) {
-      toast.error('Falta la institucion activa.')
-      return
+      if (!silent) toast.error('Falta la institucion activa.')
+      return null
     }
 
     if (!tribunalReviewExport?.rows?.length) {
-      toast.error('Primero publica el precronograma para revision docente.')
-      return
+      if (!silent) toast.error('Primero publica el precronograma para revision docente.')
+      return null
     }
 
     try {
@@ -339,15 +356,17 @@ function ExamEngineV21FieldTestPage({
       })
 
       if (!result.success) {
-        toast.error(result.error)
-        return
+        if (!silent) toast.error(result.error)
+        return null
       }
 
       const nextTeacherReviewStatus = summarizeTeacherReviewStatus(tribunalReviewExport.rows, result.rows)
       setTeacherReviewStatus(nextTeacherReviewStatus)
       void persistExamEngineState({ teacherReviewStatus: nextTeacherReviewStatus })
+      return nextTeacherReviewStatus
     } catch (error) {
-      toast.error(error.message)
+      if (!silent) toast.error(error.message)
+      return null
     } finally {
       setIsFetchingTeacherReviewStatus(false)
     }
@@ -459,21 +478,21 @@ function ExamEngineV21FieldTestPage({
     try {
       setIsBusy(true)
       const examCallConfig = buildExamCallConfigFromForm(configForm)
-      const data = buildExamEngineV21DataFromWorkspace({
+      const generatedAt = new Date().toISOString()
+      setPreviewErrors([])
+      const workflow = await runDraftWorkflowInBackground({
         workspaceSnapshot,
         examCallConfig,
         includeCurrentCronogramaAssignments,
+        isPreview,
+        generatedAt,
       })
-      setPreviewErrors([])
-      const result = isPreview ? runRelationalPreviewDraftStep({ data, examCallConfig, generatedAt: new Date().toISOString() }) : runDraftScheduleStep({
-        docentes: data.docentes,
-        materias: data.materias,
-        examCallConfig,
-        generatedAt: new Date().toISOString(),
-      })
+      const data = workflow.data
+      const result = workflow.draft
+      const reviewed = workflow.reviewed
 
-      if (isPreview && result.errors.length) {
-        setPreviewErrors(result.errors)
+      if (isPreview && workflow.previewErrors?.length) {
+        setPreviewErrors(workflow.previewErrors)
         return
       }
 
@@ -484,18 +503,8 @@ function ExamEngineV21FieldTestPage({
         throw new Error(`No se pudo generar el precronograma: ${firstReason}`)
       }
 
-      const reviewed = runReviewedScheduleStep({
-        originalDraftSchedule: result.draftResult.draftSchedule,
-        reviewedRows: createConfirmedTeacherReviewRows(result.draftExport.rows),
-        docentes: data.docentes,
-        examCallConfig,
-      })
       const nextEngineData = { ...data, examCallConfig }
-      const nextWarnings = buildDataWarnings({
-        docentes: data.docentes,
-        materias: data.materias,
-        draftResult: result.draftResult,
-      })
+      const nextWarnings = workflow.dataWarnings
 
       clearDownstreamFromDraft()
       setEngineData(nextEngineData)
@@ -726,6 +735,82 @@ function ExamEngineV21FieldTestPage({
 
   function autoConfirmFinalReview() {
     importFinalReviewRows(createConfirmedFinalReviewRows(tribunalReviewExport?.rows ?? []))
+  }
+
+  async function confirmReadyMesasFromTeacherReview() {
+    if (!tribunalReviewExport?.rows?.length) {
+      toast.error('Primero publica el precronograma para revision docente.')
+      return
+    }
+
+    try {
+      setIsBusy(true)
+      const nextTeacherReviewStatus = await refreshTeacherReviewStatus({ silent: true })
+      if (!nextTeacherReviewStatus) {
+        toast.error('No se pudo leer el estado docente actualizado.')
+        return
+      }
+
+      const confirmedRows = createConfirmedFinalReviewRowsFromTeacherStatus(
+        tribunalReviewExport.rows,
+        nextTeacherReviewStatus,
+      )
+
+      if (!confirmedRows.length) {
+        toast.error('No hay mesas con todas sus confirmaciones docentes.')
+        return
+      }
+
+      importFinalReviewRows(confirmedRows)
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  function getTeacherReviewEntriesForMesa(examTableId) {
+    const mesa = teacherReviewStatus?.mesas?.find((item) => item.draftMesaId === examTableId)
+    return [mesa?.titular, mesa?.vocal1, mesa?.vocal2]
+      .filter((entry) => entry?.teacherId && entry.status !== 'confirmed')
+  }
+
+  async function confirmAssignmentsAsAdmin(entries = []) {
+    if (!canPublishOfficialSchedule) {
+      toast.error('Tu rol actual no permite confirmar mesas como admin.')
+      return
+    }
+
+    const targets = entries.filter((entry) => entry?.examTableId && entry?.teacherId)
+    if (!targets.length) {
+      toast.error('No hay confirmaciones pendientes para esa mesa.')
+      return
+    }
+
+    try {
+      setIsBusy(true)
+      const result = await confirmExamAssignmentsAsAdmin({
+        institutionId,
+        workspaceKey,
+        entries: targets,
+      })
+
+      if (!result.success) {
+        toast.error(result.error)
+        return
+      }
+
+      toast.success(targets.length === 1 ? 'Confirmacion admin registrada.' : 'Mesa confirmada por admin.')
+      await refreshTeacherReviewStatus({ silent: true })
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  function confirmAssignmentAsAdmin(examTableId, teacherId) {
+    void confirmAssignmentsAsAdmin([{ examTableId, teacherId }])
+  }
+
+  function confirmMesaAsAdmin(examTableId) {
+    void confirmAssignmentsAsAdmin(getTeacherReviewEntriesForMesa(examTableId))
   }
 
   async function publishOfficialSchedule() {
@@ -1037,8 +1122,12 @@ function ExamEngineV21FieldTestPage({
 
           {!isPreview && <TeacherConfirmationStatusPanel
             counts={teacherReviewStatus?.counts ?? { confirmed: 0, pending: 0, objected: 0, total: 0 }}
-            isLoading={isFetchingTeacherReviewStatus}
+            canConfirmAsAdmin={canPublishOfficialSchedule}
+            isLoading={isFetchingTeacherReviewStatus || isBusy}
             mesas={teacherReviewStatus?.mesas ?? []}
+            onConfirmAssignmentAsAdmin={confirmAssignmentAsAdmin}
+            onConfirmMesaAsAdmin={confirmMesaAsAdmin}
+            onConfirmReadyMesas={confirmReadyMesasFromTeacherReview}
             onRefresh={refreshTeacherReviewStatus}
           />}
 

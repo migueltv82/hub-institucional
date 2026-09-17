@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   BookOpenCheck,
@@ -239,6 +239,62 @@ function scheduleMatchesTeacher(schedule, teacher) {
     (scheduleDni && teacherDni && sameText(scheduleDni, teacherDni)) ||
     (scheduleTeacher && teacherName && sameText(scheduleTeacher, teacherName))
   )
+}
+
+function addLookupKey(target, value) {
+  const key = normalize(value)
+  if (key) target.add(key)
+}
+
+function getTeacherLookupKeys(teacher = {}) {
+  const keys = new Set()
+  addLookupKey(keys, getTeacherOptionKey(teacher))
+  addLookupKey(keys, teacher.docenteId || teacher.docente_id || teacher.id || teacher.record_id)
+  addLookupKey(keys, teacher.dni || teacher.documento || teacher.dni_docente)
+  addLookupKey(keys, getTeacherFullName(teacher) || teacher.nombre)
+  addLookupKey(keys, [getTeacherFirstName(teacher), getTeacherLastName(teacher)].filter(Boolean).join(' '))
+  return Array.from(keys)
+}
+
+function getScheduleTeacherLookupKeys(row = {}) {
+  const keys = new Set()
+  addLookupKey(keys, getAcademicRowTeacherKey(row))
+  addLookupKey(keys, getAcademicRowTeacherDni(row))
+  addLookupKey(keys, getAcademicRowTeacherName(row))
+  return Array.from(keys)
+}
+
+function buildRowsByTeacherLookupKey(rows = []) {
+  const rowsByKey = new Map()
+
+  asArray(rows).forEach((row) => {
+    getScheduleTeacherLookupKeys(row).forEach((key) => {
+      const bucket = rowsByKey.get(key) ?? []
+      bucket.push(row)
+      rowsByKey.set(key, bucket)
+    })
+  })
+
+  return rowsByKey
+}
+
+function getIndexedRowsForTeacher(rowsByKey = new Map(), teacher = {}) {
+  const rows = []
+  const seen = new Set()
+
+  getTeacherLookupKeys(teacher).forEach((key) => {
+    asArray(rowsByKey.get(key)).forEach((row) => {
+      if (seen.has(row)) return
+      seen.add(row)
+      rows.push(row)
+    })
+  })
+
+  return rows
+}
+
+function getTeacherRosterCacheKey(teacher = {}) {
+  return getTeacherLookupKeys(teacher)[0] || normalize(getTeacherFullName(teacher) || teacher.nombre || teacher.dni)
 }
 
 function searchTeachers(teachers, query) {
@@ -2413,6 +2469,7 @@ function TeacherRosterSection({
   const [activeTab, setActiveTab] = useState('roster')
   const [careerFilter, setCareerFilter] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [editingTeacher, setEditingTeacher] = useState(null)
   const [modalMode, setModalMode] = useState('edit')
   const [form, setForm] = useState(buildTeacherForm(null))
@@ -2464,8 +2521,12 @@ function TeacherRosterSection({
     [visibleDocentes, teacherAcademicRows],
   )
   const planOptions = useMemo(() => buildPlanOptions(visiblePlanesEstudio), [visiblePlanesEstudio])
+  const teacherSchedulesByLookupKey = useMemo(
+    () => buildRowsByTeacherLookupKey(visibleHorariosDocentes),
+    [visibleHorariosDocentes],
+  )
   const filteredTeachers = useMemo(() => {
-    const matchesSearch = searchTeachers(teachers, searchQuery)
+    const matchesSearch = searchTeachers(teachers, deferredSearchQuery)
     if (!careerFilter) return matchesSearch
 
     return matchesSearch.filter((teacher) => (
@@ -2474,18 +2535,18 @@ function TeacherRosterSection({
         return sameText(resolvedCareer, careerFilter)
       })
     ))
-  }, [teachers, searchQuery, careerFilter])
+  }, [teachers, deferredSearchQuery, careerFilter])
   const teacherFilterIndex = useMemo(() => ({
     keys: new Set(filteredTeachers.map(getTeacherOptionKey).filter(Boolean)),
     names: new Set(filteredTeachers.map((teacher) => normalize(getTeacherFullName(teacher) || teacher.nombre)).filter(Boolean)),
   }), [filteredTeachers])
   const teacherSectionFilters = useMemo(() => ({
     careerFilter,
-    hasFilter: Boolean(searchQuery || careerFilter),
+    hasFilter: Boolean(deferredSearchQuery || careerFilter),
     planOptions,
-    searchQuery,
+    searchQuery: deferredSearchQuery,
     teacherFilterIndex,
-  }), [careerFilter, planOptions, searchQuery, teacherFilterIndex])
+  }), [careerFilter, planOptions, deferredSearchQuery, teacherFilterIndex])
   const filteredPlanesEstudio = useMemo(
     () => (
       careerFilter
@@ -2561,6 +2622,31 @@ function TeacherRosterSection({
     () => new Map(visibleTeacherSummaries.map((summary) => [summary.key, summary])),
     [visibleTeacherSummaries],
   )
+  const rosterTeacherOverviewByKey = useMemo(() => {
+    const overviews = new Map()
+
+    rosterTeachersToDisplay.forEach((teacher) => {
+      const cacheKey = getTeacherRosterCacheKey(teacher)
+      if (!cacheKey) return
+
+      const summary = findSummaryForTeacher(teacher, teacherSummaryByKey, visibleTeacherSummaries)
+      const schedules = getIndexedRowsForTeacher(teacherSchedulesByLookupKey, teacher)
+      overviews.set(cacheKey, buildTeacherAcademicOverview({
+        teacher,
+        academicSummary: summary,
+        schedules,
+        planOptions,
+      }))
+    })
+
+    return overviews
+  }, [
+    rosterTeachersToDisplay,
+    teacherSummaryByKey,
+    visibleTeacherSummaries,
+    teacherSchedulesByLookupKey,
+    planOptions,
+  ])
   const baseDataDiagnostics = useMemo(
     () => buildTeacherBaseDataDiagnostics({
       teachers: filteredTeachers,
@@ -2770,12 +2856,10 @@ function TeacherRosterSection({
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {rosterTeachersToDisplay.map((teacher) => {
-                      const summary = findSummaryForTeacher(teacher, teacherSummaryByKey, visibleTeacherSummaries)
-                      const teacherSchedules = visibleHorariosDocentes.filter((schedule) => scheduleMatchesTeacher(schedule, teacher))
-                      const overview = buildTeacherAcademicOverview({
+                      const overview = rosterTeacherOverviewByKey.get(getTeacherRosterCacheKey(teacher)) ?? buildTeacherAcademicOverview({
                         teacher,
-                        academicSummary: summary,
-                        schedules: teacherSchedules,
+                        academicSummary: findSummaryForTeacher(teacher, teacherSummaryByKey, visibleTeacherSummaries),
+                        schedules: getIndexedRowsForTeacher(teacherSchedulesByLookupKey, teacher),
                         planOptions,
                       })
                       const teacherEmail = getTeacherEmail(teacher)

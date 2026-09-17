@@ -50,7 +50,7 @@ function FinalTribunalSummary({
             type="button"
           >
             <UploadCloud className="h-4 w-4" />
-            Publicar portales
+            Publicar cronograma
           </button>
           <button
             className="btn-secondary"
