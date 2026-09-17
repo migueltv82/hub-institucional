@@ -99,6 +99,7 @@ describe('subjectTeacherAssignments service', () => {
     const result = await fetchSubjectTeacherAssignments({ institutionId: 'inst-1' })
 
     expect(from).toHaveBeenCalledWith('subject_teacher_assignments')
+    expect(queryBuilder.select).not.toHaveBeenCalledWith('*')
     expect(queryBuilder.eq).toHaveBeenCalledWith('institution_id', 'inst-1')
     expect(queryBuilder.eq).toHaveBeenCalledWith('workspace_key', 'main')
     expect(queryBuilder.eq).toHaveBeenCalledWith('status', 'active')
@@ -173,6 +174,7 @@ describe('subjectTeacherAssignments service', () => {
       deleted_at: null,
       role: 'titular',
     }))
+    expect(queryBuilder.select).not.toHaveBeenCalledWith('*')
     expect(result).toEqual({ success: true, data: created })
   })
 

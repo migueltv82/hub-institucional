@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "ci-cd-and-automation": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ci-cd-and-automation/SKILL.md",
+      "computedHash": "578b098a7d2352ccdac8b8abdc40eb6803538e81cf8382f138da6188a655087c"
+    },
+    "code-review-and-quality": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/code-review-and-quality/SKILL.md",
+      "computedHash": "6231479cc74c7ed70a5618b81b3f94034d9806c0319a1a23d15f9b94a368c581"
+    },
+    "code-simplification": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/code-simplification/SKILL.md",
+      "computedHash": "7973e746e8e2ea5004d520da970c15a106824b8d6be1bcff48908aec021f3677"
+    },
+    "debugging-and-error-recovery": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/debugging-and-error-recovery/SKILL.md",
+      "computedHash": "6f437bc609eb8d0dc7f4768c17c9aeb85c9c7632bc36703af9f1367ffb47237a"
+    },
+    "performance-optimization": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/performance-optimization/SKILL.md",
+      "computedHash": "f0a8e3bdb9b7d199434c2a5dd7cbb7d3cf69d802029cde1ef5daa07bffa27efc"
+    },
+    "security-and-hardening": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/security-and-hardening/SKILL.md",
+      "computedHash": "c2556c7890d2509981d6613c8f51a9371d1415b805d802912339e0b4e530fe3c"
+    },
+    "supabase": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/supabase/SKILL.md",
+      "computedHash": "a6260582f48df8ba53380bb9b9e870ed2ae5fe147799e90ed783b8aa25167d50"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/supabase-postgres-best-practices/SKILL.md",
+      "computedHash": "128fac78002d916c8ca908245d398e634f540d8bcf20915b2b2359aeb18eba59"
+    },
+    "test-driven-development": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "computedHash": "efb654aa37612ab1e7470e547b06a322c5e1837b6879525e32aa432d1281692b"
+    }
+  }
+}

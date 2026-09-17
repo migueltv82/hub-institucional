@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchWorkspaceSnapshot } from './workspaceSnapshot.js'
 
 const mocks = vi.hoisted(() => ({
+  fromCalls: 0,
   workspaceRow: null,
 }))
 
@@ -25,7 +26,10 @@ function createWorkspaceQuery() {
 vi.mock('../lib/supabase.js', () => ({
   isSupabaseConfigured: true,
   supabase: {
-    from: () => createWorkspaceQuery(),
+    from: () => {
+      mocks.fromCalls += 1
+      return createWorkspaceQuery()
+    },
   },
 }))
 
@@ -51,6 +55,7 @@ vi.mock('./rosterRecords.js', () => ({
 describe('fetchWorkspaceSnapshot: preferencia local vs remoto', () => {
   beforeEach(() => {
     localStorage.clear()
+    mocks.fromCalls = 0
     mocks.workspaceRow = {
       payload: { planesEstudio: [{ carrera: 'INGLES', materia: 'ING01' }] },
       updated_at: '2026-08-01T10:00:00.000Z',
@@ -85,5 +90,25 @@ describe('fetchWorkspaceSnapshot: preferencia local vs remoto', () => {
 
     expect(result.source).toBe('supabase')
     expect(result.snapshot.planesEstudio).toEqual([{ carrera: 'INGLES', materia: 'ING01' }])
+  })
+
+  it('deduplica lecturas remotas concurrentes del mismo snapshot', async () => {
+    const [first, second] = await Promise.all([
+      fetchWorkspaceSnapshot({
+        institutionId: 'inst-1',
+        workspaceKey: 'main',
+        useRemote: true,
+        preferLocalWhenNewer: false,
+      }),
+      fetchWorkspaceSnapshot({
+        institutionId: 'inst-1',
+        workspaceKey: 'main',
+        useRemote: true,
+        preferLocalWhenNewer: false,
+      }),
+    ])
+
+    expect(mocks.fromCalls).toBe(1)
+    expect(first.snapshot).toEqual(second.snapshot)
   })
 })

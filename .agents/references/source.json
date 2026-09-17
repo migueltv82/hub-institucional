@@ -1,0 +1,9 @@
+﻿{
+    "repository":  "https://github.com/addyosmani/agent-skills",
+    "commit":  "be4e44a9fbc5e8df0beaefadbb28bd22ee61cc39",
+    "files":  [
+                  "security-checklist.md",
+                  "performance-checklist.md",
+                  "testing-patterns.md"
+              ]
+}

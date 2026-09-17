@@ -15,8 +15,8 @@ function createFakeSupabase(store, { errorTable } = {}) {
           this.filters.push({ column, value })
           return this
         },
-        select() {
-          calls.push({ table, operation: 'select' })
+        select(columns) {
+          calls.push({ table, operation: 'select', columns })
           return this
         },
         then(resolve) {
@@ -62,6 +62,18 @@ describe('fetchAcademicRelationalTables', () => {
     expect(result.teacher_records).toEqual([{ id: 't1', institution_id: institutionId }])
     expect(result.study_plans).toEqual([])
     expect(result.teacher_exam_date_exclusions).toEqual([])
+  })
+
+  it('selecciona columnas explicitas en todas las tablas', async () => {
+    const supabase = createFakeSupabase({})
+
+    await fetchAcademicRelationalTables({ supabase, institutionId: 'inst-1' })
+
+    expect(supabase.calls).not.toHaveLength(0)
+    supabase.calls.forEach((call) => {
+      expect(call.columns).toEqual(expect.any(String))
+      expect(call.columns).not.toBe('*')
+    })
   })
 
   it('institucion sin datos devuelve arrays vacios en todas las tablas, sin lanzar', async () => {
