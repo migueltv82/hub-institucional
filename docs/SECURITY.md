@@ -33,7 +33,9 @@ Guia de seguridad para operar la app en contexto academico y prepararla para Saa
 
 ## Configuracion segura
 
-Frontend `.env`:
+### Únicas variables del frontend en Vercel
+
+En Settings → Environment Variables del proyecto frontend, configurar únicamente estas tres variables de la app para Production y para cada Preview con acceso remoto:
 
 ```text
 VITE_SUPABASE_URL=https://TU_PROJECT_REF.supabase.co
@@ -41,7 +43,21 @@ VITE_SUPABASE_PUBLISHABLE_KEY=TU_PUBLISHABLE_KEY
 VITE_DISABLE_AUTH=false
 ```
 
-Secrets de Edge Function:
+La URL y la clave publicable deben corresponder al ambiente destino. No cargar claves secretas, `service_role`, variables de scripts administrativos ni flags de preview interno en este proyecto frontend. [.env.example](../.env.example) contiene únicamente estas tres variables públicas, sin valores reales. El alias legacy `VITE_SUPABASE_ANON_KEY` aún tiene compatibilidad en el cliente, pero no forma parte de la configuración aprobada para nuevos despliegues.
+
+Vite incorpora las variables públicas durante el build: corregirlas en Vercel requiere generar un nuevo despliegue. No basta con editar una variable y reutilizar `dist/`. Ver [variables de entorno de Vite](https://vite.dev/guide/env-and-mode).
+
+### Bloqueo durante el arranque
+
+[envGuards.js](../src/lib/envGuards.js) rechaza `VITE_DISABLE_AUTH=true` cuando `import.meta.env.PROD` es verdadero y cualquier variable no vacía cuyo nombre empiece por `VITE_SERVICE_ROLE` o por `VITE_<prefijo>_SERVICE_ROLE`, incluidos los alias Supabase/Admin. Los nombres privados se rechazan también en desarrollo; el error no incluye sus valores.
+
+La validación corre en `main.jsx` antes de registrar el service worker o montar React, y en `supabaseClient.js` antes de crear el cliente, porque los imports pueden evaluarse antes del cuerpo de `main`. Los tests de [guards](../src/lib/envGuards.test.js) y de [inicialización del cliente](../src/lib/supabaseClient.test.js) cubren los rechazos y la configuración segura.
+
+El guard bloquea el arranque, pero no retira un secreto ya incorporado a un bundle: si se publicó uno, rotarlo y retirar/reemplazar el artefacto. La detección por nombre no valida el contenido de una clave renombrada como pública ni acredita que URL/clave pertenezcan al proyecto correcto. La revisión de configuración y las auditorías de repo/build siguen siendo obligatorias. Un build de CI sin credenciales no acredita una configuración remota completa.
+
+### Secrets exclusivos de la Edge Function
+
+Configurar en Supabase Functions, no en las variables del frontend de Vercel:
 
 ```text
 SERVICE_ROLE_KEY=TU_SERVICE_ROLE_KEY
@@ -66,7 +82,19 @@ Reglas:
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy` sin camara, microfono, geolocalizacion ni pagos
 
+Revisión local: los cinco headers anteriores están presentes para `/(.*)`. La CSP restringe scripts a `'self'`, bloquea objetos y embebido mediante `object-src 'none'` y `frame-ancestors 'none'`, y limita conexiones a origen propio y Supabase. Mantiene estilos inline, imágenes HTTPS y workers blob para las capacidades actuales. No falta ningún header de esta lista, por lo que no se cambia `vercel.json` en esta revisión.
+
+Verificar las respuestas HTTP reales del dominio tras desplegar: la configuración local no prueba los headers servidos. Referencia: [headers en vercel.json](https://vercel.com/docs/project-configuration/vercel-json).
+
+## Aplicación de los scripts de seguridad
+
+Seguir el [checklist de aplicación segura de los scripts del 2026-09-05](SECURITY_LOW_RISK_APPLY_CHECKLIST.md): diagnósticos, bloques de bajo riesgo, revisión humana de permisos y validación de datos antes de constraints. Incluye reversión, post-check y registro en WORKLOG.
+
+Está prohibido aplicar estos cambios en producción sin respaldo recuperable y ensayo previo en staging. Esta documentación no ejecuta SQL ni acredita cambios remotos.
+
 ## Pruebas negativas
+
+**Advertencia sobre las referencias históricas de esta sección:** `supabase/setup_multi_tenant/` y `supabase/security/rls_negative_tests.sql` no están presentes en este checkout. La secuencia siguiente no es ejecutable tal como está. Resolver la disponibilidad y compatibilidad del post-check según el [checklist operativo](SECURITY_LOW_RISK_APPLY_CHECKLIST.md#post-check-obligatorio) antes de aplicar cambios en producción. La cobertura enumerada debajo es la esperada, no una verificación actual del archivo ausente.
 
 Ejecutar en Supabase SQL Editor:
 

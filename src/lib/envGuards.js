@@ -1,8 +1,4 @@
-const forbiddenPublicEnvKeys = [
-  'VITE_SERVICE_ROLE_KEY',
-  'VITE_SUPABASE_SERVICE_ROLE_KEY',
-  'VITE_ADMIN_SERVICE_ROLE_KEY',
-]
+const forbiddenPublicEnvKeyPattern = /^VITE_(?:.*_)?SERVICE_ROLE/i
 
 export function getPublicRuntimeEnvironmentIssues(env = import.meta.env) {
   const issues = []
@@ -11,7 +7,9 @@ export function getPublicRuntimeEnvironmentIssues(env = import.meta.env) {
     issues.push('VITE_DISABLE_AUTH=true no esta permitido en produccion.')
   }
 
-  const leakedSecretKeys = forbiddenPublicEnvKeys.filter((key) => Boolean(env[key]))
+  const leakedSecretKeys = Object.keys(env).filter((key) => (
+    forbiddenPublicEnvKeyPattern.test(key) && Boolean(env[key])
+  ))
   if (leakedSecretKeys.length > 0) {
     issues.push(
       `Variables privadas expuestas al frontend: ${leakedSecretKeys.join(', ')}. ` +
