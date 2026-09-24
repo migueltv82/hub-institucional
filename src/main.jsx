@@ -24,9 +24,8 @@ import { queryClient } from './lib/queryClient.js'
 import { registerServiceWorker } from './lib/registerServiceWorker.js'
 import { initializeAppTheme } from './theme/appTheme.js'
 
-registerServiceWorker()
-
 validatePublicRuntimeEnvironment()
+registerServiceWorker()
 initializeAppTheme()
 
 createRoot(document.getElementById('root')).render(

@@ -20,6 +20,13 @@ El proyecto funciona en modo local demo y en modo remoto con Supabase multi-tena
 - Portal docente con dashboard, materias propias, roster, asistencia y notas.
 - Panel Super Admin para instituciones, usuarios, roles, bloqueos y reseteo de contrasenas.
 
+## Producción
+
+- [Preparación para producción](docs/PRODUCTION_READINESS.md): definición del MVP, ambientes, checklist go/no-go y exclusiones del primer release.
+- [Alcance obligatorio del primer release](docs/PRODUCTION_SCOPE.md): flujos por rol y criterios verificables de aceptación.
+
+Estos documentos definen los requisitos de salida; no certifican un despliegue ni la aplicación de SQL en producción.
+
 ## Stack
 
 - React 19
@@ -60,7 +67,7 @@ npm.cmd run lint        # ESLint
 npm.cmd test            # suite de Vitest
 npm.cmd run build       # build de produccion + auditoria de dist
 npm.cmd run audit:repo  # revisa archivos trackeados contra secretos y artefactos temporales
-npm.cmd run audit:prod  # revisa dist contra fugas de sourcemaps, secretos y herramientas internas
+npm.cmd run audit:prod  # revisa dist existente; no genera el build
 npm.cmd run check       # audit:repo + lint + test + build
 npm.cmd run preview     # sirve dist en 127.0.0.1:4174
 ```
@@ -385,7 +392,7 @@ where not (coalesce(payload #> '{uploadedFiles}', '{}'::jsonb) ? 'docentes');
 
 ## Verificacion
 
-Antes de cerrar cambios:
+Antes de merge a `main` y antes de desplegar la versión candidata, desde la raíz del repo:
 
 ```powershell
 npm.cmd run check
@@ -393,12 +400,26 @@ npm.cmd run check
 
 Estado esperado:
 
-- ESLint sin errores.
-- 166 archivos de test pasando.
-- 1602 tests pasando, 2 skipped, 1604 total.
-- Build de produccion generado.
+- `audit:repo` OK y ESLint sin errores.
+- Suite de Vitest sin fallos; consultar el conteo real de la ejecución.
+- Build de producción generado y `audit:prod` OK.
+- Cadena completa finalizada con código de salida `0`.
+
+La referencia histórica de README/CLAUDE.md era de aproximadamente 1600 tests (1602 pasando, 2 omitidos, 1604 total en 166 archivos); no es un conteo verificado de la versión actual ni un umbral que permita ignorar fallos.
+
+`check` ejecuta `audit:repo → lint → test → build`; `build` incluye `audit:prod`. Se detiene en el primer fallo y deja las etapas siguientes sin verificar. No hacer merge ni desplegar con un check incompleto. Ver el [procedimiento obligatorio del runbook](docs/RUNBOOK.md#puerta-de-calidad-obligatoria-antes-de-merge-y-despliegue) y la [evidencia de preparación para producción](docs/PRODUCTION_READINESS.md).
 
 La advertencia de chunks grandes por `excel-vendor` y `docx-vendor` es conocida. Esos paquetes pesan por soporte XLSX/DOCX y estan separados del codigo principal.
+
+## Integración continua
+
+El [workflow CI](.github/workflows/ci.yml) se ejecuta en cada push a `main` y en cada PR (apertura, actualización de commits o reapertura), sin filtro de rama destino ni de archivos. Usa Ubuntu, Node 22 y caché npm basada en `package-lock.json`.
+
+Ejecuta `npm ci`, `npm run audit:repo`, `npm run lint`, `npm test` y `npm run build`, en ese orden. El build incluye `audit:prod`. Un fallo detiene los pasos siguientes y marca el job como fallido; no se omiten tests ni controles de secretos.
+
+No requiere secretos de GitHub ni credenciales Supabase. El único env explícito de build es `VITE_DISABLE_AUTH=false`: el modo demo está prohibido en producción. Este workflow verifica el código; no despliega ni valida una base remota.
+
+Para impedir merges con CI fallido, configurar en GitHub la protección de `main` y exigir el check `Calidad (Node 22)`. El archivo YAML no activa por sí solo esa protección. Ver el [procedimiento de CI del runbook](docs/RUNBOOK.md#integración-continua-en-github-actions) y los fallos locales conocidos en [preparación para producción](docs/PRODUCTION_READINESS.md).
 
 ## Estructura principal
 

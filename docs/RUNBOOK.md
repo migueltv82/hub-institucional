@@ -24,23 +24,53 @@ Si queres que falle claramente cuando el puerto esta ocupado:
 npm run dev:strict
 ```
 
-## Verificacion tecnica
+## Puerta de calidad obligatoria antes de merge y despliegue
+
+Desde la raíz del repo, con las dependencias instaladas, ejecutar **antes de merge a `main` y antes de desplegar la versión candidata**:
 
 ```powershell
 npm run check
 ```
 
-Ese comando ejecuta:
+En Windows/PowerShell usar `npm.cmd run check` para evitar restricciones de ejecución de `npm.ps1`. En un checkout limpio instalar primero las dependencias del lockfile con `npm ci` (`npm.cmd ci` en PowerShell).
 
-1. `npm run lint`
-2. `npm test`
-3. `npm run build`
+Según `package.json`, la cadena ejecuta en este orden:
+
+1. `npm run audit:repo`: inspecciona archivos seguidos por Git, secretos, artefactos prohibidos y controles estáticos de seguridad.
+2. `npm run lint`: ejecuta `eslint .`.
+3. `npm test`: ejecuta Vitest una vez con `vitest.config.js`, sin modo watch.
+4. `npm run build`: ejecuta `vite build` y, si termina bien, `npm run audit:prod` sobre el `dist/` recién generado.
+
+`audit:prod` por separado requiere un `dist/` existente y no lo reconstruye. Para validar una entrega usar la cadena completa, no una auditoría sobre un build viejo.
 
 Estado esperado:
 
-- ESLint sin errores.
-- suite de Vitest pasando.
-- Build generado en `dist/`.
+- Mensaje `[repository-security-audit] OK`.
+- ESLint sin errores y suite de Vitest sin fallos.
+- Build generado en `dist/` y mensaje `[production-build-audit] OK`.
+- Comando completo finalizado con código de salida `0` (`$LASTEXITCODE` en PowerShell).
+
+La cadena usa `&&`: corta en el primer fallo. Las etapas posteriores quedan **sin verificar**, aunque exista un `dist/` de otra ejecución. No hacer merge ni desplegar si falla o queda incompleta. Corregir la causa y repetir `npm run check`; no omitir auditorías, desactivar reglas ni agregar excepciones para ocultar secretos.
+
+Antes de la revisión final, inspeccionar `git status --short` y el diff de los archivos que integrarán el cambio. `audit:repo` usa `git ls-files`: los archivos nuevos sin agregar a Git no entran en su recorrido. Revisarlos antes de agregarlos y repetir el check sobre el conjunto final; no agregar `.env` reales, credenciales ni logs privados.
+
+Guardar fecha, versión, resumen de tests y resultado de cada etapa en la evidencia de la entrega. Los conteos históricos y el estado de la última ejecución se documentan en [preparación para producción](PRODUCTION_READINESS.md). Un check local aprobado no sustituye los flujos remotos ni el checklist go/no-go de ese documento.
+
+## Integración continua en GitHub Actions
+
+Configuración: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml). Corre en pushes a `main` y PRs de cualquier rama destino al abrirse, recibir commits o reabrirse, incluidos cambios solo documentales.
+
+El job `Calidad (Node 22)` usa `ubuntu-latest`, Node 22, caché de descargas npm con clave derivada de `package-lock.json` y un límite de 20 minutos. La caché no reemplaza `npm ci` ni conserva `node_modules` como instalación validada.
+
+Secuencia exacta: `npm ci` → `npm run audit:repo` → `npm run lint` → `npm test` → `npm run build` (incluye `audit:prod`). Los pasos se detienen ante un fallo, igual que la puerta local. No se usa `continue-on-error`.
+
+El build solo define `VITE_DISABLE_AUTH=false`. No configurar `service_role`, secretos de producción ni `.env` reales para este job. No necesita una base Supabase para compilar; el build de CI no es una prueba de integración remota ni un despliegue.
+
+Para revisar una ejecución, abrir GitHub → Actions → CI → `Calidad (Node 22)` y localizar el primer paso fallido. Registrar su salida sin secretos, corregir la causa y repetir `npm run check` localmente con Node 22 antes de enviar el cambio. Un paso omitido por un fallo anterior queda sin verificar. Los fallos locales ya registrados en [preparación para producción](PRODUCTION_READINESS.md) siguen pendientes; crear el workflow no los resuelve.
+
+Después de publicar el workflow, comprobar una ejecución real en GitHub y configurar la protección de `main` para exigir el check `Calidad (Node 22)`. No se ha configurado esa protección ni ejecutado GitHub Actions desde esta entrega local.
+
+Referencias: [sintaxis de workflows de GitHub](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax) y [configuración y caché de setup-node](https://github.com/actions/setup-node).
 
 ## Si no inicia
 

@@ -1,9 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
+import { validatePublicRuntimeEnvironment } from './envGuards.js'
 import {
   clearLegacySupabaseAuthStorage,
   getEffectiveAuthStorageKey,
   getSupabaseAuthStorage,
 } from './authStorage.js'
+
+// Los imports de App/Auth pueden evaluar este modulo antes del cuerpo de main.
+validatePublicRuntimeEnvironment()
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabasePublishableKey =
