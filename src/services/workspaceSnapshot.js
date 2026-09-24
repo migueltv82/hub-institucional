@@ -16,6 +16,7 @@ const LOCAL_SNAPSHOT_PREFIX = 'mesaflow.workspace'
 const DEBUG_WORKSPACE_SNAPSHOT = import.meta.env.DEV
 const SOURCE_FILES_TABLE_NAME = 'workspace_source_files'
 const SOURCE_FILES_BUCKET = 'workspace-source-files'
+const inFlightWorkspaceSnapshotFetches = new Map()
 const REMOTE_WORKSPACE_CLEAR_TABLES = [
   'subject_attendance_records',
   'student_grades',
@@ -540,6 +541,31 @@ function canUseRemoteWorkspace({ institutionId, useRemote }) {
   return Boolean(useRemote && institutionId && isSupabaseConfigured && supabase)
 }
 
+function workspaceSnapshotFetchKey({
+  institutionId,
+  workspaceKey,
+  useRemote,
+  preferLocalWhenNewer,
+}) {
+  return [
+    clean(institutionId),
+    clean(workspaceKey) || 'main',
+    useRemote ? 'remote' : 'local',
+    preferLocalWhenNewer ? 'prefer-local' : 'prefer-remote',
+  ].join('::')
+}
+
+function clearInFlightWorkspaceSnapshotFetches({ institutionId, workspaceKey }) {
+  const institutionKey = clean(institutionId)
+  const workspace = clean(workspaceKey) || 'main'
+
+  for (const key of inFlightWorkspaceSnapshotFetches.keys()) {
+    if (key.startsWith(`${institutionKey}::${workspace}::`)) {
+      inFlightWorkspaceSnapshotFetches.delete(key)
+    }
+  }
+}
+
 function assertRemoteWorkspaceContext({ institutionId, useRemote }) {
   if (!useRemote) return
 
@@ -849,7 +875,7 @@ export function normalizeWorkspaceSnapshot(payload) {
   }
 }
 
-export async function fetchWorkspaceSnapshot({ institutionId, workspaceKey, useRemote, preferLocalWhenNewer = true }) {
+async function fetchWorkspaceSnapshotUncached({ institutionId, workspaceKey, useRemote, preferLocalWhenNewer = true }) {
   if (!canUseRemoteWorkspace({ institutionId, useRemote })) {
     try {
       assertRemoteWorkspaceContext({ institutionId, useRemote })
@@ -917,14 +943,22 @@ export async function fetchWorkspaceSnapshot({ institutionId, workspaceKey, useR
   const snapshot = normalizeWorkspaceSnapshot(data?.payload)
   let mergedSnapshot = snapshot
 
-  try {
-    const academicRecords = await fetchTeacherAcademicRecords({
+  const [academicRecordsResult, subjectAssignmentsResult] = await Promise.allSettled([
+    fetchTeacherAcademicRecords({
       institutionId,
       workspaceKey,
       useRemote,
-    })
-    mergedSnapshot = normalizeWorkspaceSnapshot(mergeTeacherAcademicRecordsIntoSnapshot(snapshot, academicRecords))
-  } catch (error) {
+    }),
+    fetchSubjectTeacherAssignments({
+      institutionId,
+      workspaceKey,
+    }),
+  ])
+
+  if (academicRecordsResult.status === 'fulfilled') {
+    mergedSnapshot = normalizeWorkspaceSnapshot(mergeTeacherAcademicRecordsIntoSnapshot(snapshot, academicRecordsResult.value))
+  } else {
+    const error = academicRecordsResult.reason
     logWorkspaceSnapshotDiagnostic('warn', 'fetch:teacher-academic-records-error', {
       destination: 'teacher_availability_records/teacher_workload_records',
       hasInstitutionId: Boolean(institutionId),
@@ -936,12 +970,19 @@ export async function fetchWorkspaceSnapshot({ institutionId, workspaceKey, useR
     mergedSnapshot = snapshot
   }
 
-  mergedSnapshot = await mergeRemoteSubjectTeacherAssignments({
-    snapshot: mergedSnapshot,
-    institutionId,
-    workspaceKey,
-    useRemote,
-  })
+  if (subjectAssignmentsResult.status === 'fulfilled') {
+    mergedSnapshot = mergeSubjectTeacherAssignmentsIntoSnapshot(mergedSnapshot, subjectAssignmentsResult.value)
+  } else {
+    const error = subjectAssignmentsResult.reason
+    logWorkspaceSnapshotDiagnostic('warn', 'fetch:subject-teacher-assignments-error', {
+      destination: 'subject_teacher_assignments',
+      hasInstitutionId: Boolean(institutionId),
+      source: 'supabase',
+      useRemote,
+      workspaceKey,
+      errorMessage: error.message,
+    })
+  }
 
   logWorkspaceSnapshotDiagnostic('info', 'fetch:supabase-ok', {
     counts: getSnapshotCounts(mergedSnapshot),
@@ -963,6 +1004,28 @@ export async function fetchWorkspaceSnapshot({ institutionId, workspaceKey, useR
   }
 }
 
+export async function fetchWorkspaceSnapshot({ institutionId, workspaceKey, useRemote, preferLocalWhenNewer = true }) {
+  const key = workspaceSnapshotFetchKey({
+    institutionId,
+    workspaceKey,
+    useRemote,
+    preferLocalWhenNewer,
+  })
+  const inFlight = inFlightWorkspaceSnapshotFetches.get(key)
+  if (inFlight) return inFlight
+
+  const fetchPromise = fetchWorkspaceSnapshotUncached({
+    institutionId,
+    workspaceKey,
+    useRemote,
+    preferLocalWhenNewer,
+  }).finally(() => {
+    inFlightWorkspaceSnapshotFetches.delete(key)
+  })
+  inFlightWorkspaceSnapshotFetches.set(key, fetchPromise)
+  return fetchPromise
+}
+
 export async function saveWorkspaceSnapshot({
   institutionId,
   workspaceKey,
@@ -973,6 +1036,8 @@ export async function saveWorkspaceSnapshot({
   syncOperational = true,
   allowLargeRemotePayload = true,
 }) {
+  clearInFlightWorkspaceSnapshotFetches({ institutionId, workspaceKey })
+
   if (!canUseRemoteWorkspace({ institutionId, useRemote })) {
     try {
       assertRemoteWorkspaceContext({ institutionId, useRemote })

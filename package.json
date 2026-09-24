@@ -16,6 +16,11 @@
     "validate:import": "node scripts/validateNormalizedImport.mjs",
     "test:watch": "vitest --config vitest.config.js",
     "check": "npm run audit:repo && npm run lint && npm test && npm run build",
+    "quality:fast": "npm run audit:repo && npm run lint",
+    "quality:deps": "npm audit --audit-level=high",
+    "quality:gate": "npm run audit:repo && npm run lint && npm test && npm run build",
+    "quality:full": "npm run quality:gate && npm run quality:deps",
+    "ci": "npm run quality:full",
     "preview": "vite preview --host 127.0.0.1 --port 4174"
   },
   "dependencies": {

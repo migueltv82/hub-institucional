@@ -1,5 +1,7 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 
+const SUBJECT_TEACHER_ASSIGNMENT_SELECT = 'id, institution_id, workspace_key, subject_id, program_id, teacher_id, teacher_record_id, status, role, source, metadata, created_at, updated_at, deleted_at'
+
 function clean(value) {
   return String(value ?? '').trim()
 }
@@ -42,7 +44,7 @@ async function runActiveAssignmentsQuery({
 } = {}) {
   let query = supabase
     .from('subject_teacher_assignments')
-    .select('*')
+    .select(SUBJECT_TEACHER_ASSIGNMENT_SELECT)
     .eq('institution_id', institutionId)
     .eq('workspace_key', workspaceKey)
     .eq('status', 'active')
@@ -199,7 +201,7 @@ export async function createSubjectTeacherAssignment({
   let { data, error } = await supabase
     .from('subject_teacher_assignments')
     .insert(payload)
-    .select('*')
+    .select(SUBJECT_TEACHER_ASSIGNMENT_SELECT)
     .single()
 
   if (isMissingDeletedAtColumn(error)) {
@@ -207,7 +209,7 @@ export async function createSubjectTeacherAssignment({
     ;({ data, error } = await supabase
       .from('subject_teacher_assignments')
       .insert(legacyPayload)
-      .select('*')
+      .select(SUBJECT_TEACHER_ASSIGNMENT_SELECT)
       .single())
   }
 
@@ -216,7 +218,7 @@ export async function createSubjectTeacherAssignment({
     ;({ data, error } = await supabase
       .from('subject_teacher_assignments')
       .insert(payloadWithoutTeacherRecord)
-      .select('*')
+      .select(SUBJECT_TEACHER_ASSIGNMENT_SELECT)
       .single())
   }
 
@@ -246,7 +248,7 @@ export async function updateSubjectTeacherAssignmentRole(id, role) {
     .from('subject_teacher_assignments')
     .update({ role })
     .eq('id', id)
-    .select('*')
+    .select(SUBJECT_TEACHER_ASSIGNMENT_SELECT)
     .single()
 
   if (error) {
@@ -288,7 +290,7 @@ export async function deactivateSubjectTeacherAssignment(id) {
     .from('subject_teacher_assignments')
     .update({ status: 'inactive', deleted_at: deletedAt })
     .eq('id', id)
-    .select('*')
+    .select(SUBJECT_TEACHER_ASSIGNMENT_SELECT)
     .single()
 
   if (error) {

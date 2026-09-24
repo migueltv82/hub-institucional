@@ -618,8 +618,13 @@ create index if not exists idx_student_plans_student on public.student_career_pl
 create index if not exists idx_student_career_plans_career on public.student_career_plans (institution_id, career_id);
 create index if not exists idx_student_career_plans_plan on public.student_career_plans (institution_id, plan_id);
 create index if not exists idx_academic_status_student on public.student_academic_statuses (institution_id, student_career_plan_id, plan_subject_id, recorded_at desc);
-<<<<<<< HEAD
 create index if not exists idx_student_academic_statuses_plan_subject on public.student_academic_statuses (institution_id, plan_subject_id);
+create index if not exists idx_teacher_records_workspace_full_name on public.teacher_records (institution_id, workspace_key, full_name);
+create index if not exists idx_teacher_records_workspace_login_email on public.teacher_records (institution_id, workspace_key, login_email);
+create index if not exists idx_teacher_records_profile_id on public.teacher_records (profile_id) where profile_id is not null;
+create index if not exists idx_student_records_workspace_full_name on public.student_records (institution_id, workspace_key, career, full_name);
+create index if not exists idx_student_records_workspace_email on public.student_records (institution_id, workspace_key, email);
+create index if not exists idx_student_records_profile_id on public.student_records (profile_id) where profile_id is not null;
 
 grant select on table
   public.careers,
@@ -635,14 +640,6 @@ grant select on table
   public.student_career_plans,
   public.student_academic_statuses
 to authenticated;
-=======
-create index if not exists idx_teacher_records_workspace_full_name on public.teacher_records (institution_id, workspace_key, full_name);
-create index if not exists idx_teacher_records_workspace_login_email on public.teacher_records (institution_id, workspace_key, login_email);
-create index if not exists idx_teacher_records_profile_id on public.teacher_records (profile_id) where profile_id is not null;
-create index if not exists idx_student_records_workspace_full_name on public.student_records (institution_id, workspace_key, career, full_name);
-create index if not exists idx_student_records_workspace_email on public.student_records (institution_id, workspace_key, email);
-create index if not exists idx_student_records_profile_id on public.student_records (profile_id) where profile_id is not null;
->>>>>>> 9ff66de244baf6061807125c68219a731cfa7be8
 
 do $$
 declare
@@ -688,8 +685,6 @@ begin
     execute format('create policy %I on public.%I for select to authenticated using (public.is_super_admin() or public.is_member_of_institution(institution_id))', table_name || ' members read', table_name);
   end loop;
 end $$;
-<<<<<<< HEAD
-=======
 
 drop policy if exists "teacher_records editors manage" on public.teacher_records;
 drop policy if exists "student_records editors manage" on public.student_records;
@@ -710,4 +705,3 @@ with check (public.is_super_admin() or public.is_member_of_institution(instituti
 
 grant select, insert, update, delete on public.teacher_records to authenticated;
 grant select, insert, update, delete on public.student_records to authenticated;
->>>>>>> 9ff66de244baf6061807125c68219a731cfa7be8

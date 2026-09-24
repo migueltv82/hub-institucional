@@ -73,4 +73,17 @@ describe('admin-users edge function security posture', () => {
     expect(edgeFunction).toContain("table: 'subject_attendance_records'")
     expect(edgeFunction).toContain('stripStudentAcademicSnapshotData')
   })
+
+  it('actualiza student_records por workspace email y carrera para no duplicar alumnos existentes', () => {
+    const persistStudentRecordBody = edgeFunction.match(/async function persistStudentRecord[\s\S]*?\n}\n\nasync function persistStudentCareerPlan/)?.[0] ?? ''
+
+    expect(persistStudentRecordBody).toContain("const workspaceKey = 'main'")
+    expect(persistStudentRecordBody).toContain("const career = getOptionalString(student.carrera ?? student.career)")
+    expect(persistStudentRecordBody).toContain("select('id')")
+    expect(persistStudentRecordBody).toContain(".eq('workspace_key', workspaceKey)")
+    expect(persistStudentRecordBody).toContain(".eq('email', email)")
+    expect(persistStudentRecordBody).toContain(".eq('career', career)")
+    expect(persistStudentRecordBody).toContain("onConflict: 'institution_id,workspace_key,email,career'")
+    expect(persistStudentRecordBody).not.toContain("onConflict: 'institution_id,external_code'")
+  })
 })

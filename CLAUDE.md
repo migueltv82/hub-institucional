@@ -2,6 +2,8 @@
 
 Contexto permanente del repo. Leer esto antes de tocar código.
 
+También leer `AGENTS.md` y `CONSTRAINTS.md`. Esos archivos definen el quality gate permanente, el contrato del CHIEF CODE AUDITOR y los controles estrictos de seguridad, Supabase, performance, tests, CI y dependencias.
+
 ## Qué es
 
 App de gestión académica para institutos terciarios argentinos (Academia Genia).

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchWorkspaceSnapshot } from './workspaceSnapshot.js'
 
 const mocks = vi.hoisted(() => ({
-  fromCalls: 0,
+  tables: [],
   workspaceRow: null,
 }))
 
@@ -26,8 +26,8 @@ function createWorkspaceQuery() {
 vi.mock('../lib/supabase.js', () => ({
   isSupabaseConfigured: true,
   supabase: {
-    from: () => {
-      mocks.fromCalls += 1
+    from: (table) => {
+      mocks.tables.push(table)
       return createWorkspaceQuery()
     },
   },
@@ -55,7 +55,7 @@ vi.mock('./rosterRecords.js', () => ({
 describe('fetchWorkspaceSnapshot: preferencia local vs remoto', () => {
   beforeEach(() => {
     localStorage.clear()
-    mocks.fromCalls = 0
+    mocks.tables = []
     mocks.workspaceRow = {
       payload: { planesEstudio: [{ carrera: 'INGLES', materia: 'ING01' }] },
       updated_at: '2026-08-01T10:00:00.000Z',
@@ -108,7 +108,7 @@ describe('fetchWorkspaceSnapshot: preferencia local vs remoto', () => {
       }),
     ])
 
-    expect(mocks.fromCalls).toBe(1)
+    expect(mocks.tables.filter((table) => table === 'workspace_snapshots')).toHaveLength(1)
     expect(first.snapshot).toEqual(second.snapshot)
   })
 })

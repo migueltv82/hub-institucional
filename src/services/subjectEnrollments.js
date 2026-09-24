@@ -1,6 +1,8 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 import { mapCanonicalSubjectEnrollment } from './academicCanonicalRows.js'
 
+const SUBJECT_ENROLLMENT_SELECT = 'id, institution_id, workspace_key, student_id, student_record_id, subject_id, program_id, status, legacy_snapshot_id, created_at, updated_at, deleted_at, dropped_at'
+
 function clean(value) {
   return String(value ?? '').trim()
 }
@@ -27,7 +29,7 @@ export async function fetchSubjectEnrollments({ institutionId, workspaceKey = 'm
 
   let query = supabase
     .from('subject_enrollments')
-    .select('*')
+    .select(SUBJECT_ENROLLMENT_SELECT)
     .eq('institution_id', institutionId)
     .eq('workspace_key', workspaceKey)
     .is('deleted_at', null)
@@ -152,7 +154,7 @@ export async function createSubjectEnrollment({
       student_record_id: normalizedStudentRecordId,
       status: 'active',
     })
-    .select('*')
+    .select(SUBJECT_ENROLLMENT_SELECT)
     .single()
 
   if (error) {
@@ -170,7 +172,7 @@ export async function createSubjectEnrollment({
         .eq('subject_id', subjectId)
         .eq('program_id', programId ?? '')
         .eq('student_id', studentId)
-        .select('*')
+        .select(SUBJECT_ENROLLMENT_SELECT)
         .single()
 
       if (!repairError && repairedEnrollment) {
@@ -201,7 +203,7 @@ export async function dropSubjectEnrollment(id) {
     .from('subject_enrollments')
     .update({ status: 'dropped', dropped_at: droppedAt, deleted_at: droppedAt })
     .eq('id', id)
-    .select('*')
+    .select(SUBJECT_ENROLLMENT_SELECT)
     .single()
 
   if (error) {

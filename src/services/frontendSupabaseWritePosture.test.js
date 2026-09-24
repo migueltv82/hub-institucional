@@ -22,7 +22,10 @@ const PORTAL_WRITE_PROTECTED_FILES = new Set([
 
 const ALLOWED_DIRECT_WRITE_FILES = new Set([
   // Admin/institution workspace synchronization and reviewed admin commands.
+  'src/services/deletedPersonRecords.js',
   'src/services/examTeacherAssignments.js',
+  'src/services/examEngineV21State.js',
+  'src/services/legacyExamSessions.js',
   'src/services/legacySyncCommon.js',
   'src/services/rosterRecords.js',
   // Public feature switch only; app_settings RLS requires a superadmin to write.

@@ -945,21 +945,58 @@ async function persistStudentRecord({
   const lastName = getOptionalString(student.apellido ?? student.last_name) || displayParts.slice(1).join(' ') || '-'
   const nationalId = getStudentPassword(student.dni ?? student.documento)
   const externalCode = getOptionalString(student.external_code ?? student.legajo) || nationalId || email
+  const workspaceKey = 'main'
+  const career = getOptionalString(student.carrera ?? student.career)
+  const academicYear = getOptionalString(student.anio ?? student.academic_year ?? student.anio_cursada)
   const rawStatus = getOptionalString(student.estado ?? student.status).toLowerCase()
   const status = ['inactive', 'inactivo', 'baja'].includes(rawStatus) ? 'inactive' : 'active'
+  const studentRecordPayload = {
+    institution_id: institutionId,
+    workspace_key: workspaceKey,
+    profile_id: userId,
+    external_code: externalCode,
+    email,
+    full_name: displayName || email,
+    first_name: firstName,
+    last_name: lastName,
+    career,
+    academic_year: academicYear,
+    national_id: nationalId || null,
+    dni: nationalId || null,
+    legajo: getOptionalString(student.legajo ?? student.matricula ?? student.student_number),
+    phone: getOptionalString(student.telefono ?? student.phone) || null,
+    status,
+    notes: getOptionalString(student.notes ?? student.observaciones) || null,
+    raw_payload: student,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data: existingByWorkspaceEmailCareer, error: existingError } = await adminClient
+    .from('student_records')
+    .select('id')
+    .eq('institution_id', institutionId)
+    .eq('workspace_key', workspaceKey)
+    .eq('email', email)
+    .eq('career', career)
+    .maybeSingle()
+
+  if (existingError) throw existingError
+
+  if (existingByWorkspaceEmailCareer?.id) {
+    const { data, error } = await adminClient
+      .from('student_records')
+      .update(studentRecordPayload)
+      .eq('id', existingByWorkspaceEmailCareer.id)
+      .select('id')
+      .single()
+
+    if (error) throw error
+    return data?.id ?? null
+  }
+
   const { data, error } = await adminClient
     .from('student_records')
-    .upsert({
-      institution_id: institutionId,
-      external_code: externalCode,
-      email,
-      first_name: firstName,
-      last_name: lastName,
-      national_id: nationalId || null,
-      phone: getOptionalString(student.telefono ?? student.phone) || null,
-      status,
-      notes: getOptionalString(student.notes ?? student.observaciones) || null,
-    }, { onConflict: 'institution_id,external_code' })
+    .upsert(studentRecordPayload, { onConflict: 'institution_id,workspace_key,email,career' })
     .select('id')
     .single()
 
