@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useMatch } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext.jsx'
 import ProtectedSuperAdminRoute from './components/ProtectedSuperAdminRoute.jsx'
 import PwaInstallPrompt from './components/PwaInstallPrompt.jsx'
@@ -14,6 +14,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'))
 const StudentPortalModule = lazy(() => import('./modules/alumnos/StudentPortalModule.jsx'))
 const TeacherPortalModule = lazy(() => import('./modules/docentes/TeacherPortalModule.jsx'))
+const PrimariaPortalModule = lazy(() => import('./modules/primaria/PrimariaPortalModule.jsx'))
 const SuperAdminLayout = lazy(() => import('./pages/SuperAdminLayout.jsx'))
 const SuperAdminOverviewPage = lazy(() => import('./pages/SuperAdminOverviewPage.jsx'))
 const SuperAdminAuditPage = lazy(() => import('./pages/SuperAdminAuditPage.jsx'))
@@ -23,12 +24,14 @@ const SuperAdminUsersPage = lazy(() => import('./pages/SuperAdminUsersPage.jsx')
 
 function AppWorkspaceRouter() {
   const { user, profile } = useAuth()
+  const primariaRoute = useMatch('/app/primario/*')
   const accountRole = String(profile?.account_role ?? user?.accountRole ?? user?.role ?? '').toLowerCase()
   const isStudent = ['alumno', 'student'].includes(accountRole)
   const isTeacher = ['docente', 'profesor', 'teacher'].includes(accountRole)
 
   if (isTeacher) return <TeacherPortalModule />
-  return isStudent ? <StudentPortalModule /> : <DashboardPage />
+  if (isStudent) return primariaRoute ? <PrimariaPortalModule /> : <StudentPortalModule />
+  return <DashboardPage />
 }
 
 function AppStatusPanel({ title, message }) {

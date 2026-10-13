@@ -1,6 +1,27 @@
 # Alcance obligatorio del primer release
 
-Este documento especifica qué probar para el MVP definido en [preparación para producción](PRODUCTION_READINESS.md). Describe código disponible al 2026-09-23, no resultados de pruebas remotas ni una certificación de despliegue. Todos los casos siguientes son obligatorios.
+## Alcance vigente v1
+
+Portal Docente v1: Mesas es **SOLO LECTURA**, certificado en Staging. Validar asignación propia, rol, confirmation_status y objection_reason cuando exista, mensaje de gestión no habilitada, ausencia de controles de decisiones/reubicación y de requests RPC legacy. Confirmación, objeción, reasignación y reconciliación docente están DIFERIDAS post-v1 y no son criterios de aceptación v1; los servicios legacy conservados no habilitan su uso.
+
+Baseline local descartable PASS, 9 SQL aplicados, 40 tablas public con RLS y Staging aplicado/verificado: [evidencia](../supabase/baseline/STAGING_BASELINE_RESULT.md). La RPC de inscripción existe y está validada, usando JWT del usuario vía `context.userClient` y `auth.uid() = actor_user_id = target_student_id`, con profile/membership/legajo del tenant-workspace validados; sin vía operativa `adminClient`/`service_role`. Ver [contrato vigente](contracts/upsert_exam_enrollment_from_portal.md).
+
+La evaluación de implementación de septiembre y las referencias siguientes a RPC/schema ausentes son **HISTÓRICAS / SUPERADAS**. Los criterios P03 de escritura docente quedan explícitamente diferidos; el resto de pruebas integrales no se da por aprobado con esta actualización. Production sigue **NO-GO**: branch protection remota, backup/restore, rollback, observabilidad, E2E/UAT y release closure pendientes. `EX-001` vence 2026-10-17, sin cobertura posterior automática.
+
+Este documento especifica qué probar para el MVP definido en [preparación para producción](PRODUCTION_READINESS.md). Describe código disponible al 2026-09-24, no resultados de pruebas remotas ni una certificación de despliegue. Todos los casos siguientes son obligatorios.
+
+Las etiquetas describen lo comprobable en el repositorio: `IMPLEMENTADO` significa que el flujo y sus dependencias locales principales existen; `IMPLEMENTADO PARCIALMENTE`, que falta una pieza local necesaria; `NO IMPLEMENTADO`, que no existe un camino funcional; y `NO VERIFICABLE`, que depende exclusivamente del estado de un ambiente remoto. Ninguna etiqueta `IMPLEMENTADO` acredita por sí sola despliegue, RLS efectiva ni datos remotos compatibles.
+
+| Caso | Estado actual | Evidencia resumida |
+| --- | --- | --- |
+| P01 Login, rol, logout y bloqueo de usuario | `IMPLEMENTADO` | Auth, perfil, enrutamiento por rol, logout y rechazo de perfiles bloqueados tienen caminos locales comprobables. |
+| P02 Carga y recuperación de workspace | `IMPLEMENTADO PARCIALMENTE` | Importación y persistencia existen, pero la lectura del snapshot se concede a cualquier miembro del tenant y no satisface mínimo privilegio por rol. |
+| P03 Generación, revisión y publicación de mesas | `IMPLEMENTADO PARCIALMENTE` | El flujo de UI/motor existe, pero el esquema canónico declara pendiente la persistencia relacional completa de mesas y confirmaciones. |
+| P04 Portal alumno e inscripción a examen | `IMPLEMENTADO PARCIALMENTE` | Lectura, elegibilidad y mutación existen; el RPC autoritativo de inscripción no está definido en `supabase/schema/`. |
+| P05 Portal docente: materias, roster, asistencia y notas | `IMPLEMENTADO PARCIALMENTE` | Pantallas, servicios y RPC cubren el circuito, pero las policies genéricas de lectura académica no prueban acceso limitado a las materias propias. |
+| P06 Super Admin | `IMPLEMENTADO PARCIALMENTE` | Instituciones, usuarios, bloqueo y reset existen; suspensión efectiva y consulta operativa del historial administrativo no están completas. |
+
+Estado transversal del despliegue Supabase, Edge Function, variables, políticas y datos del ambiente destino: `NO VERIFICABLE` desde este checkout. Debe comprobarse en staging antes del go.
 
 ## Preparación y evidencia
 
@@ -10,7 +31,7 @@ Por caso registrar versión, ambiente, fecha, ejecutor, datos de prueba anonimiz
 
 ## P01 — Login por rol
 
-**Disponible:** enrutamiento por perfil y protección de Super Admin en [App.jsx](../src/App.jsx), con autenticación en [AuthContext.jsx](../src/auth/AuthContext.jsx).
+**Estado actual: `IMPLEMENTADO`.** Enrutamiento por perfil y protección de Super Admin en [App.jsx](../src/App.jsx), autenticación y bloqueo de usuario en [AuthContext.jsx](../src/auth/AuthContext.jsx), acceso institucional y logout en [auth.js](../src/services/auth.js), y formularios en [LoginPage.jsx](../src/pages/LoginPage.jsx). La suspensión de una institución se evalúa por separado en P06.
 
 1. Ingresar como `admin_instituto`, `alumno`, `docente` y `superadmin`; comprobar dashboard institucional, portal alumno, portal docente y panel global respectivamente.
 2. Recargar, cerrar sesión y volver a ingresar; comprobar que no quedan datos visibles de la sesión anterior.
@@ -20,7 +41,7 @@ Por caso registrar versión, ambiente, fecha, ejecutor, datos de prueba anonimiz
 
 ## P02 — Carga de planillas y workspace
 
-**Disponible:** carga y gestión en [GeneradorCronograma.jsx](../src/components/GeneradorCronograma.jsx); persistencia en [workspaceSnapshot.js](../src/services/workspaceSnapshot.js) y [sourceFiles.js](../src/services/sourceFiles.js).
+**Estado actual: `IMPLEMENTADO PARCIALMENTE`.** Carga y gestión en [GeneradorCronograma.jsx](../src/components/GeneradorCronograma.jsx); persistencia en [workspaceSnapshot.js](../src/services/workspaceSnapshot.js) y [sourceFiles.js](../src/services/sourceFiles.js). La policy local de `workspace_snapshots` permite lectura a cualquier miembro de la institución; el aislamiento entre tenants existe en el predicado, pero el mínimo privilegio entre roles no está resuelto.
 
 1. Como administrador de A, cargar horarios docentes, docentes, alumnos, plan de estudios y correlatividades con las plantillas del dashboard. Revisar conteos, identidades y errores informados.
 2. Reemplazar una planilla con una corrección controlada y comprobar su efecto en el workspace y la necesidad de revisar/regenerar mesas afectadas.
@@ -31,13 +52,13 @@ Por caso registrar versión, ambiente, fecha, ejecutor, datos de prueba anonimiz
 
 ## P03 — Armado, revisión y publicación de mesas regulares
 
-**Disponible:** el camino operativo es “Armar mesas”, implementado en [ExamEngineV21FieldTestPage.jsx](../src/features/exams/ExamEngineV21FieldTestPage.jsx), pese al nombre histórico del archivo. Construye el cronograma publicable mediante [examEngineV21FieldTestService.js](../src/features/exams/examEngineV21FieldTestService.js) y lo entrega a `publicarCronogramaFinalDesdeMotor` en el generador. Existen servicios de [revisión de asignaciones docentes](../src/services/examTeacherAssignments.js), incluidos plazo de objeción y reconciliación bajo demanda. No es una promesa de ejecución programada en segundo plano.
+**Estado actual: `IMPLEMENTADO PARCIALMENTE`.** El camino operativo es “Armar mesas”, implementado en [ExamEngineV21FieldTestPage.jsx](../src/features/exams/ExamEngineV21FieldTestPage.jsx), pese al nombre histórico del archivo. Construye el cronograma publicable mediante [examEngineV21FieldTestService.js](../src/features/exams/examEngineV21FieldTestService.js) y lo entrega a `publicarCronogramaFinalDesdeMotor` en el generador. Existen servicios de [revisión de asignaciones docentes](../src/services/examTeacherAssignments.js), incluidos plazo de objeción y reconciliación bajo demanda. No es una promesa de ejecución programada en segundo plano.
 
 **Dependencia pendiente de acreditar:** la [guía de esquema](../supabase/schema/00_README.md) señala pendientes de persistencia operativa de mesas. La existencia de UI y servicios no demuestra que sus tablas/RPC estén disponibles. P03 y la inscripción de P04 permanecen pendientes hasta verificar ese contrato completo en el ambiente remoto.
 
 1. Con datos revisados, configurar el período y generar el precronograma por el camino V2.1; inspeccionar fechas, materias, docentes, advertencias y tribunales antes de continuar.
-2. Publicar asignaciones para revisión docente. Desde la sesión docente, comprobar sus mesas, confirmar una y objetar otra; verificar el estado recuperado por el administrador y resolver la objeción antes de la revisión final.
-3. En el ambiente de prueba, comprobar el vencimiento del plazo y su reconciliación al consultar. Verificar por separado la confirmación administrativa existente con un administrador autorizado y el rechazo con rol docente. Registrar quién confirma; no presentar el bypass administrativo como confirmación personal del docente.
+2. Para v1, comprobar desde la sesión docente sus mesas en modo solo lectura según «Alcance vigente v1». HISTÓRICO / DIFERIDO post-v1: publicar asignaciones para revisión docente, confirmar una y objetar otra, verificar el estado administrativo y resolver la objeción antes de la revisión final.
+3. HISTÓRICO / DIFERIDO post-v1, no ejecutar como aceptación v1: comprobar vencimiento/reconciliación y confirmación administrativa del flujo legacy. Ese criterio no habilita bypass ni decisiones docentes en v1.
 4. Confirmar la revisión final y publicar. Verificar que las mesas publicables llegan al cronograma persistido y a los portales correctos, con fecha, materia y tribunal coincidentes.
 5. Comprobar que borradores o mesas pendientes no se muestran como mesas habilitadas para inscripción. Repetir la lectura tras recargar y verificar que un error de publicación no queda acreditado como éxito.
 
@@ -45,7 +66,7 @@ Por caso registrar versión, ambiente, fecha, ejecutor, datos de prueba anonimiz
 
 ## P04 — Portal alumno: materias e inscripción con condición regular
 
-**Disponible:** lectura en [studentPortalData.js](../src/modules/alumnos/services/studentPortalData.js), escrituras por [studentPortalMutations.js](../src/modules/alumnos/services/studentPortalMutations.js) y criterio visual en [examEligibility.js](../src/modules/alumnos/lib/examEligibility.js). La autoridad para la inscripción es el RPC `upsert_exam_enrollment_from_portal`; `admin-users` agrega validaciones en el camino de mutación.
+**Estado actual: `IMPLEMENTADO PARCIALMENTE`.** Lectura en [studentPortalData.js](../src/modules/alumnos/services/studentPortalData.js), escrituras por [studentPortalMutations.js](../src/modules/alumnos/services/studentPortalMutations.js) y criterio visual en [examEligibility.js](../src/modules/alumnos/lib/examEligibility.js). La autoridad para la inscripción es el RPC `upsert_exam_enrollment_from_portal`; [admin-users](../supabase/functions/admin-users/index.ts) agrega validaciones en el camino de mutación, pero el RPC no está definido en la fuente canónica local `supabase/schema/`.
 
 1. Ingresar con un alumno vinculado al padrón y verificar sus materias/carrera y mesas publicadas. No debe recibir el padrón completo ni datos académicos ajenos.
 2. Registrar desde el docente una condición `regular` para la materia y carrera exactas. Inscribir al alumno a una mesa publicada y comprobar persistencia al recargar.
@@ -56,7 +77,7 @@ Por caso registrar versión, ambiente, fecha, ejecutor, datos de prueba anonimiz
 
 ## P05 — Portal docente: roster, asistencia y nota
 
-**Disponible:** [TeacherPortalModule.jsx](../src/modules/docentes/TeacherPortalModule.jsx), [teacherAcademicRecords.js](../src/services/teacherAcademicRecords.js), [subjectAttendance.js](../src/services/subjectAttendance.js) y [studentGrades.js](../src/services/studentGrades.js).
+**Estado actual: `IMPLEMENTADO PARCIALMENTE`.** [TeacherPortalModule.jsx](../src/modules/docentes/TeacherPortalModule.jsx), [SubjectDetailView.jsx](../src/modules/docentes/pages/SubjectDetailView.jsx), [subjectRoster.js](../src/modules/docentes/services/subjectRoster.js), [subjectAttendance.js](../src/services/subjectAttendance.js) y [studentGrades.js](../src/services/studentGrades.js). Las RPC docentes aplican controles propios, pero las policies locales de lectura sobre tablas académicas son más amplias que el alcance de materias asignadas.
 
 1. Ingresar como docente con identidad y materias asignadas; abrir el roster de una materia con inscripciones a cursada preparadas y comprobar alumnos esperados.
 2. Registrar asistencia y una nota/condición académica. Recargar y confirmar que corresponden al mismo alumno, materia, carrera e institución.
@@ -67,15 +88,18 @@ Por caso registrar versión, ambiente, fecha, ejecutor, datos de prueba anonimiz
 
 ## P06 — Super Admin: instituciones y usuarios
 
-**Disponible:** páginas `SuperAdmin*`, [superAdmin.js](../src/services/superAdmin.js) y la [Edge Function admin-users](../supabase/functions/admin-users/index.ts) existente. Su extensión actual no implica migración del frontend a TypeScript.
+**Estado actual: `IMPLEMENTADO PARCIALMENTE`.** Páginas `SuperAdmin*`, incluida una [auditoría de drift de padrones](../src/pages/SuperAdminAuditPage.jsx), [superAdmin.js](../src/services/superAdmin.js) y la [Edge Function admin-users](../supabase/functions/admin-users/index.ts) existente. El backend registra acciones en `admin_audit_logs`, pero no se verificó una pantalla que consulte ese historial. Además, la suspensión de una institución no está incorporada al helper RLS de membresía. Su extensión actual no implica migración del frontend a TypeScript.
+
+Subflujos: instituciones, usuarios, bloqueo/desbloqueo y reset de contraseña están `IMPLEMENTADO`; auditoría de drift de padrones está `IMPLEMENTADO`; consulta operativa de `admin_audit_logs` está `NO IMPLEMENTADO`; efectividad servidor de la suspensión institucional está `IMPLEMENTADO PARCIALMENTE`.
 
 1. Crear una institución de prueba con administrador; crear o asignar usuarios institucionales y verificar rol, membresía y acceso efectivo con cada cuenta.
 2. Actualizar los datos/estado de la institución y verificar que se recuperan correctamente. Probar la restricción de acceso correspondiente al suspenderla; si no se cumple, registrar bloqueo de salida.
 3. Bloquear un usuario y verificar rechazo de operaciones con sesión nueva y previamente abierta; desbloquear y comprobar recuperación autorizada.
 4. Restablecer una contraseña mediante `set_user_password`; comprobar que la nueva permite ingresar y la anterior deja de servir. Entregar la credencial de prueba por un canal seguro y excluirla de logs/evidencias.
 5. Como alumno, docente y administrador institucional, intentar operaciones globales de Super Admin y reset de usuarios ajenos. Deben rechazarse en servidor.
+6. Consultar los eventos administrativos de creación, cambio de rol, bloqueo y reset, verificando actor, objetivo, fecha y resultado sin exponer secretos. Mientras no exista un camino operativo documentado para leer `admin_audit_logs`, este paso falla.
 
-**Aprobado cuando:** Auth, perfil y membresía son coherentes y las operaciones sensibles usan autorización servidor. El reset administrativo existente no promete envío de correo ni recuperación autoservicio. Borrados masivos o purgas no forman parte del recorrido obligatorio.
+**Aprobado cuando:** Auth, perfil y membresía son coherentes; las operaciones sensibles usan autorización servidor; suspender una institución corta sus accesos activos; y existe una forma operativa documentada de consultar los eventos administrativos registrados. El reset administrativo existente no promete envío de correo ni recuperación autoservicio. Borrados masivos o purgas no forman parte del recorrido obligatorio.
 
 ## Cierre del alcance
 

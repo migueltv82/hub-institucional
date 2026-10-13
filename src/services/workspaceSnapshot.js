@@ -1,5 +1,7 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 import { syncRosterRecords } from './rosterRecords.js'
+import { invokeSourceFileStorage } from './sourceFileStorageGateway.js'
+import { canonicalStorageUuid } from './sourceFileStoragePath.js'
 import {
   fetchTeacherAcademicRecords,
   mergeTeacherAcademicRecordsIntoSnapshot,
@@ -14,28 +16,7 @@ const TABLE_NAME = 'workspace_snapshots'
 const datasetKeys = ['masterWorkbook', 'docentesWorkbook', 'alumnosWorkbook', 'horarios', 'planes', 'correlatividades', 'alumnos', 'docentes', 'docenteMateria']
 const LOCAL_SNAPSHOT_PREFIX = 'mesaflow.workspace'
 const DEBUG_WORKSPACE_SNAPSHOT = import.meta.env.DEV
-const SOURCE_FILES_TABLE_NAME = 'workspace_source_files'
-const SOURCE_FILES_BUCKET = 'workspace-source-files'
 const inFlightWorkspaceSnapshotFetches = new Map()
-const REMOTE_WORKSPACE_CLEAR_TABLES = [
-  'subject_attendance_records',
-  'student_grades',
-  'subject_class_sessions',
-  'subject_enrollments',
-  'exam_engine_v21_states',
-  'exam_enrollments',
-  'exam_teacher_assignments',
-  'subject_teacher_assignments',
-  'legacy_subject_prerequisites',
-  'legacy_exam_sessions',
-  'legacy_subjects_catalog',
-  'teacher_availability_records',
-  'teacher_workload_records',
-  SOURCE_FILES_TABLE_NAME,
-  'student_records',
-  'teacher_records',
-]
-const MISSING_WORKSPACE_CLEAR_SCHEMA_ERROR_CODES = new Set(['42P01', '42703', 'PGRST204', 'PGRST205'])
 const MAX_LOCAL_SNAPSHOT_BYTES = 4_000_000
 const MAX_REMOTE_AUTOSAVE_SNAPSHOT_BYTES = MAX_LOCAL_SNAPSHOT_BYTES
 const disabledLocalSnapshotWrites = new Set()
@@ -578,113 +559,6 @@ function assertRemoteWorkspaceContext({ institutionId, useRemote }) {
   }
 }
 
-function isMissingWorkspaceClearSchemaError(error, tableName = '') {
-  const code = String(error?.code ?? '')
-  const text = [error?.message, error?.details, error?.hint]
-    .map((value) => String(value ?? '').toLowerCase())
-    .join(' ')
-  const normalizedTableName = String(tableName ?? '').toLowerCase()
-
-  if (MISSING_WORKSPACE_CLEAR_SCHEMA_ERROR_CODES.has(code)) return true
-
-  return (
-    (normalizedTableName && text.includes(normalizedTableName)) &&
-    (
-      text.includes('does not exist') ||
-      text.includes('not found') ||
-      text.includes('could not find') ||
-      text.includes('schema cache') ||
-      text.includes('column')
-    )
-  )
-}
-
-async function removeRemoteWorkspaceSourceFiles({ institutionId, workspaceKey }) {
-  const { data, error } = await supabase
-    .from(SOURCE_FILES_TABLE_NAME)
-    .select('storage_bucket, storage_path')
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-
-  if (error) {
-    if (isMissingWorkspaceClearSchemaError(error, SOURCE_FILES_TABLE_NAME)) {
-      return { tableName: SOURCE_FILES_TABLE_NAME, target: 'storage', skipped: true, removed: 0 }
-    }
-
-    throw new Error(`No se pudieron leer los archivos fuente para borrarlos. ${error.message}`)
-  }
-
-  const filesByBucket = normalizeArray(data).reduce((accumulator, file) => {
-    const storagePath = clean(file?.storage_path)
-    if (!storagePath) return accumulator
-
-    const bucket = clean(file?.storage_bucket) || SOURCE_FILES_BUCKET
-    if (!accumulator.has(bucket)) accumulator.set(bucket, [])
-    accumulator.get(bucket).push(storagePath)
-    return accumulator
-  }, new Map())
-
-  let removed = 0
-  const warnings = []
-
-  for (const [bucket, paths] of filesByBucket.entries()) {
-    const { error: storageError } = await supabase.storage
-      .from(bucket)
-      .remove(paths)
-
-    if (storageError) {
-      warnings.push({
-        bucket,
-        message: storageError.message,
-        paths: paths.length,
-      })
-      logWorkspaceSnapshotDiagnostic('warn', 'clear:source-files-storage-error', {
-        bucket,
-        destination: 'storage',
-        hasInstitutionId: Boolean(institutionId),
-        paths: paths.length,
-        workspaceKey,
-        errorMessage: storageError.message,
-      })
-      continue
-    }
-
-    removed += paths.length
-  }
-
-  return {
-    tableName: SOURCE_FILES_TABLE_NAME,
-    target: 'storage',
-    skipped: false,
-    removed,
-    warnings,
-  }
-}
-
-async function deleteRemoteWorkspaceTableRows({ tableName, institutionId, workspaceKey }) {
-  const { error } = await supabase
-    .from(tableName)
-    .delete()
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-
-  if (error) {
-    if (isMissingWorkspaceClearSchemaError(error, tableName)) {
-      logWorkspaceSnapshotDiagnostic('warn', 'clear:table-skipped-missing-schema', {
-        destination: tableName,
-        hasInstitutionId: Boolean(institutionId),
-        workspaceKey,
-        errorMessage: error.message,
-      })
-      return { tableName, skipped: true, deleted: null }
-    }
-
-    throw new Error(`No se pudo limpiar ${tableName}. ${error.message}`)
-  }
-
-  return { tableName, skipped: false, deleted: null }
-}
-
 function getLocalSnapshotStorageKey({ institutionId, workspaceKey }) {
   return `${LOCAL_SNAPSHOT_PREFIX}:${institutionId ?? 'demo'}:${workspaceKey}`
 }
@@ -1203,56 +1077,23 @@ export async function saveWorkspaceSnapshot({
   }
 }
 
-export async function clearWorkspaceData({
-  institutionId,
-  workspaceKey,
-  ownerEmail,
-  ownerUserId,
-  useRemote,
-}) {
+export async function clearWorkspaceData({ institutionId, workspaceKey, useRemote, operationId, resumeStorageClear = false }) {
   const emptyPayload = createEmptyWorkspaceSnapshot()
-  const saveResult = await saveWorkspaceSnapshot({
-    institutionId,
-    workspaceKey,
-    ownerEmail,
-    ownerUserId,
-    payload: emptyPayload,
-    useRemote,
-  })
-
   if (!canUseRemoteWorkspace({ institutionId, useRemote })) {
-    return {
-      ...saveResult,
-      cleanup: [],
-      snapshot: emptyPayload,
-    }
+    assertRemoteWorkspaceContext({ institutionId, useRemote })
+    return { ...writeLocalSnapshot({ institutionId, workspaceKey }, emptyPayload), cleanup: [], snapshot: emptyPayload }
   }
-
-  const cleanup = []
-  cleanup.push(await removeRemoteWorkspaceSourceFiles({ institutionId, workspaceKey }))
-
-  for (const tableName of REMOTE_WORKSPACE_CLEAR_TABLES) {
-    cleanup.push(await deleteRemoteWorkspaceTableRows({
-      tableName,
-      institutionId,
-      workspaceKey,
-    }))
-  }
-
-  logWorkspaceSnapshotDiagnostic('info', 'clear:ok', {
-    counts: getSnapshotCounts(emptyPayload),
-    destination: TABLE_NAME,
-    hasInstitutionId: Boolean(institutionId),
-    source: saveResult.source,
-    useRemote,
-    workspaceKey,
-    cleanedTables: cleanup.filter((item) => item?.tableName && !item.skipped).length,
-    skippedTables: cleanup.filter((item) => item?.skipped).length,
-  })
-
+  canonicalStorageUuid(operationId)
+  const result = await invokeSourceFileStorage({ action: resumeStorageClear ? 'resume_clear' : 'begin_clear', institution_id: institutionId, workspace_key: workspaceKey, operation_id: operationId })
+  if (result.clear_id !== operationId) throw new Error('Respuesta de limpieza no autorizada.')
+  if (result.success !== true) throw new Error('No se pudo completar la limpieza del workspace.')
+  clearInFlightWorkspaceSnapshotFetches({ institutionId, workspaceKey })
+  // No client snapshot save, table delete or local empty write after the barrier.
+  // The caller must reload current state: newer mutations may already exist.
+  const current = await fetchWorkspaceSnapshot({ institutionId, workspaceKey, useRemote, preferLocalWhenNewer: false })
   return {
-    ...saveResult,
-    cleanup,
-    snapshot: emptyPayload,
+    ...current, reloadRequired: true,
+    clearId: result.clear_id, cutoffRevision: result.cutoff_revision,
+    cleanup: [{ tableName: 'workspace_source_files', target: 'storage', skipped: false, removed: result.removed || 0, warnings: [] }],
   }
 }

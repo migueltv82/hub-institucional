@@ -1,44 +1,39 @@
 name: CI
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
-  pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
-    name: Calidad (Node 22)
+    name: Quality gate (Node 22.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+
     steps:
       - name: Obtener el repositorio
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Preparar Node 22 y caché npm
+      - name: Preparar Node y cache npm
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.13.0'
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Instalar dependencias del lockfile
         run: npm ci
 
-      - name: Auditar el repositorio
-        run: npm run audit:repo
-
-      - name: Validar lint
-        run: npm run lint
-
-      - name: Ejecutar tests
-        run: npm test
-
-      - name: Compilar y auditar producción
-        run: npm run build
-        env:
-          VITE_DISABLE_AUTH: 'false'
+      - name: Ejecutar quality gate local
+        run: npm run check

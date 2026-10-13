@@ -12,6 +12,7 @@ import {
   saveWorkspaceSnapshot,
 } from '../services/workspaceSnapshot.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
+import { getWorkspaceClearOperationId, completeWorkspaceClearIntent } from '../services/workspaceClearIntent.js'
 import {
   fetchRelationalExamSnapshot,
   fetchRelationalPreviewSetting,
@@ -176,14 +177,17 @@ export function useWorkspacePersistence({
     setSyncStatus(useRemoteWorkspace ? 'syncing' : 'local-only')
 
     try {
+      const intentContext = { institutionId: activeInstitutionId, workspaceKey: WORKSPACE_KEY, ownerUserId }
+      const operationId = useRemoteWorkspace ? getWorkspaceClearOperationId(intentContext) : undefined
       const result = await clearWorkspaceData({
         institutionId: activeInstitutionId,
         workspaceKey: WORKSPACE_KEY,
         ownerEmail: ownerEmail ?? null,
         ownerUserId: ownerUserId ?? null,
         useRemote: useRemoteWorkspace,
+        ...(operationId ? { operationId } : {}),
       })
-      await saveExamEngineV21State({
+      if (!useRemoteWorkspace) await saveExamEngineV21State({
         institutionId: activeInstitutionId,
         workspaceKey: WORKSPACE_KEY,
         ownerEmail: ownerEmail ?? null,
@@ -191,12 +195,17 @@ export function useWorkspacePersistence({
         state: null,
         useRemote: useRemoteWorkspace,
       })
+      if (result.reloadRequired) {
+        const engine = await fetchExamEngineV21State({ institutionId: activeInstitutionId, workspaceKey: WORKSPACE_KEY, useRemote: true, fallbackState: result.snapshot.examEngineV21State })
+        result.snapshot = { ...result.snapshot, examEngineV21State: engine.state ?? result.snapshot.examEngineV21State ?? null }
+      }
 
       dirtySnapshotRef.current = false
       skipAutoSaveRef.current = true
       setLastSyncedAt(result.updatedAt)
       setWorkspaceSource(result.source)
       setSyncStatus(result.source === 'supabase' ? 'saved' : 'local-only')
+      if (operationId) completeWorkspaceClearIntent(intentContext, operationId)
       return result
     } catch (error) {
       setSyncStatus('error')

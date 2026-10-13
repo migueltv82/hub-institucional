@@ -22,9 +22,13 @@ Riesgo residual:
 Archivo fuente:
 
 ```text
-supabase/setup_multi_tenant/00_base_schema.sql
-supabase/setup_multi_tenant/00_README.md
+supabase/schema/00_README.md
+docs/SECURITY_LOW_RISK_APPLY_CHECKLIST.md
 ```
+
+Nota 02.1: las referencias históricas a `supabase/setup_multi_tenant/` ya no son
+ejecutables en este checkout. Validar cualquier SQL mutante primero en staging y
+contra la fuente canónica de `supabase/schema/`.
 
 Tablas protegidas:
 
@@ -145,10 +149,10 @@ Recomendacion para futuras tablas:
 
 ## Checklist antes de deploy
 
-1. Ejecutar `supabase/setup_multi_tenant/00_base_schema.sql`.
-2. Ejecutar las migraciones 01-12 listadas en `supabase/setup_multi_tenant/00_README.md`.
-3. Ejecutar `supabase/security/rls_negative_tests.sql`.
-4. Confirmar `SECURITY_TESTS_OK`.
+1. Seguir el orden canónico de `supabase/schema/00_README.md` para una base nueva.
+2. Reconciliar reparaciones de `supabase/docs/` contra la fuente canónica antes de aplicar.
+3. Seguir `docs/SECURITY_LOW_RISK_APPLY_CHECKLIST.md` para staging, backup, rollback, GO/NO-GO y post-check.
+4. Ejecutar una matriz negativa integral de RLS/Storage por rol, tabla, RPC y tenant. El archivo histórico `supabase/security/rls_negative_tests.sql` no existe en este checkout.
 5. Desplegar Edge Function `admin-users`.
 6. Verificar que no exista `VITE_SERVICE_ROLE_KEY` en frontend.
 7. Probar login con usuario de una institucion y confirmar que no ve datos de otra.

@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-06",
+  "remoteMutations": 0,
+  "dbName": "identity_real_9ffd6dd97a",
+  "cases": [
+    {
+      "name": "1 tenants A/B and Auth/DB fixtures created",
+      "result": "PASS",
+      "authUsers": 6,
+      "tenants": 2
+    },
+    {
+      "name": "2-3 exclusive B email from admin A denied without Auth/DB mutation",
+      "result": "PASS",
+      "http": 409
+    },
+    {
+      "name": "4 B original password login succeeds and attacker password fails",
+      "result": "PASS",
+      "originalLogin": 200,
+      "attackerLogin": 400
+    },
+    {
+      "name": "case/whitespace variants denied; password and DB intact",
+      "result": "PASS",
+      "variants": 2,
+      "http": 409
+    },
+    {
+      "name": "5 same-tenant reuse same user_id with password/metadata/DB intact",
+      "result": "PASS",
+      "http": 200,
+      "sameUserId": true,
+      "originalLogin": 200,
+      "proposedLogin": 400
+    },
+    {
+      "name": "6 new email creates Auth user and exact tenant student link",
+      "result": "PASS",
+      "http": 200,
+      "login": 200
+    },
+    {
+      "name": "7 unlinked and ambiguous identities denied without mutation",
+      "result": "PASS",
+      "http": 409,
+      "identities": 2
+    },
+    {
+      "name": "8 authorized SuperAdmin scoped same-tenant reset succeeds",
+      "result": "PASS",
+      "http": 200,
+      "newLogin": 200,
+      "oldLogin": 400
+    },
+    {
+      "name": "9 scoped reset cross-tenant denied; B password intact",
+      "result": "PASS",
+      "http": 403,
+      "originalLogin": 200,
+      "proposedLogin": 400
+    },
+    {
+      "name": "institutional admin dedicated reset denied by existing SuperAdmin contract",
+      "result": "PASS",
+      "http": 403
+    }
+  ],
+  "cleanup": {
+    "authUsers": 0,
+    "authIdentities": 0,
+    "sessions": 0,
+    "refreshTokens": 0,
+    "profiles": 0,
+    "memberships": 0,
+    "students": 0,
+    "institutions": 0,
+    "auditLogs": 0,
+    "storageObjects": 0
+  },
+  "artifactSha256": "D5B6E53D9008BB1018AD92C3038EA92342B2876AF337A6C1DCE0DEB6387D533D",
+  "runtime": {
+    "deno": "2.9.6",
+    "auth": "v2.196.0",
+    "postgrest": "v16.1",
+    "postgres": "17.6",
+    "actualHttp": true,
+    "actualAuth": true,
+    "actualDb": true
+  },
+  "result": "PASS",
+  "databaseRemoved": true,
+  "artifactUnchanged": true
+}

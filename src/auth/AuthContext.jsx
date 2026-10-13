@@ -29,15 +29,15 @@ const DEV_PROFILE = {
 
 const AuthContext = createContext(null)
 
-function normalizeAccountRole(profile, sessionUser) {
+function normalizeAccountRole(profile) {
   if (profile?.is_global_admin) return 'superadmin'
-  return profile?.account_role ?? sessionUser?.user_metadata?.account_role ?? 'admin_instituto'
+  return profile?.account_role ?? 'alumno'
 }
 
 function buildUser(sessionUser, profile) {
   if (!sessionUser) return null
 
-  const accountRole = normalizeAccountRole(profile, sessionUser)
+  const accountRole = normalizeAccountRole(profile)
 
   return {
     id: sessionUser.id,

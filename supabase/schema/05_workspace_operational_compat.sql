@@ -271,6 +271,26 @@ grant select, insert, update, delete on
   public.legacy_exam_sessions
 to authenticated;
 
+-- Canonical destination and actor restriction also applies to superadmins.
+-- Keep in sync with security/storage_source_files_canonical_paths.sql.
+drop policy if exists "workspace source files canonical actor paths" on storage.objects;
+create policy "workspace source files canonical actor paths"
+on storage.objects as restrictive for all to authenticated
+using (
+  bucket_id <> 'workspace-source-files'
+  or (
+    name ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[A-Za-z0-9][A-Za-z0-9_-]{0,127}/[A-Za-z0-9][A-Za-z0-9_-]{0,127}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    and split_part(name, '/', 2) = (select auth.uid())::text
+  )
+)
+with check (
+  bucket_id <> 'workspace-source-files'
+  or (
+    name ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[A-Za-z0-9][A-Za-z0-9_-]{0,127}/[A-Za-z0-9][A-Za-z0-9_-]{0,127}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    and split_part(name, '/', 2) = (select auth.uid())::text
+  )
+);
+
 drop policy if exists "workspace source files members read objects" on storage.objects;
 drop policy if exists "workspace source files editors insert objects" on storage.objects;
 drop policy if exists "workspace source files editors update objects" on storage.objects;

@@ -18,8 +18,66 @@ const deployDocs = readFileSync(
   join(process.cwd(), 'supabase/docs/deploy_admin_users.md'),
   'utf8',
 )
+const foundationSchema = readFileSync(
+  join(process.cwd(), 'supabase/schema/01_foundation.sql'),
+  'utf8',
+)
+const academicOperationsSchema = readFileSync(
+  join(process.cwd(), 'supabase/schema/07_academic_operations.sql'),
+  'utf8',
+)
+
+function normalizeSql(source) {
+  return source.replace(/\r\n/g, '\n')
+}
+
+function extractSqlBlock(source, startPattern, endPattern) {
+  const normalizedSource = normalizeSql(source)
+  const start = normalizedSource.search(startPattern)
+  expect(start, `Debe encontrarse el inicio ${startPattern}`).toBeGreaterThanOrEqual(0)
+  const rest = normalizedSource.slice(start)
+  const end = rest.search(endPattern)
+  expect(end, `Debe encontrarse el fin ${endPattern}`).toBeGreaterThanOrEqual(0)
+  return rest.slice(0, end)
+}
 
 describe('admin-users edge function security posture', () => {
+  it('vincula la inscripcion a materias con el JWT del alumno en SQL y en el caller', () => {
+    const rpcBody = extractSqlBlock(
+      academicOperationsSchema,
+      /create or replace function public\.upsert_subject_enrollment_from_portal\(/i,
+      /create or replace function public\.academic_teacher_create_class_session\(/i,
+    )
+
+    expect(rpcBody).toContain('authenticated_user_id uuid := (select auth.uid())')
+    expect(rpcBody).toMatch(/authenticated_user_id\s+is\s+null\s+or\s+authenticated_user_id\s+<>\s+actor_user_id\s+or\s+actor_user_id\s+<>\s+target_student_id/i)
+    expect(edgeFunction).toContain("context.userClient.rpc('upsert_subject_enrollment_from_portal'")
+    expect(edgeFunction).not.toContain("adminClient.rpc('upsert_subject_enrollment_from_portal'")
+  })
+
+  it('no usa raw_user_meta_data.account_role como autoridad de perfiles', () => {
+    const handleNewUserBody = extractSqlBlock(
+      foundationSchema,
+      /create or replace function public\.handle_new_user\(\)/i,
+      /drop trigger if exists on_auth_user_created/i,
+    )
+
+    expect(handleNewUserBody).toContain('security definer')
+    expect(handleNewUserBody).toContain("set search_path = ''")
+    expect(handleNewUserBody).toContain("new.raw_app_meta_data ->> 'account_role'")
+    expect(handleNewUserBody).toContain("coalesce(new.raw_app_meta_data ->> 'account_role', 'alumno')")
+    expect(handleNewUserBody).not.toContain("new.raw_user_meta_data ->> 'account_role'")
+    expect(foundationSchema).toContain('revoke execute on function public.handle_new_user() from public, anon, authenticated;')
+  })
+
+  it('conserva la asignacion administrativa legitima de roles fuera del trigger', () => {
+    expect(edgeFunction).toContain('account_role: \'admin_instituto\'')
+    expect(edgeFunction).toContain('account_role: \'alumno\'')
+    expect(edgeFunction).toContain('account_role: \'docente\'')
+    expect(edgeFunction).toContain('await upsertProfile')
+    expect(edgeFunction).toContain('await assignMemberships')
+  })
+
   it('mantiene verify_jwt desactivado solo con validacion interna explicita', () => {
     expect(supabaseConfig).toMatch(/\[functions\.admin-users\][\s\S]*verify_jwt = false/)
     expect(functionConfig).toContain('verify_jwt = false')
@@ -74,8 +132,16 @@ describe('admin-users edge function security posture', () => {
     expect(edgeFunction).toContain('stripStudentAcademicSnapshotData')
   })
 
-  it('actualiza student_records por workspace email y carrera para no duplicar alumnos existentes', () => {
-    const persistStudentRecordBody = edgeFunction.match(/async function persistStudentRecord[\s\S]*?\n}\n\nasync function persistStudentCareerPlan/)?.[0] ?? ''
+  it.each([
+    ['LF', '\n'],
+    ['CRLF', '\r\n'],
+  ])('actualiza student_records por workspace email y carrera sin duplicados con finales %s', (_format, lineEnding) => {
+    const source = edgeFunction.replace(/\r?\n/g, lineEnding)
+    // Git puede entregar CRLF o LF; conservar el contenido y normalizar solo los saltos.
+    const normalizedSource = source.replace(/\r\n/g, '\n')
+    const persistStudentRecordMatch = normalizedSource.match(/async function persistStudentRecord[\s\S]*?\n}\n\nasync function persistStudentCareerPlan/)
+    expect(persistStudentRecordMatch, 'Debe encontrarse el cuerpo de persistStudentRecord').not.toBeNull()
+    const persistStudentRecordBody = persistStudentRecordMatch[0]
 
     expect(persistStudentRecordBody).toContain("const workspaceKey = 'main'")
     expect(persistStudentRecordBody).toContain("const career = getOptionalString(student.carrera ?? student.career)")

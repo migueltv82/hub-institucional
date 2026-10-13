@@ -101,10 +101,10 @@ La suite actual cubre motor, parseo, hooks criticos, persistencia, archivos fuen
 
 ## `supabase/`
 
-- `setup_multi_tenant/`: SQL principal para tablas, RLS, RPCs, indices y seeds.
+- `schema/`: SQL fuente de verdad para tablas, RLS, RPCs, indices y seeds del esquema actual.
 - `functions/admin-users/`: Edge Function que usa `service_role` del lado servidor.
-- `security/`: pruebas negativas de RLS, RPCs y Storage.
-- `docs/`: documentacion operativa de despliegue.
+- `security/`: diagnosticos y pruebas negativas disponibles; la matriz integral RLS/Storage sigue pendiente.
+- `docs/`: documentacion operativa, verificaciones y reparaciones revisables.
 - `config/`: configuracion local de funciones Supabase.
 
 Los archivos fuente del workspace se guardan en el bucket privado `workspace-source-files`;

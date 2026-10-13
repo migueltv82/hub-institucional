@@ -51,6 +51,7 @@ function AuthProbe() {
       <p data-testid="loading">{String(isLoading)}</p>
       <p data-testid="authenticated">{String(isAuthenticated)}</p>
       <p data-testid="superadmin">{String(isSuperAdmin)}</p>
+      <p data-testid="role">{user?.accountRole ?? 'none'}</p>
       <p data-testid="email">{user?.email ?? 'none'}</p>
       <p data-testid="institution">{activeInstitution?.name ?? 'none'}</p>
     </div>
@@ -119,7 +120,9 @@ describe('AuthContext', () => {
         user: {
           id: 'user-1',
           email: 'superadmin@example.com',
-          user_metadata: {},
+          user_metadata: {
+            account_role: 'superadmin',
+          },
         },
       })
     })
@@ -127,6 +130,7 @@ describe('AuthContext', () => {
     expect(screen.getByTestId('loading')).toHaveTextContent('true')
     expect(screen.getByTestId('authenticated')).toHaveTextContent('true')
     expect(screen.getByTestId('superadmin')).toHaveTextContent('false')
+    expect(screen.getByTestId('role')).toHaveTextContent('alumno')
 
     await act(async () => {
       resolveProfile({

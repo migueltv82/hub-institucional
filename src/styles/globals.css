@@ -3158,6 +3158,8 @@ html[data-theme="dark"] .bg-fuchsia-100 {
 }
 
 html[data-theme="dark"] .bg-teal-50,
+html[data-theme="dark"] .bg-teal-50\/20,
+html[data-theme="dark"] .bg-teal-50\/50,
 html[data-theme="dark"] .bg-teal-50\/70,
 html[data-theme="dark"] .bg-teal-50\/80,
 html[data-theme="dark"] .bg-teal-50\/90,

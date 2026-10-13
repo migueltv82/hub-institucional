@@ -188,13 +188,32 @@ alter table public.deleted_person_records
 
 -- ============================================================
 -- Alta automatica de perfil al crear un usuario de Auth
+--
+-- HISTÓRICO / SUPERADO: Hardening 02.3 — PREPARADO, NO APLICADO remotamente.
+-- Ese texto describe la etapa previa. Este SQL forma parte del baseline
+-- canónico certificado: local descartable PASS y Staging aplicado/verificado.
+-- Evidencia: ../baseline/LOCAL_AB_RLS_RPC_RESULT.md y STAGING_BASELINE_RESULT.md.
+-- Esta nota no autoriza reaplicar SQL ni modificar Production.
+-- Objetivo: impedir que metadata controlable por cliente
+-- (raw_user_meta_data.account_role) sea fuente de autoridad para
+-- public.profiles.account_role.
+-- Precondiciones: revisar en staging que el provisioning legitimo pase por
+-- admin-users/Auth Admin API o por un administrador que escriba perfiles.
+-- Riesgo: si un alta legitima dependia exclusivamente de user_metadata para
+-- asignar rol inicial, quedara como alumno hasta que el flujo admin escriba
+-- public.profiles.
+-- Post-check: crear usuario sin metadata privilegiada, intentar metadata
+-- manipulada, crear alumno/docente/admin via admin-users y verificar perfil,
+-- memberships y login.
+-- Rollback conceptual: restaurar esta funcion desde la version anterior del
+-- archivo y repetir el post-check en staging antes de cualquier produccion.
 -- ============================================================
 
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = ''
 as $$
 begin
   insert into public.profiles (
@@ -209,7 +228,7 @@ begin
     new.id,
     lower(new.email),
     coalesce(new.raw_user_meta_data ->> 'nombre', new.raw_user_meta_data ->> 'full_name', new.email),
-    coalesce(new.raw_user_meta_data ->> 'account_role', 'admin_instituto'),
+    coalesce(new.raw_app_meta_data ->> 'account_role', 'alumno'),
     coalesce((new.raw_app_meta_data ->> 'is_global_admin')::boolean, false),
     false
   )
@@ -322,6 +341,87 @@ $$;
 
 revoke execute on function public.get_public_app_status() from public;
 grant execute on function public.get_public_app_status() to anon, authenticated;
+
+-- ============================================================
+-- Transicion academica global
+--
+-- Lee la configuracion privada de app_settings y expone solo el DTO minimo
+-- requerido por el portal alumno. La fila fuente no es publica
+-- (academic_relational_transition se mantiene con is_public = false), por eso
+-- esta funcion necesita SECURITY DEFINER. La defensa interna con auth.uid()
+-- evita exponerla a llamadas anonimas aunque un grant futuro quede mal.
+-- ============================================================
+
+create or replace function public.get_academic_transition_config()
+returns table (
+  stage text,
+  write_mode text,
+  read_mode text,
+  dual_write_enabled boolean,
+  hybrid_read_enabled boolean,
+  relational_primary_enabled boolean,
+  snapshot_fallback_enabled boolean,
+  snapshot_write_compat_enabled boolean,
+  strict_drift_block_enabled boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  config_value jsonb := '{}'::jsonb;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'AUTH_REQUIRED'
+      using errcode = '42501';
+  end if;
+
+  select
+    case
+      when jsonb_typeof(setting.value) = 'object' then setting.value
+      else '{}'::jsonb
+    end
+  into config_value
+  from public.app_settings setting
+  where setting.key = 'academic_relational_transition'
+  limit 1;
+
+  config_value := coalesce(config_value, '{}'::jsonb);
+
+  stage := case
+    when config_value ->> 'stage' in (
+      'snapshot_only',
+      'dual_write',
+      'hybrid_read',
+      'relational_primary_with_snapshot_fallback'
+    ) then config_value ->> 'stage'
+    else 'snapshot_only'
+  end;
+
+  write_mode := case
+    when config_value ->> 'write_mode' in ('snapshot_only', 'dual_write') then config_value ->> 'write_mode'
+    else 'snapshot_only'
+  end;
+
+  read_mode := case
+    when config_value ->> 'read_mode' in ('snapshot_only', 'hybrid_read', 'relational_primary') then config_value ->> 'read_mode'
+    else 'snapshot_only'
+  end;
+
+  dual_write_enabled := coalesce((config_value -> 'dual_write_enabled') = 'true'::jsonb, false);
+  hybrid_read_enabled := coalesce((config_value -> 'hybrid_read_enabled') = 'true'::jsonb, false);
+  relational_primary_enabled := coalesce((config_value -> 'relational_primary_enabled') = 'true'::jsonb, false);
+  snapshot_fallback_enabled := coalesce((config_value -> 'snapshot_fallback_enabled') <> 'false'::jsonb, true);
+  snapshot_write_compat_enabled := coalesce((config_value -> 'snapshot_write_compat_enabled') <> 'false'::jsonb, true);
+  strict_drift_block_enabled := coalesce((config_value -> 'strict_drift_block_enabled') = 'true'::jsonb, false);
+
+  return next;
+end;
+$$;
+
+revoke execute on function public.get_academic_transition_config() from public, anon, authenticated;
+grant execute on function public.get_academic_transition_config() to authenticated;
 
 create or replace function public.list_active_login_institutions()
 returns table (
@@ -1004,8 +1104,7 @@ begin
 
     update auth.users
     set
-      raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"is_global_admin": true}'::jsonb,
-      raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || '{"account_role": "superadmin"}'::jsonb
+      raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"is_global_admin": true, "account_role": "superadmin"}'::jsonb
     where id = target_user_id;
   end if;
 end $$;

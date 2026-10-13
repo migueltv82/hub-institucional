@@ -1,5 +1,4 @@
 import { isSupabaseConfigured, supabase } from '../../../lib/supabase.js'
-import { reconcileExpiredExamConfirmations } from '../../../services/examTeacherAssignments.js'
 
 function clean(value) {
   return String(value ?? '').trim()
@@ -13,17 +12,6 @@ function canUseRemoteExamAssignments({ institutionId }) {
   return Boolean(institutionId && isSupabaseConfigured && supabase)
 }
 
-function isMissingReassignmentColumns(error) {
-  const message = `${error?.message ?? ''} ${error?.details ?? ''}`.toLowerCase()
-  return error?.code === '42703' || error?.code === 'PGRST204' || (
-    message.includes('objection_deadline') ||
-    message.includes('requested_exam_table_id') ||
-    message.includes('requested_role') ||
-    message.includes('requested_date') ||
-    message.includes('reassignment_status')
-  )
-}
-
 function buildTeacherAssignmentsQuery({ institutionId, workspaceKey, teacherUserId, select }) {
   return supabase
     .from('exam_teacher_assignments')
@@ -35,36 +23,17 @@ function buildTeacherAssignmentsQuery({ institutionId, workspaceKey, teacherUser
     .order('created_at', { ascending: false })
 }
 
-// Mesas de examen publicadas para revision del docente autenticado (ver
-// 13_exam_teacher_assignment_confirmation.sql). Solo trae las suyas: RLS
-// filtra por teacher_id = auth.uid() ademas del filtro explicito de acá.
+// Lectura canonica de asignaciones propias, sin mutaciones.
+// La reconciliacion legacy queda pendiente de un contrato canonico separado.
 export async function fetchTeacherExamAssignments({ institutionId, workspaceKey = 'main', teacherUserId }) {
   if (!canUseRemoteExamAssignments({ institutionId }) || !clean(teacherUserId)) return []
 
-  const reconciliation = await reconcileExpiredExamConfirmations({ institutionId, workspaceKey })
-  if (!reconciliation.success) {
-    console.warn('No se pudieron reconciliar vencimientos de mesas docentes.', reconciliation.error)
-  }
-
-  let { data, error } = await buildTeacherAssignmentsQuery({
+  const { data, error } = await buildTeacherAssignmentsQuery({
     institutionId,
     workspaceKey,
     teacherUserId,
-    select: 'id, exam_table_id, role, confirmation_status, teacher_notes, confirmed_at, objection_deadline, requested_exam_table_id, requested_role, requested_date, reassignment_status, metadata, created_at, updated_at',
+    select: 'id, institution_id, workspace_key, exam_table_id, exam_table_subject_id, teacher_record_id, teacher_id, role, status, confirmation_status, objection_reason, objection_deadline, confirmed_at, objected_at, reset_at, metadata, created_at, updated_at',
   })
-
-  // Compatibilidad durante el intervalo entre desplegar el frontend y aplicar
-  // la migracion. Una columna nueva ausente no debe ocultar mesas ya publicadas.
-  if (isMissingReassignmentColumns(error)) {
-    const legacyResult = await buildTeacherAssignmentsQuery({
-      institutionId,
-      workspaceKey,
-      teacherUserId,
-      select: 'id, exam_table_id, role, confirmation_status, teacher_notes, confirmed_at, metadata, created_at, updated_at',
-    })
-    data = legacyResult.data
-    error = legacyResult.error
-  }
 
   if (error) {
     console.warn('No se pudieron leer las mesas asignadas al docente.', error)

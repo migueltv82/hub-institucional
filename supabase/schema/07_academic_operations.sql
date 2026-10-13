@@ -408,8 +408,21 @@ begin
   end if;
 end $$;
 
+-- El legajo de una inscripcion pertenece al mismo tenant y workspace.
+create unique index if not exists student_records_tenant_workspace_id_key
+  on public.student_records (institution_id, workspace_key, id);
+create unique index if not exists subject_enrollments_tenant_workspace_id_key
+  on public.subject_enrollments (institution_id, workspace_key, id);
+
 do $$
 begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.subject_enrollments'::regclass and conname = 'subject_enrollments_student_record_scope_fkey') then
+    alter table public.subject_enrollments
+      add constraint subject_enrollments_student_record_scope_fkey
+      foreign key (institution_id, workspace_key, student_record_id)
+      references public.student_records (institution_id, workspace_key, id)
+      on delete set null (student_record_id);
+  end if;
   if not exists (select 1 from pg_constraint where conrelid = 'public.subject_enrollments'::regclass and conname = 'subject_enrollments_student_id_fkey') then
     alter table public.subject_enrollments add constraint subject_enrollments_student_id_fkey foreign key (student_id) references public.profiles(user_id) on delete cascade;
   end if;
@@ -419,8 +432,22 @@ begin
   if not exists (select 1 from pg_constraint where conrelid = 'public.student_grades'::regclass and conname = 'student_grades_subject_enrollment_id_fkey') then
     alter table public.student_grades add constraint student_grades_subject_enrollment_id_fkey foreign key (subject_enrollment_id) references public.subject_enrollments(id) on delete set null;
   end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.student_grades'::regclass and conname = 'student_grades_subject_enrollment_scope_fkey') then
+    alter table public.student_grades
+      add constraint student_grades_subject_enrollment_scope_fkey
+      foreign key (institution_id, workspace_key, subject_enrollment_id)
+      references public.subject_enrollments (institution_id, workspace_key, id)
+      on delete set null (subject_enrollment_id);
+  end if;
   if not exists (select 1 from pg_constraint where conrelid = 'public.subject_attendance_records'::regclass and conname = 'subject_attendance_records_session_id_fkey') then
     alter table public.subject_attendance_records add constraint subject_attendance_records_session_id_fkey foreign key (session_id) references public.subject_class_sessions(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.subject_attendance_records'::regclass and conname = 'subject_attendance_records_enrollment_scope_fkey') then
+    alter table public.subject_attendance_records
+      add constraint subject_attendance_records_enrollment_scope_fkey
+      foreign key (institution_id, workspace_key, subject_enrollment_id)
+      references public.subject_enrollments (institution_id, workspace_key, id)
+      on delete set null (subject_enrollment_id);
   end if;
 end $$;
 
@@ -538,6 +565,7 @@ as $$
         and assignment.subject_id = p_subject_id
         and assignment.program_id = coalesce(p_program_id, '')
         and assignment.teacher_id = (select auth.uid())
+        and public.is_member_of_institution(p_institution_id)
         and assignment.status = 'active'
         and assignment.deleted_at is null
         and assignment.role in ('titular', 'suplente')
@@ -560,6 +588,17 @@ as $$
   select enrollment.id
   from public.subject_enrollments enrollment
   where enrollment.institution_id = p_institution_id
+    and (select auth.uid()) is not null
+    and public.is_member_of_institution(p_institution_id)
+    and (
+      enrollment.student_id = (select auth.uid())
+      or public.academic_can_manage_subject(
+        p_institution_id,
+        coalesce(nullif(btrim(p_workspace_key), ''), 'main'),
+        p_subject_id,
+        coalesce(p_program_id, '')
+      )
+    )
     and enrollment.workspace_key = coalesce(nullif(btrim(p_workspace_key), ''), 'main')
     and enrollment.student_id = p_student_id
     and enrollment.subject_id = p_subject_id
@@ -591,6 +630,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
+  authenticated_user_id uuid := (select auth.uid());
   clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
   clean_program_id text := coalesce(target_program_id, '');
   clean_status text := lower(btrim(coalesce(target_status, 'active')));
@@ -600,7 +640,10 @@ begin
     raise exception 'Faltan datos para inscribir al alumno.';
   end if;
 
-  if actor_user_id <> target_student_id then
+  if authenticated_user_id is null
+    or authenticated_user_id <> actor_user_id
+    or actor_user_id <> target_student_id
+  then
     raise exception 'ACADEMIC_COMMAND_FORBIDDEN';
   end if;
 
@@ -766,6 +809,25 @@ begin
     public.academic_resolve_subject_enrollment(p_institution_id, clean_workspace_key, p_student_id, btrim(p_subject_id), clean_program_id)
   );
 
+  -- Un UUID recibido no evita la validacion canonica de la inscripcion.
+  -- El bloqueo compartido estabiliza su contexto hasta finalizar la escritura.
+  select enrollment.id
+  into resolved_enrollment_id
+  from public.subject_enrollments enrollment
+  where enrollment.id = resolved_enrollment_id
+    and enrollment.institution_id = p_institution_id
+    and enrollment.workspace_key = clean_workspace_key
+    and enrollment.student_id = p_student_id
+    and enrollment.subject_id = btrim(p_subject_id)
+    and enrollment.program_id = clean_program_id
+    and enrollment.status in ('active', 'enrolled')
+    and enrollment.deleted_at is null
+    and (
+      p_student_record_id is null
+      or enrollment.student_record_id = p_student_record_id
+    )
+  for share;
+
   if resolved_enrollment_id is null then
     raise exception 'STUDENT_SUBJECT_ENROLLMENT_NOT_FOUND';
   end if;
@@ -858,7 +920,8 @@ begin
   select *
   into session_row
   from public.subject_class_sessions session
-  where session.id = p_session_id;
+  where session.id = p_session_id
+  for share;
 
   if session_row.id is null then
     raise exception 'SUBJECT_CLASS_SESSION_NOT_FOUND';
@@ -888,6 +951,20 @@ begin
         session_row.program_id
       )
     );
+
+    -- El UUID recibido debe resolver en el contexto exacto de la clase.
+    select enrollment.id
+    into record_subject_enrollment_id
+    from public.subject_enrollments enrollment
+    where enrollment.id = record_subject_enrollment_id
+      and enrollment.institution_id = session_row.institution_id
+      and enrollment.workspace_key = session_row.workspace_key
+      and enrollment.student_id = record_student_id
+      and enrollment.subject_id = session_row.subject_id
+      and enrollment.program_id = session_row.program_id
+      and enrollment.status in ('active', 'enrolled')
+      and enrollment.deleted_at is null
+    for share;
 
     if record_subject_enrollment_id is null then
       raise exception 'STUDENT_SUBJECT_ENROLLMENT_NOT_FOUND';
@@ -955,6 +1032,8 @@ as $$
     from public.subject_teacher_assignments assignment
     cross join context
     where assignment.institution_id = p_institution_id
+      and context.actor_id is not null
+      and public.is_member_of_institution(p_institution_id)
       and assignment.workspace_key = context.workspace_key
       and assignment.teacher_id = context.actor_id
       and assignment.status = 'active'
@@ -978,6 +1057,20 @@ as $$
       and enrollment.workspace_key = context.workspace_key
       and enrollment.status in ('active', 'enrolled')
       and enrollment.deleted_at is null
+      and exists (
+        select 1 from public.memberships student_membership
+        where student_membership.institution_id = enrollment.institution_id
+          and student_membership.user_id = enrollment.student_id
+      )
+      and (
+        enrollment.student_record_id is null
+        or exists (
+          select 1 from public.student_records linked_record
+          where linked_record.id = enrollment.student_record_id
+            and linked_record.institution_id = enrollment.institution_id
+            and linked_record.workspace_key = enrollment.workspace_key
+        )
+      )
     order by
       enrollment.student_id,
       enrollment.student_record_id,
@@ -1002,12 +1095,14 @@ as $$
     coalesce(nullif(btrim(student_record.email), ''), nullif(btrim(profile.email), '')) as email
   from active_enrollments enrollment
   left join public.student_records student_record
-    on student_record.id = enrollment.student_record_id
-    or (
-      student_record.profile_id is not null
-      and student_record.profile_id = enrollment.student_id
-      and student_record.institution_id = enrollment.institution_id
-      and student_record.workspace_key = enrollment.workspace_key
+    on student_record.institution_id = enrollment.institution_id
+    and student_record.workspace_key = enrollment.workspace_key
+    and (
+      student_record.id = enrollment.student_record_id
+      or (
+        student_record.profile_id is not null
+        and student_record.profile_id = enrollment.student_id
+      )
     )
   left join public.profiles profile
     on profile.user_id = enrollment.student_id
@@ -1042,6 +1137,8 @@ as $$
     from public.subject_enrollments enrollment
     cross join context
     where enrollment.institution_id = p_institution_id
+      and context.actor_id is not null
+      and public.is_member_of_institution(p_institution_id)
       and enrollment.workspace_key = context.workspace_key
       and enrollment.student_id = context.actor_id
       and enrollment.status in ('active', 'enrolled')
@@ -1060,6 +1157,20 @@ as $$
       and leave_assignment.status = 'active'
       and leave_assignment.deleted_at is null
       and leave_assignment.role = 'licencia'
+      and exists (
+        select 1 from public.memberships teacher_membership
+        where teacher_membership.institution_id = leave_assignment.institution_id
+          and teacher_membership.user_id = leave_assignment.teacher_id
+      )
+      and (
+        leave_assignment.teacher_record_id is null
+        or exists (
+          select 1 from public.teacher_records linked_record
+          where linked_record.id = leave_assignment.teacher_record_id
+            and linked_record.institution_id = leave_assignment.institution_id
+            and linked_record.workspace_key = leave_assignment.workspace_key
+        )
+      )
       and (
         nullif(leave_assignment.metadata ->> 'leave_starts_on', '') is null
         or (leave_assignment.metadata ->> 'leave_starts_on')::date <= context.today
@@ -1093,27 +1204,45 @@ as $$
    and replacement_assignment.status = 'active'
    and replacement_assignment.deleted_at is null
    and replacement_assignment.role = 'suplente'
+   and exists (
+     select 1 from public.memberships teacher_membership
+     where teacher_membership.institution_id = replacement_assignment.institution_id
+       and teacher_membership.user_id = replacement_assignment.teacher_id
+   )
+   and (
+     replacement_assignment.teacher_record_id is null
+     or exists (
+       select 1 from public.teacher_records linked_record
+       where linked_record.id = replacement_assignment.teacher_record_id
+         and linked_record.institution_id = replacement_assignment.institution_id
+         and linked_record.workspace_key = replacement_assignment.workspace_key
+     )
+   )
    and (
       replacement_assignment.metadata ->> 'leave_parent_assignment_id' = leave_assignment.id::text
       or replacement_assignment.teacher_id::text = leave_assignment.metadata ->> 'replacement_teacher_id'
    )
   left join public.teacher_records leave_teacher
-    on leave_teacher.id = leave_assignment.teacher_record_id
-    or (
-      leave_teacher.profile_id is not null
-      and leave_teacher.profile_id = leave_assignment.teacher_id
-      and leave_teacher.institution_id = leave_assignment.institution_id
-      and leave_teacher.workspace_key = leave_assignment.workspace_key
+    on leave_teacher.institution_id = leave_assignment.institution_id
+    and leave_teacher.workspace_key = leave_assignment.workspace_key
+    and (
+      leave_teacher.id = leave_assignment.teacher_record_id
+      or (
+        leave_teacher.profile_id is not null
+        and leave_teacher.profile_id = leave_assignment.teacher_id
+      )
     )
   left join public.profiles leave_profile
     on leave_profile.user_id = leave_assignment.teacher_id
   left join public.teacher_records replacement_teacher
-    on replacement_teacher.id = replacement_assignment.teacher_record_id
-    or (
-      replacement_teacher.profile_id is not null
-      and replacement_teacher.profile_id = replacement_assignment.teacher_id
-      and replacement_teacher.institution_id = replacement_assignment.institution_id
-      and replacement_teacher.workspace_key = replacement_assignment.workspace_key
+    on replacement_teacher.institution_id = replacement_assignment.institution_id
+    and replacement_teacher.workspace_key = replacement_assignment.workspace_key
+    and (
+      replacement_teacher.id = replacement_assignment.teacher_record_id
+      or (
+        replacement_teacher.profile_id is not null
+        and replacement_teacher.profile_id = replacement_assignment.teacher_id
+      )
     )
   left join public.profiles replacement_profile
     on replacement_profile.user_id = replacement_assignment.teacher_id
@@ -1166,6 +1295,8 @@ as $$
   from public.student_grades grade
   cross join context
   where grade.institution_id = p_institution_id
+    and context.actor_id is not null
+    and public.is_member_of_institution(p_institution_id)
     and grade.workspace_key = context.workspace_key
     and grade.deleted_at is null
     and (

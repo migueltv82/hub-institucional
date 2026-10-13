@@ -1,341 +1,77 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
-
-const TABLE_NAME = 'workspace_source_files'
-const SOURCE_FILES_BUCKET = 'workspace-source-files'
-const DEBUG_SOURCE_FILES = import.meta.env.DEV
-
-function logSourceFilesDiagnostic(level, event, details = {}) {
-  if (!DEBUG_SOURCE_FILES) return
-
-  const logger = level === 'warn' ? console.warn : console.info
-  logger(`[source-files] ${event}`, details)
-}
-
-function getFileDiagnostic(file) {
-  return {
-    extension: file?.name?.split('.').pop()?.toLowerCase() ?? '',
-    size: file?.size ?? null,
-    type: file?.type || '',
-  }
-}
-
-function createMemoryResult() {
-  return { source: 'local' }
-}
-
-function canUseRemoteFiles({ institutionId, useRemote }) {
-  return Boolean(useRemote && institutionId && isSupabaseConfigured && supabase)
-}
+import { SOURCE_FILES_BUCKET, assertSourceFileStoragePath, assertLegacySourceFileReadPath, getSourceFileStorageUserId, sanitizeSourceFileName, canonicalStorageUuid, canonicalStorageSegment, SOURCE_FILE_DATASETS } from './sourceFileStoragePath.js'
+import { getSourceFileResource, invokeSourceFileStorage, removeSourceFileViaGateway } from './sourceFileStorageGateway.js'
 
 function assertRemoteFileContext({ institutionId, useRemote }) {
   if (!useRemote) return
-
-  if (!institutionId) {
-    throw new Error('No hay una institucion activa. Selecciona una institucion antes de cargar archivos.')
-  }
-
-  if (!isSupabaseConfigured || !supabase) {
-    throw new Error('Supabase no esta configurado. No se puede guardar el archivo fuente de forma remota.')
-  }
-}
-
-function sanitizePathSegment(value) {
-  return String(value ?? '')
-    .trim()
-    .replace(/\\/g, '/')
-    .split('/')
-    .filter(Boolean)
-    .join('-')
-    .replace(/[^a-zA-Z0-9._-]/g, '-')
-}
-
-function buildStoragePath({ institutionId, workspaceKey, datasetKey, fileName }) {
-  return [
-    institutionId,
-    sanitizePathSegment(workspaceKey || 'main'),
-    sanitizePathSegment(datasetKey),
-    `${Date.now()}-${sanitizePathSegment(fileName)}`,
-  ].join('/')
-}
-
-function getMimeType(file) {
-  return file.type || 'application/octet-stream'
+  if (!institutionId) throw new Error('No hay una institucion activa. Selecciona una institucion antes de cargar archivos.')
+  if (!isSupabaseConfigured || !supabase) throw new Error('Supabase no esta configurado. No se puede guardar el archivo fuente de forma remota.')
 }
 
 export async function saveSourceFile({ institutionId, workspaceKey, datasetKey, file, useRemote }) {
-  if (!canUseRemoteFiles({ institutionId, useRemote })) {
+  assertRemoteFileContext({ institutionId, useRemote })
+  if (!useRemote) return { source: 'local' }
+  const filename = sanitizeSourceFileName(file.name)
+  const resource = await getSourceFileResource({ institutionId, workspaceKey, datasetKey })
+  const userId = await getSourceFileStorageUserId(supabase)
+  await invokeSourceFileStorage({ action: 'recover', ...resource })
+  const prepared = await invokeSourceFileStorage({ action: 'prepare', ...resource, filename, mime_type: file.type || 'application/octet-stream', file_size: file.size })
+  let uploaded = false
+  try {
+    canonicalStorageUuid(prepared.operation_id)
+    assertSourceFileStoragePath({ institutionId, userId, workspaceKey, datasetKey, storageBucket: SOURCE_FILES_BUCKET, storagePath: prepared.path })
+    if (prepared.path.split('/').at(-1) !== prepared.operation_id) throw new Error('Respuesta de carga invalida.')
+    if (typeof prepared.token !== 'string' || !prepared.token) throw new Error('Respuesta de carga invalida.')
+    const { error } = await supabase.storage.from(SOURCE_FILES_BUCKET).uploadToSignedUrl(prepared.path, prepared.token, file, { contentType: file.type || 'application/octet-stream', cacheControl: '31536000' })
+    if (error) throw new Error('No se pudo cargar el archivo fuente.')
+    uploaded = true
+  } catch (error) {
     try {
-      assertRemoteFileContext({ institutionId, useRemote })
-    } catch (error) {
-      logSourceFilesDiagnostic('warn', 'save:context-error', {
-        datasetKey,
-        destination: TABLE_NAME,
-        hasInstitutionId: Boolean(institutionId),
-        useRemote,
-        workspaceKey,
-        errorMessage: error.message,
-      })
-      throw error
+      await invokeSourceFileStorage({ action: 'cancel', ...resource, operation_id: prepared.operation_id })
+    } catch {
+      throw new Error('La carga fallo y su limpieza requiere reintento desde el gateway.')
     }
-
-    logSourceFilesDiagnostic('info', 'save:local-memory', {
-      datasetKey,
-      destination: 'memory',
-      hasInstitutionId: Boolean(institutionId),
-      persisted: false,
-      useRemote,
-      workspaceKey,
-      file: getFileDiagnostic(file),
-    })
-    return createMemoryResult()
-  }
-
-  const { data: existingFile, error: lookupError } = await supabase
-    .from(TABLE_NAME)
-    .select('storage_bucket, storage_path')
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-    .eq('dataset_key', datasetKey)
-    .maybeSingle()
-
-  if (lookupError) {
-    logSourceFilesDiagnostic('warn', 'save:lookup-error', {
-      datasetKey,
-      destination: TABLE_NAME,
-      hasInstitutionId: Boolean(institutionId),
-      useRemote,
-      workspaceKey,
-      errorMessage: lookupError.message,
-    })
-    throw lookupError
-  }
-
-  const storagePath = buildStoragePath({
-    institutionId,
-    workspaceKey,
-    datasetKey,
-    fileName: file.name,
-  })
-
-  const { error: uploadError } = await supabase.storage
-    .from(SOURCE_FILES_BUCKET)
-    .upload(storagePath, file, {
-      cacheControl: '31536000',
-      contentType: getMimeType(file),
-      upsert: true,
-    })
-
-  if (uploadError) {
-    logSourceFilesDiagnostic('warn', 'save:storage-upload-error', {
-      bucket: SOURCE_FILES_BUCKET,
-      datasetKey,
-      destination: 'storage',
-      hasInstitutionId: Boolean(institutionId),
-      useRemote,
-      workspaceKey,
-      errorMessage: uploadError.message,
-      file: getFileDiagnostic(file),
-    })
-    throw new Error(`No se pudo guardar el archivo fuente en Supabase Storage. Revisa que exista el bucket ${SOURCE_FILES_BUCKET} y sus politicas RLS. Detalle: ${uploadError.message}`)
-  }
-
-  if (existingFile?.storage_path && existingFile.storage_path !== storagePath) {
-    const bucket = existingFile.storage_bucket || SOURCE_FILES_BUCKET
-    const { error: cleanupError } = await supabase.storage
-      .from(bucket)
-      .remove([existingFile.storage_path])
-
-    if (cleanupError) {
-      await supabase.storage.from(SOURCE_FILES_BUCKET).remove([storagePath])
-      logSourceFilesDiagnostic('warn', 'save:storage-cleanup-error', {
-        bucket,
-        datasetKey,
-        destination: 'storage',
-        hasInstitutionId: Boolean(institutionId),
-        useRemote,
-        workspaceKey,
-        errorMessage: cleanupError.message,
-      })
-      throw new Error(`No se pudo reemplazar el archivo fuente anterior en Supabase Storage. Detalle: ${cleanupError.message}`)
-    }
-  }
-
-  const { error } = await supabase.from(TABLE_NAME).upsert({
-    institution_id: institutionId,
-    workspace_key: workspaceKey,
-    dataset_key: datasetKey,
-    file_name: file.name,
-    mime_type: getMimeType(file),
-    file_extension: file.name.split('.').pop()?.toLowerCase() ?? '',
-    file_size: file.size ?? null,
-    storage_bucket: SOURCE_FILES_BUCKET,
-    storage_path: storagePath,
-    file_base64: null,
-    updated_at: new Date().toISOString(),
-  })
-
-  if (error) {
-    await supabase.storage.from(SOURCE_FILES_BUCKET).remove([storagePath])
-    logSourceFilesDiagnostic('warn', 'save:metadata-error', {
-      bucket: SOURCE_FILES_BUCKET,
-      datasetKey,
-      destination: TABLE_NAME,
-      hasInstitutionId: Boolean(institutionId),
-      useRemote,
-      workspaceKey,
-      errorMessage: error.message,
-      file: getFileDiagnostic(file),
-    })
     throw error
   }
-
-  logSourceFilesDiagnostic('info', 'save:ok', {
-    bucket: SOURCE_FILES_BUCKET,
-    datasetKey,
-    destination: TABLE_NAME,
-    hasInstitutionId: Boolean(institutionId),
-    source: 'supabase',
-    useRemote,
-    workspaceKey,
-    file: getFileDiagnostic(file),
-  })
-
-  return { source: 'supabase' }
+  // A commit timeout is ambiguous: never cancel an upload that may be live.
+  const committed = await invokeSourceFileStorage({ action: 'commit', ...resource, operation_id: prepared.operation_id })
+  if (!uploaded || committed.success !== true) throw new Error('La confirmacion de la carga requiere reintento.')
+  return { source: 'supabase', ...(committed.cleanup_pending ? { cleanupPending: true } : {}) }
 }
 
 export async function deleteSourceFile({ institutionId, workspaceKey, datasetKey, useRemote }) {
-  if (!canUseRemoteFiles({ institutionId, useRemote })) {
-    try {
-      assertRemoteFileContext({ institutionId, useRemote })
-    } catch (error) {
-      logSourceFilesDiagnostic('warn', 'delete:context-error', {
-        datasetKey,
-        destination: TABLE_NAME,
-        hasInstitutionId: Boolean(institutionId),
-        useRemote,
-        workspaceKey,
-        errorMessage: error.message,
-      })
-      throw error
-    }
-
-    logSourceFilesDiagnostic('info', 'delete:local-memory', {
-      datasetKey,
-      destination: 'memory',
-      hasInstitutionId: Boolean(institutionId),
-      persisted: false,
-      useRemote,
-      workspaceKey,
-    })
-    return createMemoryResult()
-  }
-
-  const { data: existingFile, error: lookupError } = await supabase
-    .from(TABLE_NAME)
-    .select('storage_bucket, storage_path')
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-    .eq('dataset_key', datasetKey)
-    .maybeSingle()
-
-  if (lookupError) {
-    logSourceFilesDiagnostic('warn', 'delete:lookup-error', {
-      datasetKey,
-      destination: TABLE_NAME,
-      hasInstitutionId: Boolean(institutionId),
-      useRemote,
-      workspaceKey,
-      errorMessage: lookupError.message,
-    })
-    throw lookupError
-  }
-
-  if (existingFile?.storage_path) {
-    const bucket = existingFile.storage_bucket || SOURCE_FILES_BUCKET
-    const { error: storageError } = await supabase.storage
-      .from(bucket)
-      .remove([existingFile.storage_path])
-
-    if (storageError) {
-      logSourceFilesDiagnostic('warn', 'delete:storage-error', {
-        bucket,
-        datasetKey,
-        destination: 'storage',
-        hasInstitutionId: Boolean(institutionId),
-        useRemote,
-        workspaceKey,
-        errorMessage: storageError.message,
-      })
-      throw storageError
-    }
-  }
-
-  const { error } = await supabase
-    .from(TABLE_NAME)
-    .delete()
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-    .eq('dataset_key', datasetKey)
-
-  if (error) {
-    logSourceFilesDiagnostic('warn', 'delete:metadata-error', {
-      datasetKey,
-      destination: TABLE_NAME,
-      hasInstitutionId: Boolean(institutionId),
-      useRemote,
-      workspaceKey,
-      errorMessage: error.message,
-    })
-    throw error
-  }
-
-  logSourceFilesDiagnostic('info', 'delete:ok', {
-    datasetKey,
-    destination: TABLE_NAME,
-    hasInstitutionId: Boolean(institutionId),
-    source: 'supabase',
-    useRemote,
-    workspaceKey,
-  })
-
+  assertRemoteFileContext({ institutionId, useRemote })
+  if (!useRemote) return { source: 'local' }
+  const result = await removeSourceFileViaGateway({ institutionId, workspaceKey, datasetKey })
+  if (result.success !== true) throw new Error('No se pudo eliminar el archivo fuente.')
   return { source: 'supabase' }
+}
+
+function assertReadableManifest(file, { institutionId, workspaceKey, userId }) {
+  if (!SOURCE_FILE_DATASETS.includes(file.dataset_key) || file.storage_bucket !== SOURCE_FILES_BUCKET || typeof file.storage_path !== 'string') throw new Error('Ruta de Storage no autorizada.')
+  const segments = file.storage_path.split('/')
+  if (segments.length === 5) {
+    assertSourceFileStoragePath({ institutionId, workspaceKey, datasetKey: file.dataset_key, userId, storageBucket: file.storage_bucket, storagePath: file.storage_path })
+    return
+  }
+  // Read-only legacy format tenant/workspace/dataset/timestamp-basename.
+  assertLegacySourceFileReadPath({ institutionId, workspaceKey, datasetKey: file.dataset_key, storageBucket: file.storage_bucket, storagePath: file.storage_path })
 }
 
 export async function downloadSourceFiles({ institutionId, workspaceKey, useRemote }) {
   assertRemoteFileContext({ institutionId, useRemote })
-
-  if (!canUseRemoteFiles({ institutionId, useRemote })) {
-    throw new Error('Los archivos originales solo estan disponibles cuando el workspace esta sincronizado con Supabase.')
-  }
-
-  const { data: files, error: lookupError } = await supabase
-    .from(TABLE_NAME)
-    .select('dataset_key, file_name, storage_bucket, storage_path, updated_at')
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-    .order('updated_at', { ascending: true })
-
-  if (lookupError) throw lookupError
-
-  const storedFiles = Array.isArray(files) ? files : []
-  if (storedFiles.length === 0) {
-    throw new Error('No hay archivos originales almacenados para esta institucion.')
-  }
-
-  return Promise.all(storedFiles.map(async (file) => {
-    const bucket = file.storage_bucket || SOURCE_FILES_BUCKET
-    const { data: blob, error: downloadError } = await supabase.storage
-      .from(bucket)
-      .download(file.storage_path)
-
-    if (downloadError) {
-      throw new Error(`No se pudo descargar ${file.file_name || file.dataset_key}. ${downloadError.message}`)
-    }
-
-    return {
-      blob,
-      datasetKey: file.dataset_key,
-      fileName: file.file_name || `${file.dataset_key}.xlsx`,
-    }
+  if (!useRemote) throw new Error('Los archivos originales solo estan disponibles cuando el workspace esta sincronizado con Supabase.')
+  canonicalStorageUuid(institutionId)
+  canonicalStorageSegment(workspaceKey)
+  const userId = await getSourceFileStorageUserId(supabase)
+  const { data, error } = await supabase.from('workspace_source_files').select('dataset_key, file_name, storage_bucket, storage_path, updated_at').eq('institution_id', institutionId).eq('workspace_key', workspaceKey).order('updated_at', { ascending: true })
+  if (error) throw error
+  const files = Array.isArray(data) ? data : []
+  if (!files.length) throw new Error('No hay archivos originales almacenados para esta institucion.')
+  for (const file of files) assertReadableManifest(file, { institutionId, workspaceKey, userId })
+  return Promise.all(files.map(async (file) => {
+    const { data: blob, error: downloadError } = await supabase.storage.from(SOURCE_FILES_BUCKET).download(file.storage_path)
+    if (downloadError) throw new Error('No se pudo descargar el archivo fuente.')
+    return { blob, datasetKey: file.dataset_key, fileName: file.file_name || `${file.dataset_key}.xlsx` }
   }))
 }

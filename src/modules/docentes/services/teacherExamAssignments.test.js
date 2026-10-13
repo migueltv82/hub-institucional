@@ -41,18 +41,16 @@ afterEach(() => {
 
 describe('fetchTeacherExamAssignments', () => {
   it('carga las mesas publicadas para el docente autenticado', async () => {
-    const rows = [{ id: 'a1', exam_table_id: 'draft:mesa-1', role: 'VOCAL_1', confirmation_status: 'pending' }]
+    const rows = [{ id: '11111111-1111-4111-8111-111111111111', exam_table_id: '22222222-2222-4222-8222-222222222222', role: 'VOCAL_1', confirmation_status: 'objected', objection_reason: 'Conflicto de horario', objection_deadline: '2026-10-12T12:00:00Z', objected_at: '2026-10-10T12:00:00Z' }]
     const { fetchTeacherExamAssignments, from, rpc, queryBuilder } = await loadService({
       fromResult: { data: rows, error: null },
     })
 
     const result = await fetchTeacherExamAssignments({ institutionId: 'inst-1', teacherUserId: 'u1' })
 
-    expect(rpc).toHaveBeenCalledWith('academic_reconcile_expired_exam_confirmations', {
-      target_institution_id: 'inst-1',
-      target_workspace_key: 'main',
-      target_exam_table_id: '',
-    })
+    // Reconciliacion pendiente: leer no llama RPC ni cambia confirmaciones.
+    expect(rpc).not.toHaveBeenCalled()
+    expect(queryBuilder.select).toHaveBeenCalledWith('id, institution_id, workspace_key, exam_table_id, exam_table_subject_id, teacher_record_id, teacher_id, role, status, confirmation_status, objection_reason, objection_deadline, confirmed_at, objected_at, reset_at, metadata, created_at, updated_at')
     expect(from).toHaveBeenCalledWith('exam_teacher_assignments')
     expect(queryBuilder.eq).toHaveBeenCalledWith('institution_id', 'inst-1')
     expect(queryBuilder.eq).toHaveBeenCalledWith('workspace_key', 'main')
@@ -67,6 +65,23 @@ describe('fetchTeacherExamAssignments', () => {
     expect(await fetchTeacherExamAssignments({ teacherUserId: 'u1' })).toEqual([])
     expect(await fetchTeacherExamAssignments({ institutionId: 'inst-1' })).toEqual([])
     expect(from).not.toHaveBeenCalled()
+  })
+
+  it('no reintenta con columnas legacy cuando falla el contrato canonico', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const error = { code: '42703', message: 'column objection_reason does not exist' }
+      const { fetchTeacherExamAssignments, from, rpc, queryBuilder } = await loadService({
+        fromResult: { data: null, error },
+      })
+      expect(await fetchTeacherExamAssignments({ institutionId: 'inst-1', workspaceKey: 'teacher-workspace', teacherUserId: 'u1' })).toEqual([])
+      expect(queryBuilder.eq).toHaveBeenCalledWith('workspace_key', 'teacher-workspace')
+      expect(from).toHaveBeenCalledTimes(1)
+      expect(rpc).not.toHaveBeenCalled()
+      expect(warning).toHaveBeenCalledWith('No se pudieron leer las mesas asignadas al docente.', error)
+    } finally {
+      warning.mockRestore()
+    }
   })
 
   it('devuelve vacio y no lanza si Supabase responde error', async () => {
@@ -114,22 +129,6 @@ describe('confirmTeacherExamAssignment', () => {
 
     expect(rpc).not.toHaveBeenCalled()
     expect(result).toEqual({ success: false, error: 'Estado de confirmacion invalido.' })
-  })
-
-  it('recupera las mesas existentes si la migracion de reubicacion aun no fue aplicada', async () => {
-    const legacyRows = [{ id: 'a1', exam_table_id: 'mesa-1', confirmation_status: 'pending' }]
-    const { fetchTeacherExamAssignments, from, queryBuilders } = await loadService({
-      fromResults: [
-        { data: null, error: { code: '42703', message: 'column requested_exam_table_id does not exist' } },
-        { data: legacyRows, error: null },
-      ],
-    })
-
-    const result = await fetchTeacherExamAssignments({ institutionId: 'inst-1', teacherUserId: 'u1' })
-
-    expect(from).toHaveBeenCalledTimes(2)
-    expect(queryBuilders[1].select).toHaveBeenCalledWith(expect.not.stringContaining('requested_exam_table_id'))
-    expect(result).toEqual(legacyRows)
   })
 
   it('registra una objecion con solicitud de reubicacion mediante la RPC especifica', async () => {

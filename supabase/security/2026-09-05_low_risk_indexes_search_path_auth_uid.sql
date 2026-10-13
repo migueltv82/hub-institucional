@@ -214,13 +214,15 @@ select oid::regprocedure as function_signature, prosecdef as security_definer, p
 from pg_proc
 where oid = 'public.list_active_login_institutions()'::regprocedure;
 
--- LR-17. search_path seguro en handle_new_user(); no cambia logica ni trigger.
--- Rollback: recrear la funcion desde supabase/schema/01_foundation.sql.
+-- LR-17. Hardening seguro en handle_new_user(); evita que raw_user_meta_data
+-- controle roles privilegiados y fija search_path sin schemas mutables.
+-- Estado: PREPARADO — NO APLICADO por este repositorio.
+-- Rollback: recrear la funcion desde supabase/schema/01_foundation.sql de la version previa.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = ''
 as $$
 begin
   insert into public.profiles (
@@ -235,7 +237,7 @@ begin
     new.id,
     lower(new.email),
     coalesce(new.raw_user_meta_data ->> 'nombre', new.raw_user_meta_data ->> 'full_name', new.email),
-    coalesce(new.raw_user_meta_data ->> 'account_role', 'admin_instituto'),
+    coalesce(new.raw_app_meta_data ->> 'account_role', 'alumno'),
     coalesce((new.raw_app_meta_data ->> 'is_global_admin')::boolean, false),
     false
   )

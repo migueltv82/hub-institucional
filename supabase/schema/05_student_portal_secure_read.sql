@@ -355,18 +355,51 @@ begin
         from schedule_subject_matches
         where schedule_subject_matches.schedule_order = schedule_rows.schedule_order
       )
-      and not exists (
+      and exists (
         select 1
-        from public.exam_teacher_assignments assignment
-        where assignment.institution_id = target_institution_id
-          and assignment.workspace_key = normalized_workspace_key
-          and assignment.deleted_at is null
-          and assignment.status = 'active'
-          and assignment.confirmation_status <> 'confirmed'
-          and lower(coalesce(assignment.exam_table_id, '')) = regexp_replace(
+        from public.exam_tables mapped_table
+        where mapped_table.institution_id = target_institution_id
+          and mapped_table.workspace_key = normalized_workspace_key
+          and regexp_replace(
             regexp_replace(lower(coalesce(schedule_rows.mesa->>'id', '')), '^exam-engine-v21-', ''),
             '-[0-9]{4}-[0-9]{2}-[0-9]{2}$',
             ''
+          ) <> ''
+          and (
+            lower(mapped_table.id::text) = regexp_replace(
+              regexp_replace(lower(coalesce(schedule_rows.mesa->>'id', '')), '^exam-engine-v21-', ''),
+              '-[0-9]{4}-[0-9]{2}-[0-9]{2}$',
+              ''
+            )
+            or lower(mapped_table.legacy_exam_table_id) = regexp_replace(
+              regexp_replace(lower(coalesce(schedule_rows.mesa->>'id', '')), '^exam-engine-v21-', ''),
+              '-[0-9]{4}-[0-9]{2}-[0-9]{2}$',
+              ''
+            )
+          )
+      )
+      and not exists (
+        select 1
+        from public.exam_teacher_assignments assignment
+        join public.exam_tables exam_table
+          on exam_table.institution_id = assignment.institution_id
+         and exam_table.workspace_key = assignment.workspace_key
+         and exam_table.id = assignment.exam_table_id
+        where assignment.institution_id = target_institution_id
+          and assignment.workspace_key = normalized_workspace_key
+          and assignment.status = 'active'
+          and assignment.confirmation_status <> 'confirmed'
+          and (
+            lower(exam_table.id::text) = regexp_replace(
+              regexp_replace(lower(coalesce(schedule_rows.mesa->>'id', '')), '^exam-engine-v21-', ''),
+              '-[0-9]{4}-[0-9]{2}-[0-9]{2}$',
+              ''
+            )
+            or lower(exam_table.legacy_exam_table_id) = regexp_replace(
+              regexp_replace(lower(coalesce(schedule_rows.mesa->>'id', '')), '^exam-engine-v21-', ''),
+              '-[0-9]{4}-[0-9]{2}-[0-9]{2}$',
+              ''
+            )
           )
       )
   )
@@ -625,7 +658,7 @@ begin
         and exam_enrollment.workspace_key = normalized_workspace_key
         and exam_enrollment.student_id = caller_id
         and exam_enrollment.deleted_at is null
-        and exam_enrollment.status in ('active', 'enrolled')
+        and exam_enrollment.status = 'registered'
     ), '[]'::jsonb),
     'academicStatus', null,
     'uploadedFiles', jsonb_build_object(

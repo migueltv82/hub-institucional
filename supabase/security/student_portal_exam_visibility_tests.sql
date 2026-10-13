@@ -44,6 +44,7 @@ visible_exams as (
       exam_row->>'materia',
       exam_row->>'subject_id',
       exam_row->>'canonical_subject_id',
+
       exam_row->>'materia_id'
     )), '[^a-z0-9]+', ' ', 'g') as subject_search_text,
     regexp_replace(lower(coalesce(exam_row->>'carrera', '')), '[^a-z0-9]+', '', 'g') as career_key,

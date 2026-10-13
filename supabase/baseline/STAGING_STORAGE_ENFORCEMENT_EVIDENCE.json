@@ -1,0 +1,445 @@
+{
+  "date": "2026-10-05",
+  "project": {
+    "name": "Hub-Institucional-Staging",
+    "ref": "lzjpycejdjpzkdyzaeco"
+  },
+  "edge": {
+    "name": "source-file-storage",
+    "status": "ACTIVE",
+    "version": 1,
+    "bundle_sha256": "93f70fb1f77dc69e5a324ed7f92717f0900b224347428203a51930e47c91ecf1"
+  },
+  "migration": {
+    "name": "storage_source_file_gateway_enforcement_20261005",
+    "version": "20261005165348"
+  },
+  "approved_artifact_sha256": [
+    {
+      "name": "source-file-storage/index.ts",
+      "sha256": "f0d2fb073dfea2c1a2db928da1b39423302c5bcb5d3a7c26203a9115f39b9119"
+    },
+    {
+      "name": "source-file-storage/handler.js",
+      "sha256": "2fda392bb1b58abd9b88e230bc3686ed7f820691cc2322e868494dc0bf9a7e0a"
+    },
+    {
+      "name": "_shared/sourceFileStoragePath.js",
+      "sha256": "10ce58d4b3a73df89cbdf6fd24d008ef32b64eebb1033983be0b25512e05cd1a"
+    },
+    {
+      "name": "source_file_storage_gateway.sql",
+      "sha256": "8e4bca539c5f2b83100e38b387f98170cd8bec8f9d134447d4a1f9701bb30528"
+    }
+  ],
+  "remote_source_exact_match": true,
+  "matrix": [
+    {
+      "name": "gateway upload/read",
+      "pass": true
+    },
+    {
+      "name": "direct INSERT denied",
+      "pass": true,
+      "details": "new row violates row-level security policy"
+    },
+    {
+      "name": "direct UPDATE denied",
+      "pass": true,
+      "details": "new row violates row-level security policy"
+    },
+    {
+      "name": "direct DELETE denied",
+      "pass": true,
+      "details": {
+        "returned": 0
+      }
+    },
+    {
+      "name": "cross tenant read denied",
+      "pass": true,
+      "details": "Object not found"
+    },
+    {
+      "name": "cross tenant gateway denied",
+      "pass": true,
+      "details": 403
+    },
+    {
+      "name": "resource swap denied",
+      "pass": true,
+      "details": 403
+    },
+    {
+      "name": "gateway traversal ../evil.csv",
+      "pass": true,
+      "details": 400
+    },
+    {
+      "name": "gateway traversal a/../evil.csv",
+      "pass": true,
+      "details": 400
+    },
+    {
+      "name": "gateway traversal ..%2Fevil.csv",
+      "pass": true,
+      "details": 400
+    },
+    {
+      "name": "gateway traversal %2e%2e",
+      "pass": true,
+      "details": 400
+    },
+    {
+      "name": "gateway traversal %2E%2E",
+      "pass": true,
+      "details": 400
+    },
+    {
+      "name": "gateway traversal a\\evil.csv",
+      "pass": true,
+      "details": 400
+    },
+    {
+      "name": "gateway traversal %252e%252e",
+      "pass": true,
+      "details": 400
+    },
+    {
+      "name": "gateway traversal %2e%2e%5Cevil.csv",
+      "pass": true,
+      "details": 400
+    },
+    {
+      "name": "direct normalized traversal ../",
+      "pass": true,
+      "details": {
+        "status": 400,
+        "code": "403"
+      }
+    },
+    {
+      "name": "direct normalized traversal a/../",
+      "pass": true,
+      "details": {
+        "status": 400,
+        "code": "403"
+      }
+    },
+    {
+      "name": "direct normalized traversal ..%2F",
+      "pass": true,
+      "details": {
+        "status": 400,
+        "code": "403"
+      }
+    },
+    {
+      "name": "direct normalized traversal %2e%2e/",
+      "pass": true,
+      "details": {
+        "status": 400,
+        "code": "403"
+      }
+    },
+    {
+      "name": "direct normalized traversal %2E%2E/",
+      "pass": true,
+      "details": {
+        "status": 400,
+        "code": "403"
+      }
+    },
+    {
+      "name": "direct normalized traversal ..%5C",
+      "pass": true,
+      "details": {
+        "status": 400,
+        "code": "400"
+      }
+    },
+    {
+      "name": "invalid JWT denied",
+      "pass": true,
+      "details": 401
+    },
+    {
+      "name": "workspace resource swap denied",
+      "pass": true,
+      "details": 403
+    },
+    {
+      "name": "replace new readable old removed",
+      "pass": true,
+      "details": "DB original absent; cache-busted HTTP 404; cached GET initially stale"
+    },
+    {
+      "name": "gateway delete",
+      "pass": true,
+      "details": {
+        "delete": 200,
+        "read": 400
+      }
+    },
+    {
+      "name": "direct RPC denied",
+      "pass": true,
+      "details": "42501"
+    },
+    {
+      "name": "direct metadata INSERT denied",
+      "pass": true,
+      "details": "new row violates row-level security policy \"source files metadata gateway only insert\" for table \"workspace_source_files\""
+    },
+    {
+      "name": "foreign object delete denied",
+      "pass": true,
+      "details": 403
+    },
+    {
+      "name": "foreign object remains",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "post T0 snapshot create",
+      "pass": true
+    },
+    {
+      "name": "two concurrent retries same ID",
+      "pass": true,
+      "details": [
+        {
+          "status": 200,
+          "body": {
+            "success": true,
+            "removed": 1,
+            "clear_id": "06fb4a65-c41c-48dd-b57a-be4a1f53f23b",
+            "cutoff_revision": 6,
+            "updated_at": "2026-10-05T16:56:13.955508+00:00"
+          }
+        },
+        {
+          "status": 200,
+          "body": {
+            "success": true,
+            "removed": 1,
+            "clear_id": "06fb4a65-c41c-48dd-b57a-be4a1f53f23b",
+            "cutoff_revision": 6,
+            "updated_at": "2026-10-05T16:56:13.955508+00:00"
+          }
+        }
+      ]
+    },
+    {
+      "name": "commit failure B retry A preserves B",
+      "pass": true,
+      "details": {
+        "B": 200,
+        "original": 400,
+        "snapshot": {
+          "acceptance": "B-after-T0"
+        }
+      }
+    },
+    {
+      "name": "workspace B isolated while clear A pending",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "terminal repeat preserves cutoff",
+      "pass": true,
+      "details": {
+        "success": true,
+        "removed": 1,
+        "clear_id": "06fb4a65-c41c-48dd-b57a-be4a1f53f23b",
+        "cutoff_revision": 6,
+        "updated_at": "2026-10-05T16:56:13.955508+00:00"
+      }
+    },
+    {
+      "name": "late upload reserve",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "explicit new clear",
+      "pass": true,
+      "details": {
+        "success": true,
+        "removed": 2,
+        "clear_id": "fac11a05-bd0a-41b6-8ffe-dfa565614c4b",
+        "cutoff_revision": 10,
+        "updated_at": "2026-10-05T16:56:47.682081+00:00"
+      }
+    },
+    {
+      "name": "pre clear token late finalize denied",
+      "pass": true,
+      "details": {
+        "signedUpload": "PASS",
+        "commit": 409
+      }
+    },
+    {
+      "name": "late upload cannot invalidate new C",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "cancel orphan exact key",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "signed token altered key denied",
+      "pass": true,
+      "details": "Invalid signature"
+    },
+    {
+      "name": "operation resource swap denied",
+      "pass": true,
+      "details": 403
+    },
+    {
+      "name": "two concurrent independent clears",
+      "pass": true,
+      "details": [
+        200,
+        200
+      ]
+    },
+    {
+      "name": "older terminal retry cannot remove future D",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "same tenant foreign actor read denied",
+      "pass": true,
+      "details": 400
+    },
+    {
+      "name": "same tenant foreign actor delete denied",
+      "pass": true,
+      "details": "Denied fail-closed with generic 503; D remains HTTP 200. Status precision P2."
+    },
+    {
+      "name": "foreign actor delete preserves D",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "direct metadata UPDATE DELETE denied",
+      "pass": true,
+      "details": {
+        "update": 0,
+        "delete": 0
+      }
+    },
+    {
+      "name": "anon read/list denied",
+      "pass": true,
+      "details": {
+        "read": "Object not found",
+        "list": 0
+      }
+    },
+    {
+      "name": "second real session",
+      "pass": true
+    },
+    {
+      "name": "clear vs upload two real sessions",
+      "pass": true,
+      "details": [
+        409,
+        200
+      ]
+    },
+    {
+      "name": "post concurrent clear data survives replay",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "clear vs delete converges",
+      "pass": true,
+      "details": [
+        200,
+        200
+      ]
+    },
+    {
+      "name": "post clear delete data safe",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "partial cleanup second target upload",
+      "pass": true
+    },
+    {
+      "name": "partial cleanup one exact captured target",
+      "pass": true,
+      "details": 200
+    },
+    {
+      "name": "retry after partial cleanup preserves new B",
+      "pass": true,
+      "details": {
+        "replay": 200,
+        "removed": 2,
+        "B": 200
+      }
+    },
+    {
+      "name": "approved local origin CORS contract",
+      "pass": true,
+      "details": {
+        "status": 200,
+        "origin": "http://127.0.0.1:4173"
+      }
+    },
+    {
+      "name": "unapproved origin denied",
+      "pass": true,
+      "details": 403
+    },
+    {
+      "name": "admin-users basic no regression",
+      "pass": true,
+      "details": 401
+    },
+    {
+      "name": "original canonical destination traversal denied",
+      "pass": true,
+      "details": "new row violates row-level security policy"
+    }
+  ],
+  "cleanup": {
+    "clears": 0,
+    "objects": 0,
+    "profiles": 0,
+    "sessions": 0,
+    "resources": 0,
+    "revisions": 0,
+    "snapshots": 0,
+    "auth_users": 0,
+    "identities": 0,
+    "operations": 0,
+    "memberships": 0,
+    "institutions": 0,
+    "source_files": 0,
+    "refresh_tokens": 0,
+    "admin_audit_logs": 0
+  },
+  "admin_users": {
+    "status": "ACTIVE",
+    "version": 2,
+    "no_jwt_status": 401,
+    "bundle_sha256": "53cbf123167a40e15264294d5c96c5a9e0caeb3687c97a574e8911d7cbcc82be"
+  },
+  "production_mutations": "NONE"
+}

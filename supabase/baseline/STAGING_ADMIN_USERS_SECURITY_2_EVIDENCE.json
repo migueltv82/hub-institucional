@@ -1,0 +1,191 @@
+{
+  "date": "2026-10-05",
+  "target": {
+    "name": "Hub-Institucional-Staging",
+    "ref": "lzjpycejdjpzkdyzaeco"
+  },
+  "status": "BLOCKED",
+  "first_finding": {
+    "severity": "P1",
+    "title": "Cross-tenant Auth password overwrite through bulk_create_students email reuse",
+    "actor_scope": "tenant A admin only",
+    "target_before": "student belonged exclusively to tenant B",
+    "request_scope": "tenant A",
+    "http_result": {
+      "status": 200,
+      "success": true,
+      "updated": 1,
+      "failed": 0
+    },
+    "proof": {
+      "same_auth_user": true,
+      "new_password_login_pass": true,
+      "old_password_login_denied": true
+    },
+    "source_references": [
+      "supabase/functions/admin-users/index.ts:416",
+      "supabase/functions/admin-users/index.ts:744",
+      "supabase/functions/admin-users/index.ts:785",
+      "supabase/functions/admin-users/index.ts:1127",
+      "supabase/functions/admin-users/index.ts:1150"
+    ]
+  },
+  "checks": [
+    {
+      "name": "sin Authorization denegado",
+      "pass": true,
+      "detail": 401
+    },
+    {
+      "name": "JWT invalido denegado",
+      "pass": true,
+      "detail": 401
+    },
+    {
+      "name": "CORS origin permitido",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "origin": "http://127.0.0.1:4173"
+      }
+    },
+    {
+      "name": "CORS origin ajeno denegado",
+      "pass": true,
+      "detail": 403
+    },
+    {
+      "name": "CORS POST ajeno denegado",
+      "pass": true,
+      "detail": 403
+    },
+    {
+      "name": "autenticado sin permiso denegado",
+      "pass": true,
+      "detail": 403
+    },
+    {
+      "name": "autenticado bloqueado denegado",
+      "pass": true,
+      "detail": 403
+    },
+    {
+      "name": "admin institucional accion superadmin denegada",
+      "pass": true,
+      "detail": 403
+    },
+    {
+      "name": "admin institucional create own tenant",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "created": 1,
+        "failed": 0,
+        "errors": []
+      }
+    },
+    {
+      "name": "Auth Admin create real login A",
+      "pass": true
+    },
+    {
+      "name": "admin A intenta tenant B denegado",
+      "pass": true,
+      "detail": 403
+    },
+    {
+      "name": "superadmin contract create assign tenant B",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "userId": "b00b9ebd-bc47-4305-90bf-94b96df6f2c9"
+      }
+    },
+    {
+      "name": "superadmin create Auth Admin real login",
+      "pass": true
+    },
+    {
+      "name": "superadmin reset contractual",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "Auth Admin reset real login",
+      "pass": true
+    },
+    {
+      "name": "admin B create own tenant",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "failed": 0,
+        "errors": []
+      }
+    },
+    {
+      "name": "B original password before cross user test",
+      "pass": true
+    },
+    {
+      "name": "admin A no puede modificar identidad Auth de B via email en tenant A",
+      "pass": false,
+      "detail": {
+        "status": 200,
+        "success": true,
+        "updated": 1,
+        "failed": 0,
+        "user_id": "e679aae4-8d6d-4ced-b7a8-072044400a7d"
+      }
+    },
+    {
+      "name": "P1 confirmed cross tenant credential overwrite",
+      "pass": false,
+      "detail": {
+        "new_password_login": true,
+        "old_password_denied": true,
+        "same_user": true
+      }
+    }
+  ],
+  "cleanup": {
+    "clears": 0,
+    "objects": 0,
+    "profiles": 0,
+    "sessions": 0,
+    "resources": 0,
+    "revisions": 0,
+    "snapshots": 0,
+    "auth_users": 0,
+    "identities": 0,
+    "operations": 0,
+    "memberships": 0,
+    "institutions": 0,
+    "source_files": 0,
+    "refresh_tokens": 0,
+    "student_records": 0,
+    "teacher_records": 0,
+    "admin_audit_logs": 0,
+    "student_career_plans": 0
+  },
+  "pending_due_stop": [
+    "additional superadmin branches",
+    "function logs secret check",
+    "minimal Storage HTTP smoke"
+  ],
+  "functions": {
+    "admin_users": {
+      "status": "ACTIVE",
+      "version": 2,
+      "bundle_sha256": "53cbf123167a40e15264294d5c96c5a9e0caeb3687c97a574e8911d7cbcc82be"
+    },
+    "source_file_storage": {
+      "status": "ACTIVE",
+      "version": 1,
+      "bundle_sha256": "93f70fb1f77dc69e5a324ed7f92717f0900b224347428203a51930e47c91ecf1"
+    }
+  },
+  "code_schema_rls_grants_changes": "NONE",
+  "deploy_secrets_changes": "NONE",
+  "production_mutations": "NONE"
+}

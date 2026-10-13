@@ -1,101 +1,180 @@
-# Aplicación segura de los scripts de seguridad del 2026-09-05
+# Checklist seguro para aplicar SQL de Supabase
 
-Procedimiento manual para los cuatro archivos existentes en `supabase/security/`. Esta guía no ejecuta SQL ni acredita aplicación remota. El nombre “bajo riesgo” no garantiza compatibilidad con una base que haya cambiado desde la auditoría.
+## Estado vigente y alcance de la evidencia
 
-**Prohibido aplicar cambios en producción sin respaldo recuperable y sin probar previamente los mismos bloques en staging.** Si falta cualquiera de los dos, detenerse. No ejecutar los cuatro archivos como un lote ni descomentar propuestas en conjunto.
+Baseline local descartable PASS, 9 SQL canónicos aplicados y 40 tablas public con RLS; Staging aplicado/verificado según [resultado](../supabase/baseline/STAGING_BASELINE_RESULT.md). El orden vigente está en [BASELINE_MANIFEST.md](../supabase/baseline/BASELINE_MANIFEST.md). El inventario de septiembre, el repair como «único origen», la lectura segura fuera del orden y los pasos de diseño de baseline/RPC son **HISTÓRICOS / SUPERADOS**: no usarlos como instrucciones de instalación actual ni reaplicar SQL por esta nota.
 
-## Orden y efectos
+La RPC de inscripción existe/está validada y usa JWT del usuario vía `context.userClient`, con `auth.uid() = actor_user_id = target_student_id` y profile/membership/legajo tenant-workspace validados; no `adminClient`/`service_role` operativo para ese flujo. [Contrato vigente](contracts/upsert_exam_enrollment_from_portal.md). Storage enforcement certificado, límite 25 MiB; [evidencia](../supabase/baseline/STAGING_STORAGE_ENFORCEMENT_EVIDENCE.json).
 
-Orden obligatorio: **diagnostics → low_risk_indexes_search_path_auth_uid → revisión humana → permissions_review → validación y resolución de datos → constraints → post-check**. Cada flecha requiere revisar el resultado anterior; no significa aprobación automática del siguiente bloque.
+Mesas Docente v1 read-only certificado; decisiones/reasignación/reconciliación DIFERIDAS post-v1. Production sigue **NO-GO**: branch protection remota, backup/restore, rollback, observabilidad, E2E/UAT y release closure pendientes. Mantener revisión y autorización por bloque; ningún gate se cierra automáticamente. `EX-001` vence 2026-10-17 y exige nueva validación para cobertura posterior.
 
-| Archivo | Qué ejecuta actualmente | Clasificación |
-| --- | --- | --- |
-| [security_diagnostics](../supabase/security/2026-09-05_security_diagnostics.sql) | Consultas de catálogo, permisos, políticas, funciones, duplicados, cruces institucionales y valores inválidos. | Solo lectura. Puede devolver datos personales; conservar resultados fuera del repo y anonimizar evidencia. |
-| [low_risk_indexes_search_path_auth_uid](../supabase/security/2026-09-05_low_risk_indexes_search_path_auth_uid.sql) | LR-01–12 crean índices; LR-13–17 reemplazan funciones; LR-18–19 eliminan y recrean políticas de lectura. Incluye consultas posteriores. | Muta esquema, definiciones y políticas. No hace limpieza masiva de datos; `handle_new_user()` contiene escrituras que se ejecutarán cuando se invoque el trigger. |
-| [rls_function_permissions_review](../supabase/security/2026-09-05_rls_function_permissions_review.sql) | RP-01–04, incluido RP-03B, contienen `GRANT`/`REVOKE` activos. RP-05–06 tienen propuestas de escritura comentadas y consultas activas. RP-07 es una función propuesta comentada; RP-08 solo plantea decisiones. | Mixto: modifica permisos en los bloques activos; las consultas son de lectura. Las propuestas comentadas no se aplican al ejecutar el archivo. |
-| [manual_review_constraints](../supabase/security/2026-09-05_manual_review_constraints.sql) | MR-01–07 proponen FK, CHECK e índices únicos dentro de comentarios. | Tal como está, no aplica cambios. Extraer y ejecutar un bloque aprobado sí muta esquema e integridad y puede fallar con datos existentes. No limpia ni fusiona datos. |
+Fecha de auditoría documental: 2026-09-24. Alcance: todos los `.sql` presentes en `supabase/security/`, `supabase/schema/` y `supabase/docs/`, más las referencias históricas de documentación. Esta guía no ejecuta SQL ni acredita ningún ambiente remoto.
 
-## Preparación obligatoria
+**NINGÚN SCRIPT MUTANTE DEBE EJECUTARSE DIRECTAMENTE EN PRODUCCIÓN SIN HABER SIDO VALIDADO PRIMERO EN STAGING.**
 
-- [ ] Identificar ambiente y esquema destino mediante una comprobación del operador; usar un alias en documentación pública, sin credenciales ni identificadores privados.
-- [ ] Registrar commit o hash de los archivos y bloques concretos que se proponen aplicar. Contrastar con el [esquema disponible](../supabase/schema/00_README.md), sin importar migraciones de otro repo.
-- [ ] Disponer de staging representativo del esquema, roles y flujos actuales, con datos sintéticos o anonimizados adecuados para probar restricciones.
-- [ ] Verificar respaldo previo, alcance y restauración ensayada en un ambiente aislado. Capturar definiciones, propietarios, grants y políticas originales para una reversión selectiva.
-- [ ] Designar operador y revisor, ventana de mantenimiento, criterio de interrupción y responsable de recuperación. Revisar tamaño de tablas y bloqueo esperado antes de crear índices o validar constraints.
-- [ ] Preparar pruebas por rol e institución y resolver la disponibilidad del post-check descrito más abajo. Su ausencia bloquea la promoción a producción.
+## Inventario histórico — no sustituye el manifest vigente
 
-## 1. Diagnostics: lectura inicial
+| Script | Tipo | Riesgo | Idempotente | Requiere staging | Rollback | Estado |
+| --- | --- | --- | --- | --- | --- | --- |
+| `supabase/security/2026-09-05_security_diagnostics.sql` | READ ONLY | BAJO | Sí | Recomendado | No aplica | Diagnóstico inicial obligatorio; puede exponer metadatos sensibles en evidencia. |
+| `supabase/security/2026-09-05_low_risk_indexes_search_path_auth_uid.sql` | MUTACIÓN DE SCHEMA | MEDIO | Parcial | Sí | Parcial por bloque | Índices, funciones y policies; ejecutar un bloque por vez, no como lote. Incluye hardening preparado de `handle_new_user()` para no confiar roles a `raw_user_meta_data`. |
+| `supabase/security/2026-09-05_rls_function_permissions_review.sql` | MIXTO | ALTO | Parcial | Sí | Parcial y manual | Cambia grants/revokes; puede abrir o romper acceso si RLS no está validada. |
+| `supabase/security/2026-09-05_manual_review_constraints.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Parcial por constraint/índice | Las propuestas están comentadas; no extraer bloques sin validar datos primero. |
+| `supabase/security/student_portal_exam_visibility_tests.sql` | TEST/VALIDACIÓN | MEDIO | Sí | Sí | `rollback` incluido | Prueba negativa focalizada para portal alumno/mesas; exige actores preparados. |
+| `supabase/schema/01_foundation.sql` | MIXTO | ALTO | Parcial | Sí | Manual | Fuente canónica foundation; incluye seed superadmin condicionado, RLS/RPC base y hardening preparado de `handle_new_user()` con rol mínimo por defecto. |
+| `supabase/schema/02_academic_relational_schema.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Fuente canónica académica; impacta PII, padrones, grants, triggers y policies. |
+| `supabase/schema/03_workspace_data.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Fuente canónica de snapshots y estado v2.1; contiene datos JSON operativos. |
+| `supabase/schema/04_teacher_exam_date_exclusions.sql` | MUTACIÓN DE SCHEMA | MEDIO | Parcial | Sí | Manual | Fuente canónica de bloqueos docentes; depende de `teacher_records`. |
+| `supabase/schema/05_workspace_operational_compat.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Fuente canónica de datos operativos, Storage y legacy compat. |
+| `supabase/schema/05_student_portal_secure_read.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | RPC de lectura segura del alumno; no figura en el orden de `00_README.md` y debe ordenarse antes de aplicar. |
+| `supabase/schema/06_subject_teacher_assignments.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Fuente canónica de asignaciones docente-materia y RPCs asociadas. |
+| `supabase/schema/07_academic_operations.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Fuente canónica de inscripciones, libro docente, notas, asistencia y RPCs. |
+| `supabase/docs/verify_01_foundation_p0.sql` | TEST/VALIDACIÓN | BAJO | Sí | Recomendado | No aplica | Verifica RPCs, grants, RLS, perfiles, membresías y auditoría base. |
+| `supabase/docs/verify_02_roster_records_ui_compat.sql` | TEST/VALIDACIÓN | BAJO | Sí | Recomendado | No aplica | Verifica columnas, constraints, triggers, grants, policies y duplicados. |
+| `supabase/docs/verify_02_roster_records_ui_compat_summary.sql` | TEST/VALIDACIÓN | BAJO | Sí | Recomendado | No aplica | Usa tabla temporal `pg_temp`; no persiste cambios. |
+| `supabase/docs/verify_03_workspace_functional_counts.sql` | TEST/VALIDACIÓN | BAJO | Sí | Sí | No aplica | Conteos funcionales con UUID de institución hardcodeado; ajustar antes de usar. |
+| `supabase/docs/verify_03_workspace_operational_compat_summary.sql` | TEST/VALIDACIÓN | BAJO | Sí | Recomendado | No aplica | Usa `pg_temp`; valida etapa 3 y Storage. |
+| `supabase/docs/verify_04_subject_teacher_assignments_summary.sql` | TEST/VALIDACIÓN | BAJO | Sí | Recomendado | No aplica | Usa `pg_temp`; valida asignaciones docente-materia. |
+| `supabase/docs/verify_05_academic_operations_summary.sql` | TEST/VALIDACIÓN | BAJO | Sí | Recomendado | No aplica | Usa `pg_temp`; valida etapa 5 académica. |
+| `supabase/docs/verify_05_student_portal_enrollment_diagnostics.sql` | TEST/VALIDACIÓN | BAJO | Sí | Sí | No aplica | Diagnóstico post-smoke con UUID y ventana temporal hardcodeados. |
+| `supabase/docs/verify_05_student_portal_manual_student_career_fallback.sql` | TEST/VALIDACIÓN | BAJO | Sí | Sí | No aplica | Diagnóstico con búsqueda nominal hardcodeada; anonimizar evidencia. |
+| `supabase/docs/verify_05_teacher_portal_functional_counts.sql` | TEST/VALIDACIÓN | BAJO | Sí | Sí | No aplica | Conteos post-smoke docente con UUID y ventana temporal hardcodeados. |
+| `supabase/docs/repair_01_deleted_person_records.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Agrega tabla/RLS y reemplaza RPC de baja; la RPC puede borrar accesos al invocarse. |
+| `supabase/docs/repair_02_student_records_duplicate_upsert_keys.sql` | MIXTO | CRÍTICO | No | Sí | Backup/restauración | Fusiona y elimina duplicados de `student_records`; no ejecutar sin respaldo ensayado. |
+| `supabase/docs/repair_05_enable_academic_transition_dual_write.sql` | MUTACIÓN DE DATOS | MEDIO | Sí | Sí | Script comentado/manual | Cambia `app_settings`; útil solo para smoke controlado de transición. |
+| `supabase/docs/repair_05_portal_connection_read_rpcs.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Reemplaza RPCs hoy también presentes en `schema/07`; tratar como parche histórico. |
+| `supabase/docs/repair_05_student_portal_career_fallback.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Reemplaza `get_student_portal_workspace_snapshot`; superado por variantes posteriores. |
+| `supabase/docs/repair_05_student_portal_classmates.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Reemplaza la misma RPC que el fallback; candidato duplicado/obsoleto. |
+| `supabase/docs/repair_05_student_portal_grades_rpc.sql` | MUTACIÓN DE SCHEMA | MEDIO | Parcial | Sí | Manual | Subconjunto de RPC también incluido en `repair_05_portal_connection_read_rpcs.sql` y `schema/07`. |
+| `supabase/docs/repair_05_teacher_student_removal_reset_rpcs.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Define RPCs destructivas de reinicio/baja académica; duplicadas por `schema/07`. |
+| `supabase/docs/repair_06_exam_process_reset_rpc.sql` | MUTACIÓN DE SCHEMA | ALTO | Parcial | Sí | Manual | Define RPC de reset que al invocarse actualiza/borra datos operativos de mesas. |
+| `supabase/docs/repair_06_exam_teacher_assignments.sql` | MIXTO | ALTO | Parcial | Sí | Manual | Crea tablas/RLS/RPCs y backfills; único origen actual para `exam_teacher_assignments`. |
+| `supabase/docs/repair_07_exam_engine_v21_state.sql` | MIXTO | MEDIO | Sí | Sí | Manual | Duplica tabla/policies de `schema/03` y migra datos desde `workspace_snapshots`. |
 
-Ejecutar las consultas de `2026-09-05_security_diagnostics.sql` en staging y revisar **todas** las salidas. El editor puede presentar varios resultados por separado. Guardar una línea base de RLS, policies, definiciones de funciones, `search_path`, grants, índices, constraints y hallazgos de datos.
+Resumen del inventario: 34 scripts SQL analizados; 12 son lectura/validación sin mutación permanente esperada; 22 contienen mutaciones reales, propuestas o capacidades mutantes. Hay 1 script de riesgo CRÍTICO y al menos 6 scripts candidatos a obsoletos/duplicados.
 
-Si faltan tablas, columnas o firmas, detenerse: no saltar consultas para declarar compatible el conjunto. Los diagnósticos revisan una lista concreta de objetos; no constituyen una auditoría completa del esquema actual. Ampliar la revisión humana a las dependencias y flujos que realmente usa la app.
+## Orden propuesto histórico — SUPERADO por el manifest vigente
 
-## 2. Low risk: un bloque por vez
+Este orden es un procedimiento de evaluación, no una autorización de ejecución:
 
-- [ ] **LR-01–12:** comprobar si cada índice existe y comparar su definición, no solo su nombre. `IF NOT EXISTS` no corrige un índice distinto con el mismo nombre. Ejecutar un bloque y su consulta posterior antes de seguir.
-- [ ] La versión del archivo usa `CREATE INDEX` sin `CONCURRENTLY` para SQL Editor. No asumir ausencia de bloqueo. Para tablas grandes, una variante concurrente requiere revisión específica y ejecución fuera de una transacción mediante una herramienta adecuada; no sustituir automáticamente el comando en el editor.
-- [ ] **LR-13–17:** comparar el cuerpo completo de cada función con la definición remota capturada. Se reemplaza toda la función, no solo `search_path`; comprobar que no elimina correcciones posteriores de autorización o provisioning.
-- [ ] Revisar especialmente LR-17: su versión de `handle_new_user()` obtiene `account_role` inicial de `raw_user_meta_data`. No reintroducirla sobre un trigger ya endurecido ni asumir que RP-07 se aplicará después, porque RP-07 está comentado.
-- [ ] **LR-18–19:** comparar roles, expresión y comando de cada política antes de recrearla. Ejecutar cada pareja `DROP`/`CREATE` de forma atómica en una transacción revisada; no dejar una política eliminada si falla su recreación.
-- [ ] Tras cada bloque, comprobar definición resultante y funciones afectadas: lectura de perfil/membresía, estado público, instituciones de login y alta de cuentas en staging. Ante error, detenerse y registrar qué alcanzó a aplicarse.
+1. Congelar versión candidata: commit, ambiente, operador, revisor y alcance.
+2. Preparar respaldo recuperable de base, Storage y configuración; ensayar restauración en ambiente aislado.
+3. Preparar staging con el mismo esquema esperado y datos sintéticos o anonimizados suficientes.
+4. Ejecutar solo diagnósticos y verificaciones sin mutación:
+   - `supabase/security/2026-09-05_security_diagnostics.sql`
+   - verificadores `supabase/docs/verify_*`
+   - `supabase/security/student_portal_exam_visibility_tests.sql` si existen actores preparados.
+5. Para instalación nueva o staging vacío, usar como fuente canónica el orden documentado por `supabase/schema/00_README.md`: `01_foundation` → `02_academic_relational_schema` → `03_workspace_data` → `04_teacher_exam_date_exclusions` → `05_workspace_operational_compat` → `06_subject_teacher_assignments` → `07_academic_operations`.
+6. Resolver explícitamente la posición de `supabase/schema/05_student_portal_secure_read.sql` antes de aplicarlo: el archivo existe, pero no está en el orden canónico y contiene dependencias funcionales que deben validarse.
+7. Usar `supabase/docs/repair_*` solo como reparación condicionada por una falla o brecha confirmada. No mezclarlos con el flujo canónico sin reconciliar duplicados.
+8. Evaluar `2026-09-05_low_risk_indexes_search_path_auth_uid.sql` un bloque por vez después de capturar definiciones originales.
+9. Evaluar `2026-09-05_rls_function_permissions_review.sql` con aprobación humana por bloque; no ejecutar entero.
+10. Evaluar constraints solo después de resolver datos inválidos y duplicados.
+11. Repetir diagnósticos, pruebas negativas y smoke tests por rol antes de cualquier promoción.
 
-## 3. Permissions review: aprobación humana explícita
+## Precondiciones
 
-El revisor debe decidir por bloque qué acceso se habilita o revoca y qué flujo legítimo podría romperse. Los comentarios históricos sobre estado remoto no prueban el estado del destino actual.
+- Staging funcional y aislado, con Auth, RLS, Storage y Edge Function compatibles con la versión candidata.
+- Datos de prueba para al menos dos instituciones, con usuarios `anon`, alumno, docente, admin institucional y superadmin.
+- Evidencia de línea base: tablas, columnas, constraints, grants, policies, funciones, owners, índices, buckets y policies de Storage.
+- Revisor independiente para cambios de RLS, permisos, RPCs `SECURITY DEFINER`, deduplicación de datos y cualquier rollback.
+- Comparar cada función/RPC afectada contra [SECURITY_FUNCTION_MATRIX.md](SECURITY_FUNCTION_MATRIX.md), incluyendo `SECURITY DEFINER`, `search_path`, grants/revokes y caller esperado.
+- Resolver el drift remoto confirmado en [SUPABASE_DRIFT_AUDIT.md](SUPABASE_DRIFT_AUDIT.md) antes de aplicar SQL preparado en un ambiente compartido: `handle_new_user()` remoto conserva la vulnerabilidad 02.3 y 12 RPC llamadas por el producto están ausentes.
+- Preparar la ejecución futura de [STAGING_SECURITY_TEST_MATRIX.md](STAGING_SECURITY_TEST_MATRIX.md) con datos sintéticos por rol.
+- Decisión explícita sobre scripts duplicados/obsoletos antes de aplicar.
 
-- **RP-01–02:** revisar cierre de ejecución del trigger como RPC y exposición de instituciones de login. Verificar altas legítimas y acceso público previsto.
-- **RP-03:** habilita `SELECT` a `authenticated` sobre las tablas listadas. Antes de concederlo, verificar RLS y que sus políticas no expongan padrones o datos académicos ajenos.
-- **RP-03B:** revoca escrituras y otros privilegios en tablas académicas, restaurando `INSERT`/`UPDATE` solo para snapshots. Contrastar especialmente la edición de `teacher_records` y `student_records` y sus servicios actuales: una revocación puede cortar cargas o mantenimiento de padrones. No aplicar solo porque figura como endurecimiento histórico.
-- **RP-04:** concede `INSERT`/`UPDATE` de `app_settings`; probar que únicamente el superadmin puede modificarlo y que los demás roles son rechazados.
-- **RP-05–06:** las escrituras propuestas están comentadas. RP-06 indica no aplicar hasta contar con un flujo autorizado de carga de bloqueos. Las consultas activas sirven para observar grants, no para concederlos.
-- **RP-07:** requiere revisar cómo `admin-users` provisiona alumnos, docentes y administradores antes de cambiar la fuente de `account_role`. Probar los tres tipos de alta en staging si se aprueba el cambio.
-- **RP-08:** requiere una decisión institucional sobre acceso a datos personales; no contiene una política lista para ejecutar.
+## Backup
 
-Ejecutar únicamente bloques aprobados y verificar accesos permitidos y denegados con usuarios reales de prueba, no solo con una cuenta privilegiada. Guardar el resultado antes de avanzar.
+- Crear respaldo antes de cualquier mutación de schema, permisos o datos.
+- El respaldo debe cubrir Postgres, Storage y configuración necesaria de Auth/Functions.
+- Ensayar restauración en ambiente aislado antes de tocar producción.
+- No guardar backups, DNIs, emails, tokens ni resultados nominales en el repo.
 
-## 4. Constraints: primero los datos
+## Staging
 
-- [ ] Resolver hallazgos con el responsable institucional mediante un procedimiento separado, respaldado y revisado. Estos scripts no autorizan borrar duplicados ni fusionar personas automáticamente.
-- [ ] **MR-01:** comprobar cruces de institución, referencias huérfanas y la clave única referenciada `(institution_id, id)`. El diagnóstico con `INNER JOIN` detecta cruces, pero no demuestra ausencia de huérfanos. Revisar también el efecto futuro de `ON DELETE CASCADE`.
-- [ ] **MR-02–03:** comprobar `logic_group` y `current_year` contra los CHECK propuestos y revisar nulabilidad según la regla de negocio.
-- [ ] **MR-04–05:** acordar el rango institucional. El diagnóstico usa año actual + 1 como máximo, mientras las propuestas usan 2100; no son criterios equivalentes. Verificar los datos contra el rango exacto aprobado antes de ejecutar.
-- [ ] **MR-06–07:** revisar DNI por institución, vacíos, provisorios, espacios y duplicados históricos. Los índices usan el valor original de `national_id`; `trim` solo filtra vacíos, no normaliza la clave de unicidad.
-- [ ] Los índices únicos propuestos usan `CONCURRENTLY`: ejecutar fuera de transacciones y verificar definición y validez final. Si falla su creación, inspeccionar posibles índices inválidos antes de reintentar; no confiar únicamente en `IF NOT EXISTS`.
-- [ ] Extraer solo la propuesta aprobada, comprobar si ya existe una restricción equivalente y aplicar una por vez en staging. Confirmar en catálogo su definición/validación y probar altas y modificaciones admitidas y rechazadas.
+- Ejecutar primero la ruta completa en staging.
+- Registrar cada bloque aplicado, salida esperada, salida real, duración y responsable.
+- Detenerse ante diferencias no explicadas entre staging y la fuente local.
+- No considerar válido un staging que solo prueba modo demo o una cuenta privilegiada.
 
-## Post-check obligatorio
+## GO/NO-GO
 
-Secuencia esperada: **`supabase/security/rls_negative_tests.sql` → `SECURITY_TESTS_OK` y `failed_count = 0`**.
+GO exige todo esto:
 
-**Bloqueo actual:** `rls_negative_tests.sql` no está presente en este checkout. No hay un enlace ejecutable disponible ni se puede certificar su cobertura o efectos. Antes de promover cambios, disponer de una versión revisada y compatible en este repo, inspeccionar si crea datos o modifica sesiones/permisos y probar su limpieza en staging. No sustituirla por `SELECT 'SECURITY_TESTS_OK'`, por un mensaje de DDL exitoso ni por `npm run check`.
+- Diagnósticos sin hallazgos bloqueantes no resueltos.
+- Backups probados.
+- Orden canónico y reparaciones reconciliadas.
+- Pruebas negativas por rol/institución en verde.
+- Verificaciones `verify_*` relevantes con estado OK.
+- Smoke tests reales en staging para los flujos afectados.
+- Revisión humana de cada grant, policy, RPC `SECURITY DEFINER`, constraint y deduplicación.
 
-Una vez disponible y revisado el script:
+NO-GO si ocurre cualquiera de estas condiciones:
 
-1. Ejecutarlo después de los cambios en staging y conservar el resumen íntegro; exigir el marcador y cero fallos. Cualquier error o prueba no ejecutada bloquea la salida.
-2. Repetir diagnostics y comparar contra la línea base: cambios limitados a los bloques aprobados, definiciones y grants esperados, constraints válidos y sin nuevos hallazgos.
-3. Probar login y operaciones de admin, alumno, docente y superadmin, rechazo entre instituciones, usuario bloqueado, permisos de Storage y flujos afectados por los grants. No asumir que un único script cubre todo.
-4. Solo con respaldo, staging aprobado y revisión humana documentada, programar la aplicación manual en producción. Repetir diagnósticos previos para detectar diferencias y detenerse si el esquema cambió.
-5. Verificar el destino tras aplicar. Ejecutar el post-check allí únicamente si su versión revisada es segura para ese ambiente y usa fixtures controlados. Si no puede ejecutarse con seguridad, mantener la verificación pendiente y no declarar la intervención completa.
+- Falta staging o respaldo recuperable.
+- Se pretende ejecutar SQL mutante directo en producción.
+- Hay PII, RLS, grants o `SECURITY DEFINER` sin revisión.
+- El discovery remoto confirma P1/P2 abiertos: `handle_new_user()` vulnerable, RPC críticas ausentes, grants/`EXECUTE` amplios o RLS/Storage sin pruebas negativas.
+- Falta acceso remoto read-only suficiente para inventariar funciones, grants, triggers, RLS, Storage y Auth no sensible.
+- Un script duplicado/obsoleto compite con una fuente canónica más nueva.
+- Falta el test negativo integral de RLS/Storage o su equivalente revisado.
+- Hay duplicados o datos inválidos antes de constraints únicas/checks.
 
-## Reversión
+## Post-check
 
-Los comentarios de rollback son orientativos: compararlos con la línea base, no ejecutarlos como otro lote. No eliminar índices que ya existían antes de la intervención ni ejecutar `01_foundation.sql` completo para restaurar una sola función. Restaurar la definición exacta capturada y sus permisos/políticas necesarios; un archivo fuente actual puede no representar el estado anterior.
+Post-check mínimo:
 
-Restaurar grants a `PUBLIC` puede reabrir exposición. RP-03B explícitamente desaconseja una reversión general: recuperar solo el privilegio legítimo junto con su política revisada. Quitar una constraint no revierte correcciones de datos ni eliminaciones en cascada que ya hayan ocurrido; esas situaciones requieren el plan de recuperación y respaldo.
+1. Repetir `2026-09-05_security_diagnostics.sql`.
+2. Ejecutar los `verify_*` correspondientes a cada etapa aplicada.
+3. Ejecutar `student_portal_exam_visibility_tests.sql` con fixtures preparados.
+4. Ejecutar una matriz negativa integral de RLS/Storage por rol y tenant. El script histórico `supabase/security/rls_negative_tests.sql` no existe en este checkout; su ausencia bloquea declarar cobertura integral.
+5. Probar login, lectura y escritura permitida/denegada de alumno, docente, admin institucional y superadmin.
+6. Verificar que `admin-users` no expone `service_role`, que CORS usa orígenes concretos y que los logs no contienen secretos.
+7. Crear un usuario de prueba con metadata de cliente manipulada (`account_role`, `is_global_admin`) y confirmar que `profiles.account_role` no escala privilegios, que `profiles.is_global_admin` queda falso salvo alta administrativa legitima y que las membresías solo aparecen por flujo autorizado.
+8. Para toda RPC aplicada o existente en remoto, capturar `pg_get_functiondef`, privilegios reales y pruebas `anon`/`authenticated`/cross-tenant; reconciliar cualquier diferencia con la matriz 02.4 antes de avanzar.
 
-Tras cualquier reversión, volver a verificar accesos y registrar el estado real por bloque. No asumir que fallar un bloque deshace otros ya confirmados.
+## Rollback
+
+Los rollbacks comentados son orientación, no un plan universal.
+
+- Para funciones y policies: restaurar la definición exacta capturada en línea base.
+- Para grants: revertir solo el privilegio afectado; no restaurar `PUBLIC` por comodidad.
+- Para constraints e índices únicos: retirar la constraint no revierte datos eliminados, fusionados o cascadas ya ocurridas.
+- Para scripts con mutación de datos (`repair_02`, backfills o resets): el rollback real es restauración o procedimiento manual validado.
+- Tras cualquier reversión, repetir diagnósticos y pruebas funcionales.
+
+## Producción
+
+Producción solo puede considerarse después de staging aprobado. La aplicación debe hacerse por ventana controlada, con operador y revisor disponibles, respaldo validado, plan de reversión probado y bitácora externa con evidencia sin secretos ni PII.
+
+No ejecutar en producción:
+
+- `repair_02_student_records_duplicate_upsert_keys.sql` sin respaldo/restauración probada.
+- Reparaciones históricas duplicadas sin reconciliación con `supabase/schema/`.
+- Grants/RLS completos como lote.
+- Constraints únicas/checks sin demostrar que los datos cumplen.
+- Pruebas con usuarios o instituciones reales si el script requiere fixtures preparados.
+
+## Scripts obsoletos o duplicados
+
+- `supabase/README.md` fue actualizado en 02.1 para dejar de presentar `setup_multi_tenant/` y `rls_negative_tests.sql` como flujo ejecutable. Si aparecen esas rutas en documentación histórica, tratarlas como no ejecutables en este checkout.
+- `repair_05_student_portal_career_fallback.sql`, `repair_05_student_portal_classmates.sql` y `schema/05_student_portal_secure_read.sql` reemplazan la misma RPC `get_student_portal_workspace_snapshot`; deben reconciliarse antes de aplicar.
+- `repair_05_student_portal_grades_rpc.sql` es subconjunto de `repair_05_portal_connection_read_rpcs.sql` y de `schema/07_academic_operations.sql`.
+- `repair_05_portal_connection_read_rpcs.sql` y `repair_05_teacher_student_removal_reset_rpcs.sql` contienen RPCs que ya aparecen en `schema/07_academic_operations.sql`.
+- `repair_07_exam_engine_v21_state.sql` duplica `exam_engine_v21_states`, ya presente en `schema/03_workspace_data.sql`, y además migra datos.
+- `schema/05_student_portal_secure_read.sql` existe fuera del orden canónico de `schema/00_README.md`; no es necesariamente obsoleto, pero queda pendiente de integración documental.
 
 ## Qué anotar en WORKLOG
 
-Agregar una entrada en [WORKLOG](WORKLOG.md) por intervención con estos campos; no adjuntar filas nominales, DNIs, tokens, cadenas de conexión ni backups al repo:
+Cada intervención futura debe registrar:
 
-- Fecha/hora y zona horaria; operador, revisor y ambiente mediante alias.
-- Objetivo, commit/hash y archivos/bloques exactos (`LR-*`, `RP-*`, `MR-*`).
-- Línea base: hallazgos, diferencias de esquema y enlace a evidencia con acceso restringido.
-- Respaldo, prueba de restauración, ensayo en staging y aprobación humana previa a producción.
-- Por bloque: `propuesto`, `omitido con motivo`, `aplicado sin verificar`, `aplicado y verificado`, `fallido` o `revertido`; hora y resultado observado.
-- Decisiones sobre permisos y datos, efectos previstos y correcciones de datos autorizadas por separado.
-- Post-check: versión del script, ambiente, marcador, conteo de fallos y pruebas funcionales. Si falta el script, escribir `no ejecutado: archivo ausente`, nunca `SECURITY_TESTS_OK`.
-- Recuperación realizada, incidentes, riesgos residuales, responsable y siguiente acción pendiente.
+- Fecha/hora, zona horaria, operador, revisor y ambiente.
+- Commit/hash y scripts/bloques exactos.
+- Línea base y evidencia restringida.
+- Backup y restauración ensayada.
+- Resultado de staging, GO/NO-GO y aprobación.
+- Bloques aplicados, omitidos, fallidos o revertidos.
+- Resultado de verificaciones y pruebas negativas.
+- Incidentes, riesgos residuales y próxima acción.
 
-Al redactar esta guía, WORKLOG contiene marcadores de conflicto de merge. Resolverlos mediante revisión antes de usarlo como registro consolidado; esta tarea no elige entre esas versiones ni altera sus afirmaciones históricas. Una entrada sobre esta entrega debe decir **solo documentación; SQL remoto no ejecutado**.
+Para esta auditoría 02.1 registrar: **solo documentación; SQL remoto no ejecutado; Supabase remoto no modificado**.

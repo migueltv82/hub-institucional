@@ -26,6 +26,7 @@ El proyecto funciona en modo local demo y en modo remoto con Supabase multi-tena
 - [Alcance obligatorio del primer release](docs/PRODUCTION_SCOPE.md): flujos por rol y criterios verificables de aceptación.
 
 Estos documentos definen los requisitos de salida; no certifican un despliegue ni la aplicación de SQL en producción.
+El alcance auditado distingue implementación local de verificación remota y fue revisado contra el checkout el 2026-09-24.
 
 ## Stack
 
@@ -271,36 +272,38 @@ cuando exista.
 La configuracion vive en:
 
 ```text
-supabase/setup_multi_tenant/
+supabase/schema/
 supabase/functions/admin-users/
 supabase/security/
+supabase/docs/
 ```
 
-Opcion recomendada en SQL Editor: seguir el flujo documentado en:
+Para una base nueva, seguir el flujo documentado en:
 
 ```text
-supabase/setup_multi_tenant/00_README.md
+supabase/schema/00_README.md
 ```
 
-Para una base nueva, ejecutar primero `00_base_schema.sql` y despues las migraciones academicas 01-12 en orden.
+Antes de correr el bloque de seed de `01_foundation.sql`, crear el usuario real
+en Supabase Auth según indica `supabase/schema/00_README.md`.
 
-`00_base_schema.sql` crea el esquema base: instituciones, perfiles, memberships,
-padrones, snapshots, archivos de workspace, bucket de Storage, helpers, RPCs
-administrativas, indices y seeds. Las migraciones 01-12 agregan la capa
-academica relacional: materias, inscripciones, asistencia, notas, portales y
-bloqueo de mesas por condicion regular.
-
-Despues ejecutar:
+No usar instrucciones históricas de `supabase/setup_multi_tenant/`: esa carpeta
+no existe en este checkout. Antes de aplicar SQL mutante, seguir:
 
 ```text
-supabase/security/rls_negative_tests.sql
+docs/SECURITY_LOW_RISK_APPLY_CHECKLIST.md
 ```
 
-Resultado esperado:
+El archivo histórico `supabase/security/rls_negative_tests.sql` tampoco existe
+en este checkout. La prueba disponible es:
 
 ```text
-SECURITY_TESTS_OK
+supabase/security/student_portal_exam_visibility_tests.sql
 ```
+
+Esa prueba cubre visibilidad de mesas del alumno con actores preparados; no
+reemplaza una matriz negativa integral de RLS/Storage por rol, tabla, RPC y
+tenant.
 
 ### Edge Function admin-users
 
@@ -413,13 +416,9 @@ La advertencia de chunks grandes por `excel-vendor` y `docx-vendor` es conocida.
 
 ## Integración continua
 
-El [workflow CI](.github/workflows/ci.yml) se ejecuta en cada push a `main` y en cada PR (apertura, actualización de commits o reapertura), sin filtro de rama destino ni de archivos. Usa Ubuntu, Node 22 y caché npm basada en `package-lock.json`.
+El [workflow CI](.github/workflows/ci.yml) se ejecuta en cada PR hacia `main` y push a `main`. Usa Ubuntu, Node `22.13.0`, `npm ci`, cache npm basada en `package-lock.json` y el mismo quality gate local: `npm run check`.
 
-Ejecuta `npm ci`, `npm run audit:repo`, `npm run lint`, `npm test` y `npm run build`, en ese orden. El build incluye `audit:prod`. Un fallo detiene los pasos siguientes y marca el job como fallido; no se omiten tests ni controles de secretos.
-
-No requiere secretos de GitHub ni credenciales Supabase. El único env explícito de build es `VITE_DISABLE_AUTH=false`: el modo demo está prohibido en producción. Este workflow verifica el código; no despliega ni valida una base remota.
-
-Para impedir merges con CI fallido, configurar en GitHub la protección de `main` y exigir el check `Calidad (Node 22)`. El archivo YAML no activa por sí solo esa protección. Ver el [procedimiento de CI del runbook](docs/RUNBOOK.md#integración-continua-en-github-actions) y los fallos locales conocidos en [preparación para producción](docs/PRODUCTION_READINESS.md).
+No requiere secretos de GitHub, credenciales Supabase ni variables `VITE_*`; no despliega ni valida una base remota. La auditoría de dependencias queda como workflow manual separado hasta resolver la excepción vigente `EX-001`. Para bloquear merges, configurar en GitHub la protección de `main` y exigir el check `Quality gate (Node 22.13)`. Ver el [procedimiento de CI del runbook](docs/RUNBOOK.md#integración-continua-en-github-actions).
 
 ## Estructura principal
 
@@ -438,7 +437,7 @@ src/
   styles/
 
 supabase/
-  setup_multi_tenant/
+  schema/
   functions/admin-users/
   security/
   docs/

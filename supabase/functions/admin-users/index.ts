@@ -256,7 +256,7 @@ async function recordAdminAudit({
   metadata,
   errorMessage = null,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   caller: { id: string; email?: string | null }
   action: string
   status: 'success' | 'error'
@@ -355,7 +355,7 @@ async function getAuthenticatedContext(req: Request) {
     throw new HttpError('Tu usuario esta bloqueado. Contacta al administrador del sistema.', 403)
   }
 
-  return { adminClient, caller: userData.user, profile }
+  return { userClient, adminClient, caller: userData.user, profile }
 }
 
 async function requireStudentPortalMember(req: Request, institutionId: string) {
@@ -450,7 +450,7 @@ async function requireSuperAdmin(req: Request) {
 
   const { data: profile, error: profileError } = await adminClient
     .from('profiles')
-    .select('is_global_admin, is_blocked')
+    .select('is_global_admin, is_blocked, account_role, display_name, email')
     .eq('user_id', userData.user.id)
     .maybeSingle()
 
@@ -462,10 +462,10 @@ async function requireSuperAdmin(req: Request) {
     throw new HttpError('Acceso denegado: se requieren permisos de Super Admin.', 403)
   }
 
-  return { adminClient, caller: userData.user }
+  return { userClient, adminClient, caller: userData.user, profile }
 }
 
-async function findAuthUserByEmail(adminClient: ReturnType<typeof createClient>, email: string) {
+async function findAuthUserByEmail(adminClient: ReturnType<typeof getClients>['adminClient'], email: string) {
   let page = 1
   const perPage = 1000
 
@@ -484,7 +484,7 @@ async function findAuthUserByEmail(adminClient: ReturnType<typeof createClient>,
   return null
 }
 
-async function findAuthUsersByEmails(adminClient: ReturnType<typeof createClient>, emails: string[]) {
+async function findAuthUsersByEmails(adminClient: ReturnType<typeof getClients>['adminClient'], emails: string[]) {
   const pendingEmails = new Set(emails.map((email) => email.toLowerCase()).filter(Boolean))
   const usersByEmail = new Map<string, Awaited<ReturnType<typeof findAuthUserByEmail>>>()
   if (pendingEmails.size === 0) return usersByEmail
@@ -510,7 +510,7 @@ async function findAuthUsersByEmails(adminClient: ReturnType<typeof createClient
   return usersByEmail
 }
 
-async function deleteAuthUsersByEmail(adminClient: ReturnType<typeof createClient>, email: string) {
+async function deleteAuthUsersByEmail(adminClient: ReturnType<typeof getClients>['adminClient'], email: string) {
   const normalizedEmail = email.toLowerCase()
   let page = 1
   const perPage = 1000
@@ -531,13 +531,67 @@ async function deleteAuthUsersByEmail(adminClient: ReturnType<typeof createClien
   }
 }
 
+async function findStudentProvisioningUsers(adminClient: ReturnType<typeof getClients>['adminClient'], emails: string[]) {
+  const requested = new Set(emails.map((email) => email.trim().toLowerCase()))
+  const users = new Map<string, Awaited<ReturnType<typeof findAuthUserByEmail>>>()
+  if (requested.size === 0) return users
+  // No inferir ausencia o unicidad desde una pagina parcial de Auth.
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) throw error
+    for (const user of data.users) {
+      const email = user.email?.trim().toLowerCase()
+      if (!email || !requested.has(email)) continue
+      if (users.has(email) && users.get(email)?.id !== user.id) {
+        throw new HttpError('Identidad de alumno ambigua. No se modifico ningun acceso.', 409)
+      }
+      users.set(email, user)
+    }
+    if (data.users.length < 1000) return users
+  }
+  throw new HttpError('No se pudo resolver la identidad completa del alumno.', 409)
+}
+
+async function findStudentProvisioningLinks(
+  adminClient: ReturnType<typeof getClients>['adminClient'], institutionId: string, email: string,
+) {
+  const escapedEmail = email.replace(/[\\%_]/g, '\\$&')
+  const { data: records, count, error: recordsError } = await adminClient.from('student_records')
+    .select('id, profile_id, email, workspace_key, career', { count: 'exact' }).eq('institution_id', institutionId).ilike('email', escapedEmail)
+  if (recordsError) throw recordsError
+  if (!records || count !== records.length || records.some((record) => record.email?.trim().toLowerCase() !== email)) {
+    throw new HttpError('Vinculos de alumno ambiguos o incompletos.', 409)
+  }
+  return records
+}
+
+async function assertStudentProvisioningIdentity(
+  adminClient: ReturnType<typeof getClients>['adminClient'], institutionId: string, email: string,
+  user: NonNullable<Awaited<ReturnType<typeof findAuthUserByEmail>>>,
+) {
+  const { data: profile, error: profileError } = await adminClient.from('profiles')
+    .select('email, account_role, is_global_admin, is_blocked').eq('user_id', user.id).maybeSingle()
+  if (profileError) throw profileError
+  const { data: membership, error: membershipError } = await adminClient.from('memberships')
+    .select('role').eq('institution_id', institutionId).eq('user_id', user.id).maybeSingle()
+  if (membershipError) throw membershipError
+  const records = await findStudentProvisioningLinks(adminClient, institutionId, email)
+  if (!profile || profile.is_global_admin || profile.is_blocked ||
+    !['alumno', 'student'].includes(String(profile.account_role).toLowerCase()) ||
+    profile.email?.trim().toLowerCase() !== email || !membership ||
+    !records.length || records.some((record) => record.profile_id !== user.id)) {
+    throw new HttpError('Identidad de alumno sin vinculo inequivoco con esta institucion.', 409)
+  }
+  return records
+}
+
 async function createOrReuseAuthUser({
   adminClient,
   email,
   password,
   displayName,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   email: string
   password: string
   displayName: string
@@ -592,7 +646,7 @@ async function upsertProfile({
   email,
   displayName,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   userId: string
   email: string
   displayName: string
@@ -618,7 +672,7 @@ async function assignMemberships({
   institutionIds,
   role,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   userId: string
   institutionIds: string[]
   role: string
@@ -644,7 +698,7 @@ async function assignMemberships({
   if (error) throw error
 }
 
-async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof createClient>, payload: Record<string, unknown>) {
+async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
   const institutionName = requireString(payload.institution_name, 'El nombre de la institucion')
   const slug = requireString(payload.institution_slug ?? slugify(institutionName), 'El slug de la institucion')
   const planType = typeof payload.institution_plan_type === 'string' && planTypes.has(payload.institution_plan_type)
@@ -704,7 +758,7 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof create
   }
 }
 
-async function handleCreateOrAssignInstitutionUser(adminClient: ReturnType<typeof createClient>, payload: Record<string, unknown>) {
+async function handleCreateOrAssignInstitutionUser(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
   const email = normalizeEmail(payload.user_email)
   const password = requireString(payload.user_password, 'La contrasena inicial')
   const displayName = requireString(payload.user_display_name, 'El nombre visible')
@@ -743,57 +797,37 @@ async function handleCreateOrAssignInstitutionUser(adminClient: ReturnType<typeo
 
 async function createOrReuseStudentAuthUser({
   adminClient,
+  institutionId,
   email,
   password,
   displayName,
   existingUser,
   skipExistingUserLookup = false,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
+  institutionId: string
   email: string
   password: string
   displayName: string
   existingUser?: Awaited<ReturnType<typeof findAuthUserByEmail>>
   skipExistingUserLookup?: boolean
 }) {
-  if (password.length < 6) {
-    throw badRequest(`El DNI usado como contrasena para ${email} debe tener al menos 6 caracteres.`)
-  }
-
   if (!skipExistingUserLookup && !existingUser) {
-    existingUser = await findAuthUserByEmail(adminClient, email)
+    existingUser = (await findStudentProvisioningUsers(adminClient, [email])).get(email) ?? null
   }
 
   if (existingUser) {
-    const { data: existingProfile, error: profileLookupError } = await adminClient
-      .from('profiles')
-      .select('account_role, is_global_admin')
-      .eq('user_id', existingUser.id)
-      .maybeSingle()
+    const studentRecords = await assertStudentProvisioningIdentity(adminClient, institutionId, email, existingUser)
+    // Provisionar no resetea Auth, metadata global, roles ni bloqueo.
+    return { user: existingUser, status: 'updated', studentRecords }
+  }
 
-    if (profileLookupError) throw profileLookupError
-
-    const existingRole = String(
-      existingProfile?.account_role ?? existingUser.user_metadata?.account_role ?? '',
-    ).toLowerCase()
-    const canReuseAsStudent = !existingRole || ['alumno', 'student'].includes(existingRole)
-
-    if (existingProfile?.is_global_admin || !canReuseAsStudent) {
-      throw badRequest(`El email ${email} ya pertenece a un usuario con otro rol. No se modifico ese acceso.`)
-    }
-
-    const { error: updateError } = await adminClient.auth.admin.updateUserById(existingUser.id, {
-      password,
-      email_confirm: true,
-      user_metadata: {
-        ...existingUser.user_metadata,
-        full_name: displayName || existingUser.user_metadata?.full_name || email,
-        account_role: 'alumno',
-      },
-    })
-
-    if (updateError) throw updateError
-    return { user: existingUser, status: 'updated' }
+  if (password.length < 6) {
+    throw badRequest('El DNI usado como contrasena inicial debe tener al menos 6 caracteres.')
+  }
+  const links = await findStudentProvisioningLinks(adminClient, institutionId, email)
+  if (links.some((record) => record.profile_id)) {
+    throw new HttpError('El alumno ya esta vinculado a otra identidad.', 409)
   }
 
   const { data, error } = await adminClient.auth.admin.createUser({
@@ -810,9 +844,14 @@ async function createOrReuseStudentAuthUser({
     },
   })
 
-  if (error) throw error
+  if (error) {
+    if (error.code === 'email_exists' || error.code === 'user_already_exists') {
+      throw new HttpError('La identidad ya existe. Reintenta sin modificar credenciales.', 409)
+    }
+    throw error
+  }
   if (!data.user) throw new Error('Supabase no devolvio el usuario alumno creado.')
-  return { user: data.user, status: 'created' }
+  return { user: data.user, status: 'created', studentRecords: [] }
 }
 
 async function createOrReuseTeacherAuthUser({
@@ -824,7 +863,7 @@ async function createOrReuseTeacherAuthUser({
   existingUser,
   skipExistingUserLookup = false,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   email: string
   password: string
   displayName: string
@@ -899,7 +938,7 @@ async function linkStudentRecordsToProfile({
   email,
   userId,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   email: string
   userId: string
@@ -933,7 +972,7 @@ async function persistStudentRecord({
   displayName,
   userId,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   student: Record<string, unknown>
   email: string
@@ -1010,7 +1049,7 @@ async function persistStudentCareerPlan({
   student,
   studentRecordId,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   student: Record<string, unknown>
   studentRecordId: string | null
@@ -1073,7 +1112,7 @@ async function persistAndLinkTeacherRecord({
   dni,
   userId,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   teacher: Record<string, unknown>
   email: string
@@ -1112,7 +1151,7 @@ async function persistAndLinkTeacherRecord({
   return data.id
 }
 
-async function handleBulkCreateStudents(adminClient: ReturnType<typeof createClient>, payload: Record<string, unknown>) {
+async function handleBulkCreateStudents(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
   const institutionId = requireString(payload.institution_id, 'La institucion')
   const students = Array.isArray(payload.students)
     ? payload.students.filter(isRecord)
@@ -1124,7 +1163,7 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof createCli
 
   const results: Array<Record<string, unknown>> = []
   const errors: Array<Record<string, unknown>> = []
-  const authUsersByEmail = await findAuthUsersByEmails(
+  const authUsersByEmail = await findStudentProvisioningUsers(
     adminClient,
     students.flatMap((student) => {
       try {
@@ -1143,12 +1182,9 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof createCli
       const password = getStudentPassword(student.dni ?? student.documento ?? student.password)
       const displayName = getStudentDisplayName(student, email)
 
-      if (!password) {
-        throw badRequest(`Fila ${rowNumber}: falta DNI para usar como contrasena inicial.`)
-      }
-
-      const { user, status } = await createOrReuseStudentAuthUser({
+      const { user, status, studentRecords } = await createOrReuseStudentAuthUser({
         adminClient,
+        institutionId,
         email,
         password,
         displayName,
@@ -1157,26 +1193,38 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof createCli
       })
       authUsersByEmail.set(email, user)
 
-      const { error: profileError } = await adminClient
-        .from('profiles')
-        .upsert({
-          user_id: user.id,
-          email,
-          display_name: displayName,
-          account_role: 'alumno',
-          is_global_admin: false,
-          is_blocked: false,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' })
+      if (status === 'updated') {
+        const career = getOptionalString(student.carrera ?? student.career)
+        const record = studentRecords.find((entry) => entry.workspace_key === 'main' && entry.career === career)
+        results.push({
+          email, user_id: user.id, linked_student_records: studentRecords.length,
+          student_record_id: record?.id ?? null, student_career_plan_id: null, status,
+        })
+        continue
+      }
 
-      if (profileError) throw profileError
+      if (status === 'created') {
+        const { error: profileError } = await adminClient
+          .from('profiles')
+          .upsert({
+            user_id: user.id,
+            email,
+            display_name: displayName,
+            account_role: 'alumno',
+            is_global_admin: false,
+            is_blocked: false,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' })
 
-      await assignMemberships({
-        adminClient,
-        userId: user.id,
-        institutionIds: [institutionId],
-        role: 'viewer',
-      })
+        if (profileError) throw profileError
+
+        await assignMemberships({
+          adminClient,
+          userId: user.id,
+          institutionIds: [institutionId],
+          role: 'viewer',
+        })
+      }
 
       const studentRecordId = await persistStudentRecord({
         adminClient,
@@ -1213,8 +1261,16 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof createCli
         row: rowNumber,
         email: typeof student.email === 'string' ? student.email : null,
         error: error instanceof Error ? error.message : 'Error inesperado.',
+        status: error instanceof HttpError ? error.status : 500,
       })
     }
+  }
+
+  if (results.length === 0 && errors.some((entry) => entry.status === 409 || entry.status === 403)) {
+    throw new HttpError('Identidad de alumno no autorizada o ambigua. No se modifico el acceso.', 409)
+  }
+  if (results.length === 0 && errors.length > 0) {
+    throw new HttpError('No se pudo provisionar el acceso del alumno.', Number(errors[0].status))
   }
 
   return {
@@ -1227,7 +1283,7 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof createCli
   }
 }
 
-async function handleBulkCreateTeachers(adminClient: ReturnType<typeof createClient>, payload: Record<string, unknown>) {
+async function handleBulkCreateTeachers(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
   const institutionId = requireString(payload.institution_id, 'La institucion')
   const teachers = Array.isArray(payload.teachers)
     ? payload.teachers.filter(isRecord)
@@ -1456,7 +1512,7 @@ async function resolveStudentRecordIdForPortalEnrollment({
   callerEmail,
   programId,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   workspaceKey: string
   callerId?: string | null
@@ -1631,7 +1687,7 @@ async function getLatestRelationalAcademicStatus({
   subjectId,
   programId,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   workspaceKey: string
   studentId: string
@@ -1669,7 +1725,7 @@ async function assertPortalExamRegistrationEligibility({
   subjectId,
   programId,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   snapshot: Record<string, unknown>
   institutionId: string
   workspaceKey: string
@@ -1732,7 +1788,7 @@ function normalizeAcademicTransitionConfig(value: unknown): AcademicTransitionCo
   }
 }
 
-async function getAcademicTransitionConfig(adminClient: ReturnType<typeof createClient>) {
+async function getAcademicTransitionConfig(adminClient: ReturnType<typeof getClients>['adminClient']) {
   const { data, error } = await adminClient
     .from('app_settings')
     .select('value')
@@ -2273,7 +2329,7 @@ function stripStudentSubjectEnrollmentSnapshotData(
   subjectId: string,
   programId: string,
 ) {
-  const nextSnapshot = stripStudentSubjectAcademicSnapshotData(snapshot, identity, subjectId, programId)
+  const nextSnapshot: Record<string, unknown> = stripStudentSubjectAcademicSnapshotData(snapshot, identity, subjectId, programId)
 
   return {
     ...nextSnapshot,
@@ -2310,7 +2366,7 @@ async function fetchStudentRecordsForAcademicReset({
   workspaceKey,
   identity,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   workspaceKey: string
   identity: StudentAcademicResetIdentity
@@ -2352,7 +2408,7 @@ async function selectAcademicIdsByColumns({
   workspaceKey,
   filters,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   table: string
   institutionId: string
   workspaceKey: string
@@ -2396,7 +2452,7 @@ async function updateAcademicRowsByIds({
   ids,
   patch,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   table: string
   ids: string[]
   patch: Record<string, unknown>
@@ -2422,7 +2478,7 @@ async function deleteAcademicRowsByIds({
   table,
   ids,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   table: string
   ids: string[]
 }) {
@@ -2450,7 +2506,7 @@ async function recordStudentPortalDualWriteWarning({
   errorMessage,
   payload,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   caller: { id: string; email?: string | null }
   institutionId: string
   mutationType: string
@@ -2484,7 +2540,7 @@ async function writeSubjectEnrollmentRelational({
   mutationType,
   now,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   context: Awaited<ReturnType<typeof requireStudentPortalMember>>
   institutionId: string
   workspaceKey: string
@@ -2506,7 +2562,7 @@ async function writeSubjectEnrollmentRelational({
   const legacySnapshotId = getOptionalString(enrollment.id)
   const clientMutationId = getOptionalString(enrollment.client_mutation_id) || legacySnapshotId || null
 
-  const { data, error } = await adminClient.rpc('upsert_subject_enrollment_from_portal', {
+  const { data, error } = await context.userClient.rpc('upsert_subject_enrollment_from_portal', {
     target_institution_id: institutionId,
     target_workspace_key: workspaceKey,
     actor_user_id: context.caller.id,
@@ -2539,7 +2595,7 @@ async function writeExamEnrollmentRelational({
   mutationType,
   now,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   context: Awaited<ReturnType<typeof requireStudentPortalMember>>
   institutionId: string
   workspaceKey: string
@@ -2558,7 +2614,7 @@ async function writeExamEnrollmentRelational({
   const legacySnapshotId = getOptionalString(enrollment.id)
   const clientMutationId = getOptionalString(enrollment.client_mutation_id) || legacySnapshotId || null
 
-  const { data, error } = await adminClient.rpc('upsert_exam_enrollment_from_portal', {
+  const { data, error } = await context.userClient.rpc('upsert_exam_enrollment_from_portal', {
     target_institution_id: institutionId,
     target_workspace_key: workspaceKey,
     actor_user_id: context.caller.id,
@@ -2592,7 +2648,7 @@ async function writeStudentPortalRelational({
   result,
   now,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   context: Awaited<ReturnType<typeof requireStudentPortalMember>>
   institutionId: string
   workspaceKey: string
@@ -2632,7 +2688,7 @@ async function writeStudentPortalRelational({
 }
 
 async function handleStudentPortalMutation(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: ReturnType<typeof getClients>['adminClient'],
   payload: Record<string, unknown>,
   context?: Awaited<ReturnType<typeof requireStudentPortalMember>>,
 ) {
@@ -2976,7 +3032,7 @@ async function fetchTeacherRosterTeacherRecords({
   workspaceKey,
   context,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   workspaceKey: string
   context: Awaited<ReturnType<typeof requireTeacherPortalMember>>
@@ -3010,7 +3066,7 @@ async function fetchTeacherRosterSnapshot({
   institutionId,
   workspaceKey,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   workspaceKey: string
 }) {
@@ -3037,7 +3093,7 @@ async function fetchTeacherRosterAssignments({
   institutionId,
   workspaceKey,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   institutionId: string
   workspaceKey: string
 }) {
@@ -3169,7 +3225,7 @@ async function fetchTeacherRosterStudentRecords({
   adminClient,
   enrollments,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   enrollments: Array<Record<string, unknown>>
 }) {
   const records = {
@@ -3187,7 +3243,10 @@ async function fetchTeacherRosterStudentRecords({
   }
 
   if (recordIds.length > 0) {
-    let { data, error } = await adminClient
+    let { data, error }: {
+      data: Array<Record<string, unknown>> | null
+      error: { code: string; message: string; details: string; hint: string } | null
+    } = await adminClient
       .from('student_records')
       .select('id, profile_id, full_name, first_name, last_name, dni, email')
       .in('id', recordIds)
@@ -3227,7 +3286,7 @@ async function fetchTeacherRosterStudentProfiles({
   adminClient,
   enrollments,
 }: {
-  adminClient: ReturnType<typeof createClient>
+  adminClient: ReturnType<typeof getClients>['adminClient']
   enrollments: Array<Record<string, unknown>>
 }) {
   const profileIds = Array.from(new Set(enrollments.map((row) => getOptionalString(row.student_id)).filter(isUuid)))
@@ -3240,15 +3299,15 @@ async function fetchTeacherRosterStudentProfiles({
 
   if (error) throw error
 
-  return new Map(
+  return new Map<string, Record<string, unknown>>(
     asRecordArray(data)
-      .map((row) => [getOptionalString(row.user_id), row])
+      .map((row): [string, Record<string, unknown>] => [getOptionalString(row.user_id), row])
       .filter(([userId]) => userId),
   )
 }
 
 async function handleTeacherSubjectRosters(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: ReturnType<typeof getClients>['adminClient'],
   payload: Record<string, unknown>,
   context?: Awaited<ReturnType<typeof requireTeacherPortalMember>>,
 ) {
@@ -3352,7 +3411,7 @@ async function handleTeacherSubjectRosters(
 }
 
 async function handleTeacherProfileUpdate(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: ReturnType<typeof getClients>['adminClient'],
   payload: Record<string, unknown>,
   context?: Awaited<ReturnType<typeof requireTeacherPortalMember>>,
 ) {
@@ -3463,9 +3522,17 @@ async function handleTeacherProfileUpdate(
   return { success: true, user_id: context.caller.id, email, telefono: phone }
 }
 
-async function handleSetUserPassword(adminClient: ReturnType<typeof createClient>, payload: Record<string, unknown>) {
+async function handleSetUserPassword(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
   const userId = requireString(payload.target_user_id, 'El usuario')
   const password = requireString(payload.new_password, 'La nueva contrasena')
+  const scopedReset = payload.institution_id !== undefined
+  if (scopedReset) {
+    const institutionId = requireString(payload.institution_id, 'La institucion')
+    const { data: membership, error } = await adminClient.from('memberships').select('role')
+      .eq('institution_id', institutionId).eq('user_id', userId).maybeSingle()
+    if (error) throw error
+    if (!membership) throw new HttpError('El usuario no pertenece a la institucion solicitada.', 403)
+  }
 
   if (password.length < 8) {
     throw badRequest('La nueva contrasena debe tener al menos 8 caracteres.')
@@ -3477,6 +3544,8 @@ async function handleSetUserPassword(adminClient: ReturnType<typeof createClient
   })
 
   if (error) {
+    // Un reset con scope nunca borra/recrea identidades como reparacion global.
+    if (scopedReset) throw error
     // Usuarios creados por SQL directo durante pruebas pueden quedar inconsistentes.
     // Para admins institucionales intentamos repararlos recreando Auth y restaurando memberships.
     const { data: profile, error: profileError } = await adminClient
@@ -3576,7 +3645,7 @@ async function handleSetUserPassword(adminClient: ReturnType<typeof createClient
 }
 
 async function handleResetStudentAcademicRecords(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: ReturnType<typeof getClients>['adminClient'],
   payload: Record<string, unknown>,
   context?: Awaited<ReturnType<typeof requireInstitutionAdmin>>,
 ) {
@@ -3720,7 +3789,7 @@ async function handleResetStudentAcademicRecords(
 }
 
 async function handleTeacherRemoveStudentSubjectRecords(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: ReturnType<typeof getClients>['adminClient'],
   payload: Record<string, unknown>,
   context?: Awaited<ReturnType<typeof getAuthenticatedContext>>,
 ) {
@@ -3811,7 +3880,7 @@ async function handleTeacherRemoveStudentSubjectRecords(
 }
 
 async function handleTeacherResetStudentSubjectAcademicRecords(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: ReturnType<typeof getClients>['adminClient'],
   payload: Record<string, unknown>,
   context?: Awaited<ReturnType<typeof requireTeacherPortalMember>>,
 ) {
@@ -3881,7 +3950,7 @@ async function handleTeacherResetStudentSubjectAcademicRecords(
 }
 
 const actionHandlers: Record<string, (
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: ReturnType<typeof getClients>['adminClient'],
   payload: Record<string, unknown>,
   context?: Awaited<ReturnType<typeof getAuthenticatedContext>>,
 ) => Promise<unknown>> = {
@@ -3914,7 +3983,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Metodo no permitido.' }, 405, req)
   }
 
-  let auditClient: ReturnType<typeof createClient> | null = null
+  let auditClient: ReturnType<typeof getClients>['adminClient'] | null = null
   let auditCaller: { id: string; email?: string | null } | null = null
   let auditAction = 'unknown'
   let auditPayload: Record<string, unknown> = {}

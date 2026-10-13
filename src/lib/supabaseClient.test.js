@@ -24,6 +24,23 @@ describe('validacion antes de inicializar Supabase', () => {
     expect(mocks.createClient).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['VITE_SUPABASE_URL'],
+    ['VITE_SUPABASE_PUBLISHABLE_KEY'],
+  ])('impide crear el cliente si falta %s en produccion', async (key) => {
+    vi.stubEnv(key, '')
+    await expect(import('./supabaseClient.js')).rejects.toThrow()
+    expect(mocks.createClient).not.toHaveBeenCalled()
+  })
+
+  it('impide crear el cliente si la publishable key parece service_role', async () => {
+    const payload = Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url')
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', `header.${payload}.signature`)
+
+    await expect(import('./supabaseClient.js')).rejects.toThrow()
+    expect(mocks.createClient).not.toHaveBeenCalled()
+  })
+
   it('inicializa el cliente con configuracion publica segura', async () => {
     const client = await import('./supabaseClient.js')
     expect(client.isSupabaseConfigured).toBe(true)

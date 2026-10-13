@@ -1,6 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import toast from 'react-hot-toast'
 import { DashboardView, ExamsView } from './TeacherPortalModule.jsx'
 import { confirmTeacherExamAssignment } from './services/teacherExamAssignments.js'
 import { getTeacherVisibleEmail, isTeacherTechnicalEmail } from './services/teacherContactDisplay.js'
@@ -40,7 +39,6 @@ function assignment(overrides = {}) {
     exam_table_id: 'draft:prof-historia::MAT1:PRIMER_LLAMADO',
     role: 'VOCAL_1',
     confirmation_status: 'pending',
-    teacher_notes: '',
     metadata: {
       fecha: '2026-08-10',
       materia: 'Didactica General',
@@ -93,100 +91,40 @@ describe('ExamsView - precronograma en revision', () => {
     expect(screen.getByText('No hay mesas publicadas para tu revision por el momento.')).toBeInTheDocument()
   })
 
-  it('muestra la mesa publicada con su rol y permite confirmar', async () => {
-    confirmTeacherExamAssignment.mockResolvedValue({ success: true, data: {} })
-    const onRefetchExamAssignments = vi.fn()
-
-    render(
-      <ExamsView
-        data={{}}
-        examAssignments={[assignment()]}
-        institutionId="inst-1"
-        onRefetchExamAssignments={onRefetchExamAssignments}
-      />,
-    )
+  it('muestra la mesa publicada con su rol y estado sin controles de decision', () => {
+    render(<ExamsView data={{}} examAssignments={[assignment()]} />)
 
     expect(screen.getByText('Didactica General')).toBeInTheDocument()
-    // Regresion: new Date('2026-08-10') sin timeZone: 'UTC' en formatDate
-    // mostraba "09 de ago" en husos horarios negativos (America/Argentina).
+    // Conserva el dia calendario en husos horarios negativos.
     expect(screen.getByText(/10 de ago de 2026/)).toBeInTheDocument()
     expect(screen.getByText(/Tu rol: Vocal 1/)).toBeInTheDocument()
     expect(screen.getByText('Pendiente de tu confirmacion')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: /Confirmar/ }))
-
-    await vi.waitFor(() => {
-      expect(confirmTeacherExamAssignment).toHaveBeenCalledWith({
-        institutionId: 'inst-1',
-        examTableId: 'draft:prof-historia::MAT1:PRIMER_LLAMADO',
-        confirmationStatus: 'confirmed',
-        teacherNotes: '',
-      })
-    })
-    expect(toast.success).toHaveBeenCalledWith('Mesa confirmada.')
-    expect(onRefetchExamAssignments).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('La gestion de decisiones sobre mesas no esta habilitada en esta version.')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(confirmTeacherExamAssignment).not.toHaveBeenCalled()
   })
 
-  it('objeta una mesa con observacion y muestra el error si falla', async () => {
-    confirmTeacherExamAssignment.mockResolvedValue({ success: false, error: 'No se pudo registrar la confirmacion.' })
+  it('muestra el motivo canonico de una objecion como informacion de solo lectura', () => {
+    render(<ExamsView data={{}} examAssignments={[assignment({ confirmation_status: 'objected', objection_reason: 'Conflicto horario' })]} />)
 
-    render(<ExamsView data={{}} examAssignments={[assignment()]} institutionId="inst-1" />)
-
-    fireEvent.change(screen.getByPlaceholderText(/Ej: no puedo esa fecha/), {
-      target: { value: 'No puedo ese dia' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /Objetar/ }))
-
-    await vi.waitFor(() => {
-      expect(confirmTeacherExamAssignment).toHaveBeenCalledWith(expect.objectContaining({
-        confirmationStatus: 'objected',
-        teacherNotes: 'No puedo ese dia',
-      }))
-    })
-    expect(toast.error).toHaveBeenCalledWith('No se pudo registrar la confirmacion.')
+    expect(screen.getByText('Objetada')).toBeInTheDocument()
+    expect(screen.getByText('Motivo de objecion:')).toBeInTheDocument()
+    expect(screen.getByText(/Conflicto horario/)).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(confirmTeacherExamAssignment).not.toHaveBeenCalled()
   })
 
-  it('ofrece fechas disponibles y envia la reubicacion elegida al objetar', async () => {
-    confirmTeacherExamAssignment.mockResolvedValue({ success: true, data: {} })
+  it('no habilita reubicacion aunque existan alternativas publicadas', () => {
+    const current = assignment()
+    current.metadata.reassignment_options = [{ targetExamTableId: 'mesa-alternativa', targetRole: 'VOCAL_2', fecha: '2026-08-12' }]
+    render(<ExamsView data={{ workspaceSnapshot: { cronograma: [{ id: 'mesa-alternativa', fecha: '2026-08-12' }] } }} examAssignments={[current]} />)
 
-    render(
-      <ExamsView
-        data={{
-          currentTeacher: {
-            full_name: 'Bruno Vocal',
-            raw: { id: 'doc-vocal-a', full_name: 'Bruno Vocal' },
-          },
-          workspaceSnapshot: {
-            disponibilidadDocente: [{ docenteId: 'doc-vocal-a', fecha: '2026-08-12' }],
-            cronograma: [{
-              id: 'mesa-alternativa', carrera: 'Profesorado de Historia',
-              materiaMesa: 'Historia Argentina', fecha: '2026-08-12',
-              inicio: '18:00', fin: '20:00', titularId: 'doc-titular',
-              vocal1Id: 'doc-vocal-c', vocal2Id: '',
-            }],
-          },
-        }}
-        examAssignments={[assignment()]}
-        institutionId="inst-1"
-      />,
-    )
-
-    const dateSelect = screen.getByLabelText('Fecha alternativa para Didactica General')
-    expect(dateSelect).toHaveTextContent('12 de ago de 2026')
-    fireEvent.change(dateSelect, { target: { value: 'mesa-alternativa:VOCAL_2' } })
-    fireEvent.change(screen.getByPlaceholderText(/Ej: no puedo esa fecha/), {
-      target: { value: 'Solicito cambio de fecha' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /Objetar/ }))
-
-    await vi.waitFor(() => {
-      expect(confirmTeacherExamAssignment).toHaveBeenCalledWith(expect.objectContaining({
-        confirmationStatus: 'objected',
-        reassignmentOption: expect.objectContaining({
-          targetExamTableId: 'mesa-alternativa', targetRole: 'VOCAL_2', fecha: '2026-08-12',
-        }),
-      }))
-    })
+    expect(screen.getByText('Didactica General')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(confirmTeacherExamAssignment).not.toHaveBeenCalled()
   })
 
   it('sigue mostrando la lista de mesas asignadas de solo lectura', () => {

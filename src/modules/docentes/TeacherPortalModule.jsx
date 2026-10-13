@@ -6,7 +6,6 @@ import {
   BookOpenCheck,
   Building2,
   CalendarDays,
-  CheckCircle2,
   Clock3,
   Download,
   GraduationCap,
@@ -19,7 +18,6 @@ import {
   Save,
   UsersRound,
   X,
-  XCircle,
 } from 'lucide-react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext.jsx'
@@ -28,7 +26,7 @@ import ProductBrand from '../../components/ProductBrand.jsx'
 import SubjectDetailView from './pages/SubjectDetailView.jsx'
 import SubjectsView from './pages/SubjectsView.jsx'
 import { buildSubjectDisplayIndex, buildSubjectKey, fetchTeacherSubjects } from './services/teacherSubjects.js'
-import { confirmTeacherExamAssignment, fetchTeacherExamAssignments } from './services/teacherExamAssignments.js'
+import { fetchTeacherExamAssignments } from './services/teacherExamAssignments.js'
 import {
   buildTeacherScheduleGrids,
   buildTeacherWeeklyOverviewGrid,
@@ -42,7 +40,6 @@ import {
 import { fetchTeacherSubjectRosters } from './services/subjectRoster.js'
 import { getTeacherVisibleEmail } from './services/teacherContactDisplay.js'
 import { updateTeacherProfile, validateTeacherProfile } from './services/teacherProfile.js'
-import { buildTeacherReassignmentOptions } from '../../features/exams/teacherReassignmentOptions.js'
 import {
   buildSubjectGroupsFromSubjects,
   mergeSubjectGroupsWithRosters,
@@ -542,47 +539,8 @@ const CONFIRMATION_BADGE_CLASSES = {
   objected: 'bg-rose-50 text-rose-900 ring-rose-200',
 }
 
-function ExamAssignmentConfirmationCard({ assignment, institutionId, onConfirmed, reassignmentOptions = EMPTY_ARRAY }) {
-  const [notes, setNotes] = useState(assignment.teacher_notes ?? '')
-  const [selectedOptionKey, setSelectedOptionKey] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+function ExamAssignmentCard({ assignment }) {
   const metadata = assignment.metadata ?? {}
-
-  async function handleDecision(confirmationStatus) {
-    const reassignmentOption = reassignmentOptions.find((option) => (
-      `${option.targetExamTableId}:${option.targetRole}` === selectedOptionKey
-    )) ?? null
-
-    if (confirmationStatus === 'objected' && reassignmentOptions.length > 0 && !reassignmentOption) {
-      toast.error('Selecciona una fecha alternativa para solicitar el cambio.')
-      return
-    }
-
-    setIsSubmitting(true)
-    const result = await confirmTeacherExamAssignment({
-      institutionId,
-      examTableId: assignment.exam_table_id,
-      confirmationStatus,
-      teacherNotes: notes,
-      ...(reassignmentOption ? { reassignmentOption } : {}),
-    })
-    setIsSubmitting(false)
-
-    if (!result.success) {
-      toast.error(result.error)
-      return
-    }
-
-    const automaticReassignment = result.data?.automatic_reassignment === true
-    toast.success(
-      confirmationStatus === 'confirmed'
-        ? 'Mesa confirmada.'
-        : automaticReassignment
-          ? `Cambio realizado automaticamente para el ${formatDate(result.data?.target_date)}.`
-          : 'Objecion registrada. El cambio queda pendiente de revision administrativa.',
-    )
-    onConfirmed?.()
-  }
 
   return (
     <article className="rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -602,96 +560,25 @@ function ExamAssignmentConfirmationCard({ assignment, institutionId, onConfirmed
         <p><strong className="text-slate-900">Titular:</strong> {metadata.titular || '-'}</p>
         <p><strong className="text-slate-900">Vocales:</strong> {[metadata.vocal1, metadata.vocal2].filter(Boolean).join(' / ') || '-'}</p>
       </div>
-      <label className="mt-4 block text-xs font-bold text-slate-600">
-        Observacion (opcional)
-        <textarea
-          className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900"
-          disabled={isSubmitting}
-          onChange={(event) => setNotes(event.target.value)}
-          placeholder="Ej: no puedo esa fecha, prefiero otro horario, etc."
-          rows={2}
-          value={notes}
-        />
-      </label>
-      {reassignmentOptions.length > 0 && (
-        <label className="mt-4 block text-xs font-bold text-slate-600">
-          Fecha alternativa para la reubicacion
-          <select
-            aria-label={`Fecha alternativa para ${metadata.materia || 'mesa de examen'}`}
-            className="input-base mt-1"
-            disabled={isSubmitting}
-            onChange={(event) => setSelectedOptionKey(event.target.value)}
-            value={selectedOptionKey}
-          >
-            <option value="">Seleccionar una mesa disponible</option>
-            {reassignmentOptions.map((option) => (
-              <option key={`${option.targetExamTableId}:${option.targetRole}`} value={`${option.targetExamTableId}:${option.targetRole}`}>
-                {formatDate(option.fecha)} · {option.inicio || 'Horario a confirmar'} · {option.materia} · {EXAM_ROLE_LABELS[option.targetRole]}{option.requiresSwap ? ' · requiere intercambio' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+      {assignment.confirmation_status === 'objected' && assignment.objection_reason && (
+        <p className="mt-4 text-sm text-slate-600"><strong>Motivo de objecion:</strong> {assignment.objection_reason}</p>
       )}
-      {assignment.reassignment_status === 'requested' && (
-        <p className="mt-3 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-900">
-          Cambio solicitado para el {formatDate(assignment.requested_date)}. Pendiente de revision administrativa.
-        </p>
-      )}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button className="btn-primary" disabled={isSubmitting} onClick={() => handleDecision('confirmed')} type="button">
-          <CheckCircle2 className="h-4 w-4" />
-          Confirmar
-        </button>
-        <button className="btn-secondary" disabled={isSubmitting} onClick={() => handleDecision('objected')} type="button">
-          <XCircle className="h-4 w-4" />
-          Objetar
-        </button>
-      </div>
     </article>
   )
 }
 
-export function ExamsView({ data, examAssignments = EMPTY_ARRAY, institutionId, onRefetchExamAssignments }) {
+export function ExamsView({ data, examAssignments = EMPTY_ARRAY }) {
   const exams = data?.exams ?? EMPTY_ARRAY
-  const snapshot = data?.workspaceSnapshot ?? {}
-  const teacherIdentity = data?.currentTeacher?.raw ?? {}
-  const teacherAvailability = (snapshot.disponibilidadDocente ?? []).filter((row) => {
-    const currentIds = [teacherIdentity.id, teacherIdentity.record_id, data?.currentTeacher?.record_id].map(clean).filter(Boolean)
-    const rowIds = [row.id, row.docenteId, row.docente_id, row.teacher_record_id].map(clean).filter(Boolean)
-    const currentNames = [teacherIdentity.full_name, teacherIdentity.nombre, data?.currentTeacher?.full_name].map(normalizeText).filter(Boolean)
-    const rowNames = [row.docente, row.nombre, row.teacher_name, row.teacher_display_name].map(normalizeText).filter(Boolean)
-    return rowIds.some((id) => currentIds.includes(id)) || rowNames.some((name) => currentNames.includes(name))
-  })
-  const teacherForAvailability = {
-    ...teacherIdentity,
-    availability: teacherAvailability,
-  }
 
   return (
     <div className="space-y-6">
       <Section title="Precronograma en revision" icon={CalendarDays}>
+        <p className="mb-4 text-sm text-slate-600">La gestion de decisiones sobre mesas no esta habilitada en esta version.</p>
         {examAssignments.length > 0 ? (
           <div className="grid gap-4 lg:grid-cols-2">
-            {examAssignments.map((assignment) => {
-              const calculatedOptions = buildTeacherReassignmentOptions({
-                objectedAssignment: assignment,
-                mesas: snapshot.cronograma ?? EMPTY_ARRAY,
-                teacher: teacherForAvailability,
-                teacherAssignments: examAssignments,
-              })
-              const publishedOptions = Array.isArray(assignment.metadata?.reassignment_options)
-                ? assignment.metadata.reassignment_options
-                : EMPTY_ARRAY
-              return (
-              <ExamAssignmentConfirmationCard
-                key={assignment.id}
-                assignment={assignment}
-                institutionId={institutionId}
-                onConfirmed={onRefetchExamAssignments}
-                reassignmentOptions={calculatedOptions.length ? calculatedOptions : publishedOptions}
-              />
-              )
-            })}
+            {examAssignments.map((assignment) => (
+              <ExamAssignmentCard key={assignment.id} assignment={assignment} />
+            ))}
           </div>
         ) : (
           <EmptyBlock>No hay mesas publicadas para tu revision por el momento.</EmptyBlock>
@@ -729,7 +616,7 @@ export function ExamsView({ data, examAssignments = EMPTY_ARRAY, institutionId, 
   )
 }
 
-function TeacherPortalLayout({ data, examAssignments, onRefetchExamAssignments, subjects, subjectsLoading }) {
+function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading }) {
   const { user, isRemoteSession, isSuperAdmin, signOutRemote } = useAuth()
   const queryClient = useQueryClient()
   const [isProfileOpen, setIsProfileOpen] = useState(false)
@@ -881,8 +768,6 @@ function TeacherPortalLayout({ data, examAssignments, onRefetchExamAssignments, 
               <ExamsView
                 data={data}
                 examAssignments={examAssignments}
-                institutionId={data?.currentInstitution?.id}
-                onRefetchExamAssignments={onRefetchExamAssignments}
               />
             )}
           />
@@ -1050,7 +935,6 @@ export default function TeacherPortalModule() {
     <TeacherPortalLayout
       data={dataWithSubjectRosters}
       examAssignments={examAssignmentsQuery.data ?? EMPTY_ARRAY}
-      onRefetchExamAssignments={examAssignmentsQuery.refetch}
       subjects={visibleSubjects}
       subjectsLoading={(subjectsQuery.isLoading || subjectRostersQuery.isLoading) && visibleSubjects.length === 0}
     />

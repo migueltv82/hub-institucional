@@ -4,6 +4,10 @@ Convencion nueva, distinta a `examenes/supabase/setup_multi_tenant/`: en vez de 
 
 No hay migraciones incrementales que dependan de un orden historico de aplicacion: si en algun momento hace falta cambiar algo de un bloque ya aplicado, se edita ese mismo archivo y se vuelve a correr entero, no se crea un archivo nuevo que lo parchea.
 
+Antes de aplicar funciones/RPC en staging o produccion, comparar el bloque afectado con `../../docs/SECURITY_FUNCTION_MATRIX.md`: caller esperado, `SECURITY DEFINER`, `search_path`, grants/revokes y pruebas cross-tenant. La matriz es local y no acredita que el ambiente remoto ya coincida.
+
+La comparación contra Supabase remoto/staging queda documentada en `../../docs/SUPABASE_DRIFT_AUDIT.md`. Si esa auditoría sigue bloqueada por falta de evidencia remota, no aplicar este schema ni reparaciones históricas a producción. Para discovery futuro, usar solo consultas read-only como `../security/remote_readonly_discovery.sql`.
+
 ## Proyecto Supabase
 
 `TU_PROJECT_REF` (`https://TU_PROJECT_REF.supabase.co`) -- ver variable local o `.env.local`, no commitear el ref real. Proyecto nuevo y vacio, sin relacion con la base de `examenes` en produccion.
@@ -12,7 +16,7 @@ No hay migraciones incrementales que dependan de un orden historico de aplicacio
 
 Ejecutar en el SQL Editor del dashboard, en este orden:
 
-1. **`01_foundation.sql`** — extensiones, identidad (`profiles`), multi-tenancy (`institutions`, `memberships`), auditoria (`admin_audit_logs`, `deleted_person_records`), configuracion (`app_settings`), funciones de login publico (`get_public_app_status`, `list_active_login_institutions`), RPCs base de superadmin (`update_membership_role`, `remove_user_membership`, `set_user_access_status`, `delete_institution_user`), RLS de estas tablas, y el seed del primer superadmin. Antes de correr el bloque de seed (al final del archivo), crear el usuario en **Authentication > Users** del dashboard con el email que figura en `target_email` dentro del archivo.
+1. **`01_foundation.sql`** — extensiones, identidad (`profiles`), multi-tenancy (`institutions`, `memberships`), auditoria (`admin_audit_logs`, `deleted_person_records`), configuracion (`app_settings`), funciones de login publico (`get_public_app_status`, `list_active_login_institutions`), RPCs base de superadmin (`update_membership_role`, `remove_user_membership`, `set_user_access_status`, `delete_institution_user`), hardening de `handle_new_user()` para no usar `raw_user_meta_data.account_role` y caer a `alumno` como rol minimo, RLS de estas tablas, y el seed del primer superadmin. Antes de correr el bloque de seed (al final del archivo), crear el usuario en **Authentication > Users** del dashboard con el email que figura en `target_email` dentro del archivo.
 
 2. **`02_academic_relational_schema.sql`** — carreras, planes, materias, correlatividades, equivalencias, docentes, horarios, alumnos y trayectoria academica, todos aislados por `institution_id`. Incluye compatibilidad de padrones con la UI actual en `teacher_records` y `student_records` (`workspace_key`, `profile_id`, `full_name`, `dni`, `raw_payload`, `updated_at`, claves de upsert, triggers de sincronizacion y policies de escritura para `owner`/`admin`/`editor`).
 
@@ -28,10 +32,13 @@ Ejecutar en el SQL Editor del dashboard, en este orden:
 
 7. **`07_academic_operations.sql`** — inscripciones a materias (`subject_enrollments`), libro docente (`student_grades`, `subject_class_sessions`, `subject_attendance_records`) y deuda administrativa (`student_financial_status`). Incluye RPCs seguras para inscripcion desde portal alumno y carga docente de clases, asistencia y notas.
 
+8. **`08_exam_tables.sql`** — schema canonico local de mesas de examen: `exam_tables`, `exam_table_subjects`, `exam_teacher_assignments`, `exam_enrollments`, `exam_enrollment_events` y `exam_table_events`. Implementa identidad `uuid`, compatibilidad legacy no destructiva, FKs compuestas tenant-safe, idempotencia estructural de inscripcion, soporte de `TRIBUNAL_CRUZADO`, RLS habilitado en default-deny y grants directos no mutantes. Incluye la RPC canónica `upsert_exam_enrollment_from_portal`, ya validada, y el modelo `exam_absence_penalties` respaldado por schema/tests dentro de su alcance acreditado. No migra datos legacy; las descripciones anteriores de RPC/modelo pendientes son HISTÓRICAS / SUPERADAS.
+
 Proximos bloques (todavia no escritos, quedan para completar la operacion academica):
 
-- Persistencia del cronograma generado por el motor de mesas (tablas de "mesas"/tribunal, todavia no existen).
-- Datos operativos de mesas no cubiertos por los bloques 5 a 7: `exam_teacher_assignments`, `exam_enrollments`, confirmaciones/objeciones docentes, actas. Requiere mantener compatibilidad con `legacy_exam_sessions` hasta que exista persistencia relacional real del cronograma.
+- HISTÓRICO / SUPERADO: la RPC autoritativa `upsert_exam_enrollment_from_portal` ya existe y está validada en el bloque 8; ver el [contrato vigente](../../docs/contracts/upsert_exam_enrollment_from_portal.md) y los [resultados locales](../baseline/LOCAL_AB_RLS_RPC_RESULT.md).
+- Migracion controlada desde `legacy_exam_sessions`, `workspaceSnapshot.cronograma` y repairs historicos hacia el modelo canonico del bloque 8.
+- Actas/resultados y operaciones no acreditadas permanecen diferidos. El modelo de penalidades de ausencia ya existe en schema/tests; esto no acredita automáticamente todos sus flujos operativos ni una migración legacy.
 
 ## Por que existe esta carpeta
 

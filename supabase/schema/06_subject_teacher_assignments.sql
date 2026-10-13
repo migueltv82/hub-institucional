@@ -126,8 +126,19 @@ begin
   end if;
 end $$;
 
+-- La asignacion conserva el legajo dentro de su tenant y workspace.
+create unique index if not exists teacher_records_tenant_workspace_id_key
+  on public.teacher_records (institution_id, workspace_key, id);
+
 do $$
 begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.subject_teacher_assignments'::regclass and conname = 'subject_teacher_assignments_teacher_record_scope_fkey') then
+    alter table public.subject_teacher_assignments
+      add constraint subject_teacher_assignments_teacher_record_scope_fkey
+      foreign key (institution_id, workspace_key, teacher_record_id)
+      references public.teacher_records (institution_id, workspace_key, id)
+      on delete set null (teacher_record_id);
+  end if;
   if not exists (
     select 1
     from pg_constraint

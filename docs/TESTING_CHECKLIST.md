@@ -6,13 +6,13 @@ Guia corta para validar el proyecto despues de crear una base Supabase nueva.
 
 1. Configurar `.env` con `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` y `VITE_DISABLE_AUTH=false`.
 2. Crear tu usuario en `Authentication > Users`.
-3. Ejecutar `00_base_schema.sql` y luego las migraciones 01-12 listadas en `supabase/setup_multi_tenant/00_README.md` en Supabase SQL Editor.
+3. Para una base nueva, seguir el orden de `supabase/schema/00_README.md`. No usar `supabase/setup_multi_tenant/`: esa carpeta no existe en este checkout.
 4. Desplegar `admin-users` siguiendo `supabase/docs/deploy_admin_users.md`.
 5. Configurar `ADMIN_USERS_ALLOWED_ORIGINS` con el dominio de la app y los origenes locales permitidos.
 6. En Supabase Auth, definir:
    - `Site URL`: `http://127.0.0.1:4173`
    - `Redirect URLs`: `http://127.0.0.1:4173/**` y `http://127.0.0.1:5173/**`
-7. Ejecutar `supabase/security/rls_negative_tests.sql` y confirmar `SECURITY_TESTS_OK`.
+7. Antes de aplicar SQL mutante, seguir `docs/SECURITY_LOW_RISK_APPLY_CHECKLIST.md`. El archivo histórico `supabase/security/rls_negative_tests.sql` no existe; `supabase/security/student_portal_exam_visibility_tests.sql` es solo una prueba focal de mesas del alumno y no sustituye la matriz negativa integral de RLS/Storage.
 8. Si hay deploy en Vercel, cargar solo variables `VITE_*` publicas y confirmar que no existe ninguna `VITE_SERVICE_ROLE_KEY`.
 9. Levantar la app con `npm run dev`.
 10. Validar `npm run check`.
@@ -50,7 +50,7 @@ Guia corta para validar el proyecto despues de crear una base Supabase nueva.
 - `npm run check` pasa
 - la RPC `list_active_login_institutions` devuelve instituciones activas
 - la Edge Function `admin-users` responde `200` al preflight
-- `supabase/security/rls_negative_tests.sql` devuelve `SECURITY_TESTS_OK`
+- la matriz negativa integral de RLS/Storage por rol, tabla, RPC y tenant queda ejecutada y documentada; el script histórico `rls_negative_tests.sql` está ausente en este checkout
 - el deploy tiene headers de seguridad desde `vercel.json`
 - el modo remoto persiste datos por `institution_id`
 - el superadmin puede crear, bloquear, resetear y eliminar usuarios institucionales

@@ -1,14 +1,34 @@
-# Protección de ramas para producción
+# Protección de `main`
 
-Estas reglas aplican a `main` de este repo. Son la política de integración del producto; **este documento no configura GitHub ni confirma que la protección esté activa**. Su configuración y verificación son manuales.
+Estas reglas aplican a `main` de `migueltv82/hub-institucional`. Son la política de integración del producto; **este documento no configura GitHub ni confirma que la protección esté activa**. La configuración remota y su verificación son estados separados.
+
+## Estado auditado
+
+- Repositorio remoto local: `https://github.com/migueltv82/hub-institucional.git`.
+- Rama default detectada localmente y por GitHub: `main`.
+- Workflow principal: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml), nombre `CI`.
+- Job principal: `Quality gate (Node 22.13)`.
+- Comando protegido por el job: `npm run check`.
+- Required status check esperado: `Quality gate (Node 22.13)`.
+- Confirmación remota del check: **PENDIENTE DE PRIMERA EJECUCIÓN REMOTA**. GitHub muestra el check real después de que el workflow haya corrido al menos una vez en PR/push.
+- Rulesets visibles por lectura remota: ninguno (`[]`).
+- Branch protection clásica: **NO VERIFICABLE** con el conector disponible; GitHub respondió `403 Resource not accessible by integration` para el endpoint de protección.
+
+### Nombres que no deben confundirse
+
+| Concepto | Valor en este repo | Uso |
+| --- | --- | --- |
+| Workflow | `CI` | Nombre que aparece bajo Actions y agrupa ejecuciones del archivo `ci.yml`. |
+| Job | `Quality gate (Node 22.13)` | Nombre del trabajo que ejecuta `npm ci` y `npm run check`. |
+| Required status check | `Quality gate (Node 22.13)`, pendiente de confirmar tras primera corrida remota | Check que debe seleccionarse en Branch protection/rulesets. No seleccionar `Dependency Audit` mientras siga vigente `EX-001`. |
 
 ## Reglas de integración
 
-- `main` requiere CI verde para la versión que se va a integrar: el job `Calidad (Node 22)` del [workflow CI](../.github/workflows/ci.yml) debe terminar correctamente. Un resultado pendiente, fallido, cancelado o con etapas omitidas por fallo no habilita el merge.
-- Se recomienda no hacer push directo a `main`: trabajar en una rama y abrir un PR. Configurar la exigencia de PR para que GitHub haga cumplir ese recorrido.
+- `main` requiere CI verde para la versión que se va a integrar: el job `Quality gate (Node 22.13)` del workflow `CI` debe terminar correctamente. Un resultado pendiente, fallido, cancelado o con etapas omitidas por fallo no habilita el merge.
+- Pull Request obligatorio para cambios normales. Evitar push directo a `main`; trabajar en una rama corta y abrir PR.
 - Antes de solicitar el merge, ejecutar `npm run check` (`npm.cmd run check` en PowerShell) según el [runbook](RUNBOOK.md#puerta-de-calidad-obligatoria-antes-de-merge-y-despliegue). El resultado local no reemplaza el check del PR.
 - Cada PR debe explicar qué cambia y cómo probarlo. Resolver observaciones bloqueantes antes de integrar y repetir la validación cuando cambien los commits.
-- No desactivar auditorías, omitir tests ni ampliar excepciones de secretos para conseguir CI verde. Los fallos conocidos también bloquean; no se convierten en excepciones por ser anteriores al PR.
+- No desactivar auditorías, omitir tests ni ampliar excepciones de secretos para conseguir CI verde. Los fallos conocidos también bloquean salvo que exista una excepción formal vigente en [CONSTRAINTS.md](../CONSTRAINTS.md), como `EX-001` para la auditoría de dependencias.
 
 ## Configuración manual en GitHub
 
@@ -16,10 +36,25 @@ Un administrador del repositorio debe crear o revisar una regla para `main` en S
 
 Configuración recomendada para esta política:
 
-- Exigir PR antes de integrar y al menos una aprobación de otra persona; invalidar aprobaciones cuando haya nuevos cambios revisables.
-- Exigir status checks y seleccionar `Calidad (Node 22)`, emitido por GitHub Actions. Confirmar el nombre en una ejecución real del PR; no seleccionar un check inexistente ni uno de otro workflow.
-- Exigir que la rama esté actualizada respecto de `main` y que las conversaciones de revisión estén resueltas.
-- Mantener deshabilitados force push y borrado de `main`, y evitar bypass de las reglas, incluidos administradores.
+- Exigir PR antes de integrar. Si el repo sigue con un único mantenedor, no imponer una cantidad de reviews imposible de cumplir; usar el PR como trazabilidad y hacer obligatoria la revisión humana adicional cuando haya otro colaborador disponible. Si se suma un colaborador estable, exigir al menos una aprobación externa e invalidarla cuando haya nuevos cambios revisables.
+- Exigir status checks y seleccionar `Quality gate (Node 22.13)`, emitido por GitHub Actions, **solo después de confirmarlo en una ejecución real**. No seleccionar un check inexistente ni uno de otro workflow.
+- Mantener `Dependency Audit` como auditoría manual mientras `EX-001` esté vigente; no agregarla como check obligatorio de PR/main sin completar antes el triage de dependencias.
+- Exigir que la rama esté actualizada respecto de `main` antes del merge. Costo: puede requerir actualizar/re-ejecutar CI si `main` avanza. Beneficio: evita integrar código validado contra una base vieja; para este repo se prioriza seguridad sobre comodidad.
+- Exigir que las conversaciones estén resueltas antes del merge.
+- Mantener deshabilitados force push sobre `main`.
+- No permitir borrado de `main`. Esto no impide borrar ramas de feature después del merge; son conceptos distintos.
+- Aplicar reglas también a administradores para evitar saltos accidentales del quality gate. Si se necesita bypass de emergencia, debe quedar como excepción operacional explícita, con responsable, motivo, evidencia y validación posterior.
+
+## Estrategia de merge
+
+No reescribir historial existente. La metadata remota visible informa habilitados `allow_squash_merge`, `allow_merge_commit` y `allow_rebase_merge`; no se cambió esa configuración remota en esta etapa.
+
+Política recomendada:
+
+- Usar `squash merge` para PRs pequeños y autocontenidos, con título de commit claro.
+- Usar merge commit solo cuando se quiera conservar la estructura de una rama con varios commits relevantes.
+- Evitar rebase merge en `main` salvo decisión explícita del mantenedor, porque hace más difícil auditar qué PR incorporó cada conjunto de cambios.
+- Eliminar ramas de feature después del merge si GitHub lo permite y ya no se necesitan; nunca confundirlo con permitir borrar `main`.
 
 Estas opciones permiten exigir revisiones y checks mediante GitHub; guardar este archivo no las activa. Ver [comportamiento de las ramas protegidas](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 
@@ -67,6 +102,7 @@ Para documentación, indicar qué enlaces y consistencia se revisaron; CI sigue 
 
 - [ ] La descripción permite reproducir el cambio y comprobar el resultado esperado.
 - [ ] `npm run check` termina correctamente y el CI de la última versión del PR está verde, incluido build y su auditoría.
+- [ ] `quality:deps` fue ejecutado manualmente o queda cubierto por una excepción vigente con responsable y vencimiento; no se ignoran hallazgos nuevos fuera de ese alcance.
 - [ ] Las pruebas cubren la lógica modificada y los casos de error relevantes; no hay tests desactivados ni expectativas debilitadas para encubrir regresiones.
 - [ ] Documentación y mensajes visibles están en español; identificadores sin tildes. Se explican riesgos residuales y recuperación cuando corresponda.
 

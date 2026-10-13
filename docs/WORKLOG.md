@@ -1,5 +1,13 @@
 # Worklog
 
+## 2026-10-04 — Mitigación focal Storage path traversal
+
+Keys tenant/actor/workspace/dataset/UUID y guard de prefijo en servicio/cleanup; policy restrictiva mínima aplicada solo en staging. 71 focales PASS, suite 2298 PASS, lint/build/diff-check PASS. Exploit original 403 y objetos ajenos/cross-tenant denegados. Auditor independiente identificó bypass por normalización HTTP hacia key canónica; confirmado escapando horarios hacia docentes. P1 sigue abierto, Security 2 no retomada. Cleanup final todos conteos 0; Production mutations NONE. Evidencia y límites en `supabase/baseline/STAGING_SECURITY_2_RESULT.md`. QUALITY GATE: FAIL.
+
+## 2026-10-04 — Security Acceptance 2 retomada en Staging
+
+Validación funcional HTTP de Storage y guards de admin-users, exclusivamente en Staging. Detención ante primer P1: upload con `security2/../traversal.csv` permitido y persistido fuera del subdirectorio. Sin corrección de código/schema/RLS/grants/configuración. Cleanup SQL final confirma 0 objetos, usuarios, identidades, sesiones, refresh tokens, instituciones, perfiles, memberships y auditorías. Production mutations: NONE. Evidencia: `supabase/baseline/STAGING_SECURITY_2_RESULT.md`. Casos restantes pendientes por regla de detención.
+
 Registro de trabajo del producto para estimar costo, esfuerzo y velocidad real.
 
 ## Criterio de conteo
@@ -15,6 +23,116 @@ Registro de trabajo del producto para estimar costo, esfuerzo y velocidad real.
 - Rango razonable de error sobre el historico inicial: `+- 2 h`
 
 ## Detalle
+
+### 2026-09-26
+
+- Horas reales: pendiente de completar.
+- Etapa 02.6: planificación de aislamiento de staging y remediación, sin crear staging, sin modificar Supabase remoto, sin ejecutar SQL remoto, sin aplicar 02.3, sin desplegar Edge Functions y sin cambiar runtime.
+- Topología actual: metadata read-only confirmó que `Hub-Institucional` es el único proyecto Supabase visible que corresponde al producto; los otros proyectos visibles (`cs automotores`, `Lulu Torres Ceramica`) no son ambientes de Hub y están inactivos. No hay staging/development remoto identificado para Hub.
+- Topología objetivo: production = `Hub-Institucional`; staging = proyecto/branch persistente separado con credenciales, secrets, Storage y datos sintéticos propios; local development = Supabase local cuando sea viable.
+- Estrategia de fuente de verdad: recomendar transición híbrida, reconciliando `supabase/schema/*.sql`, security scripts y `repair_*` antes de crear un baseline reproducible; desde ese corte, avanzar con migrations incrementales. No se creó `supabase/migrations/` en esta etapa.
+- Datos/fixtures: definido seed sintético multi-tenant A/B, identidades ficticias por rol, prohibición de copiar PII real y plan de pruebas para `handle_new_user`, RLS/RPC, Storage, Edge Functions y frontend staging.
+- 12 RPC ausentes: clasificadas sin inventar implementación; `upsert_exam_enrollment_from_portal` y `get_academic_transition_config` quedan como necesarias por runtime/contrato, y las restantes como features internas/incompletas actualmente gated o no aptas para producción sin backend versionado.
+- 30 `EXECUTE`: preparado criterio de clasificación por grant (`EXPECTED`, `OVERPERMISSION`, `NEEDS INVESTIGATION`) sin ejecutar `REVOKE`.
+- Artefactos 02.6: creados `docs/STAGING_IMPLEMENTATION_PLAN.md` y `docs/STAGING_CREATION_CHECKLIST.md`.
+- Seguridad 02.6: sin datos personales extraídos, sin secrets expuestos, sin usuarios creados, sin deploy, sin cambios remotos.
+- Etapa 02.7: continuación tras creación manual de `Hub-Institucional-Staging` por el usuario en Supabase Dashboard, con costo informado `NINGUNO`.
+- Verificación metadata 02.7: `supabase projects list` confirmó production `Hub-Institucional` `ACTIVE_HEALTHY` (`qwrw…mibx`) y staging `Hub-Institucional-Staging` `ACTIVE_HEALTHY` (`lzjp…aeco`), ambos en `sa-east-1`; las refs son distintas y no hay identidad de entorno ambigua.
+- Link local 02.7: se inspeccionó `supabase/.temp/`; el checkout sigue linked a production, `supabase/.gitignore` ignora `.temp`, y no se ejecutó `supabase link`.
+- Conectividad staging 02.7: `supabase db query --help` confirmó que la CLI permite `--linked`, `--local` o `--db-url`, pero no `--project-ref`; sin cambiar link ni usar credenciales nuevas, no se ejecutó consulta SQL read-only contra staging.
+- Schema staging 02.7: `HUB APPLICATION SCHEMA: NOT DEPLOYED` como estado operativo documentado; no se aplicaron migrations, no se ejecutó 02.3, no se cargaron seeds, no se desplegaron Edge Functions y no se creó/modificó Storage/Auth. No hubo comprobación de catálogo SQL contra staging porque requeriría `db-url` o relink.
+- Documentación 02.7: actualizados `docs/STAGING_IMPLEMENTATION_PLAN.md`, `docs/STAGING_CREATION_CHECKLIST.md`, `docs/RUNBOOK.md`, `docs/PRODUCTION_READINESS.md` y `docs/WORKLOG.md` con estrategia de selección segura de ambiente: antes de cualquier mutación remota verificar `TARGET ENVIRONMENT`, `PROJECT NAME` y `PROJECT REF`; production requiere aprobación humana explícita.
+- Seguridad 02.7: sin mutaciones remotas, sin SQL mutante, sin service-role, sin secrets expuestos, sin `.env` modificado y sin datos personales extraídos.
+- Etapa 02.8A: baseline canónico reproducible investigado localmente, sin tocar staging ni production.
+- Inventario SQL 02.8A: 35 archivos `.sql` bajo `supabase/` clasificados en `supabase/baseline/BASELINE_MANIFEST.md` como CANONICAL, SECURITY PATCH, MIGRATION CANDIDATE, REPAIR ONLY, DIAGNOSTIC, TEST, VALIDATION, DEPRECATED o NEEDS INVESTIGATION.
+- Baseline 02.8A: identificados 8 archivos canónicos (`supabase/schema/01_foundation.sql` a `07_academic_operations.sql`, incluyendo `05_student_portal_secure_read.sql`) y orden futuro de instalación; no se creó SQL ejecutable ni `supabase/migrations/` porque la fuente canónica sigue incompleta.
+- Blockers 02.8A: `get_academic_transition_config` y `upsert_exam_enrollment_from_portal` no tienen implementación SQL autoritativa localizada; el modelo de mesas (`exam_teacher_assignments`, `exam_enrollments`, confirmaciones/reset) sigue en repairs históricos y requiere reconciliación.
+- Repairs 02.8A: clasificados en A/B/C/D/E; ningún `repair_*` entra automáticamente al baseline.
+- Seguridad 02.8A: `handle_new_user()` canónico queda endurecido localmente, se reforzó cobertura estática para blockers del baseline y `SECURITY DEFINER` con `search_path`; sin service-role, sin secrets, sin SQL remoto y sin datos personales.
+- Artefactos 02.8A: creados `docs/BASELINE_READINESS.md` y `supabase/baseline/BASELINE_MANIFEST.md`; actualizados docs operativos para marcar `LOCAL BASELINE EXECUTION PENDING`.
+- Etapa 02.8B-1: recuperado el contrato de `get_academic_transition_config` sin implementar SQL ni tocar Supabase remoto.
+- Evidencia 02.8B-1: el único caller runtime es el portal alumno (`academicRelationalData.js`), sin argumentos; la fuente sustentada es `app_settings.key = 'academic_relational_transition'`, global y privada; la Edge Function ya usa lectura server-side equivalente.
+- Decisión 02.8B-1: `IMPLEMENTAR RPC` en subpaso posterior, como lectura read-only mínima con `EXECUTE` para `authenticated`, sin `anon` ni `public`, manteniendo la fila privada y devolviendo solo el DTO de transición.
+- Baseline 02.8B-1: contrato documentado en `docs/contracts/get_academic_transition_config.md`; el blocker P1 persiste hasta crear SQL canónico y tests. Remote mutations: NONE.
+- Etapa 02.8B-2: implementada localmente `public.get_academic_transition_config()` en `supabase/schema/01_foundation.sql`, sin ejecutar SQL, sin deploy y sin tocar Supabase remoto.
+- Seguridad 02.8B-2: la RPC no recibe parámetros, usa `SECURITY DEFINER`, `set search_path = ''`, referencias calificadas, defensa interna con `auth.uid()`, revoca `EXECUTE` a `public/anon/authenticated` y concede explícitamente a `authenticated`; no agrega grant explícito a `service_role`.
+- Fail-safe 02.8B-2: config ausente/inválida cae a `snapshot_only`; los flags relacionales peligrosos solo se activan con booleano JSONB `true`; la función devuelve solo el DTO contractual y no expone la fila completa de `app_settings`.
+- Tests 02.8B-2: ampliado `src/services/supabaseFunctionSecurityMatrix.test.js` para cubrir definición SQL, grants, minimum disclosure, contrato SQL/JS y defaults fail-safe.
+- Baseline 02.8B-2: `get_academic_transition_config` cambia a `RESUELTO LOCALMENTE — PENDIENTE VALIDACIÓN DB`; persisten como riesgos `upsert_exam_enrollment_from_portal`, modelo de mesas y validación dinámica PostgreSQL. Remote mutations: NONE.
+- 02.8C-1 Contract Recovery: contrato de `upsert_exam_enrollment_from_portal` documentado en `docs/contracts/upsert_exam_enrollment_from_portal.md`; se reconstruyeron callers, firma de 14 parámetros, DTO, reglas de regularidad/correlativas/ausencia/deuda, idempotencia y threat model. Decisión: `MODELO DE DATOS BLOQUEA LA IMPLEMENTACIÓN` porque `exam_enrollments`/`exam_teacher_assignments` siguen en repairs históricos y `exam_table_id` no referencia una mesa canónica. Remote mutations: NONE.
+- 02.8C-2 Contract/Data Model Design: modelo canónico de mesas definido en `docs/contracts/exam_tables_canonical_model.md`, con `exam_tables`, `exam_table_subjects`, `exam_teacher_assignments`, `exam_enrollments` y eventos append-only; resuelve identidad `uuid`, compatibilidad legacy, FKs tenant-safe, estados, idempotencia y migración conceptual. No se implementó SQL/runtime ni se ejecutó Supabase CLI. Remote mutations: NONE.
+- 02.8C-3 Schema Implementation Local Only: implementado localmente `supabase/schema/08_exam_tables.sql` con `exam_tables`, `exam_table_subjects`, `exam_teacher_assignments`, `exam_enrollments`, `exam_enrollment_events` y `exam_table_events`; incluye identidad `uuid`, compatibilidad legacy, FKs tenant-safe, validadores trigger, índices de idempotencia, estados canónicos y RLS default-deny con grants mínimos.
+- Alcance 02.8C-3: no se implementó `public.upsert_exam_enrollment_from_portal`, no se migraron datos legacy, no se ejecutó SQL remoto/local, no se usó Supabase CLI, no hubo `db push`, no hubo deploy, no se usó service-role y no se expusieron secrets.
+- Tests 02.8C-3: agregado `src/services/examTablesCanonicalSchema.test.js` para validar contrato estático del schema canónico, separación de repairs legacy, FKs críticas, idempotencia, RLS default-deny y ausencia de la RPC aún pendiente.
+- 02.8C-4A Contract/Data Model Design: resuelto el blocker P1 de ausencia/castigo a nivel contrato. No existe fuente compat segura: los campos `ausente`/`fecha_ausencia` del snapshot/UI y `student_grades` no alcanzan institución, legajo, mesa fuente/destino, vigencia, estado e idempotencia sin ambigüedad. Creado `docs/contracts/exam_absence_penalties.md` con modelo mínimo `exam_absence_penalties`, tenant boundaries, identidad por `student_record_id`, idempotencia por `source_event_key`, estados `active/pending_review/fulfilled/voided/expired`, semántica fail-closed para la futura RPC y estrategia legacy sin migrar datos. No se implementó SQL, no se ejecutaron migrations, no se tocó staging/production y no hubo mutaciones remotas.
+- 02.8C-4B Schema Implementation Local Only: implementado localmente `public.exam_absence_penalties` en `supabase/schema/08_exam_tables.sql`, sin implementar `public.upsert_exam_enrollment_from_portal`, sin ejecutar SQL, sin migrations, sin `db push`, sin Supabase remoto y sin service-role.
+- Modelo 02.8C-4B: incluye FKs tenant-safe hacia legajo, plan, mesa/materia fuente, inscripción fuente y mesa/materia bloqueada; estados `active/pending_review/fulfilled/voided/expired`; scopes `next_exam_call_for_subject` y `specific_exam_table_subject`; idempotencia por `source_event_key` y `absence_semantic_key`; RLS default-deny sin grant directo a `authenticated`.
+- Tests 02.8C-4B: agregado `src/services/examAbsencePenaltiesSchema.test.js` para validar columnas contractuales, estados, scopes, checks temporales, FKs, idempotencia, RLS/grants, ausencia de `user_metadata`, no implementación de la RPC pendiente y documentación de baseline.
+
+### 2026-09-24
+
+- Horas reales: pendiente de completar.
+- Trabajo principal: auditoría documental de preparación para producción contra el checkout actual.
+- Actualizados `PRODUCTION_READINESS.md` y `PRODUCTION_SCOPE.md` para clasificar los flujos con estados explícitos, separar implementación local de verificación remota y registrar las brechas del esquema canónico de mesas.
+- Sin cambios de runtime, SQL, dependencias ni infraestructura remota.
+- Etapa 00.2: estabilizada la puerta local `npm.cmd run check` sin tocar runtime, SQL, RLS, dependencias, despliegues ni scripts de calidad.
+- Causa raíz: `src/services/adminUsersEdgeFunctionSecurity.test.js` extraía el cuerpo de `persistStudentRecord` con una expresión regular sensible a finales LF exactos; en Windows/CRLF no encontraba el bloque y las aserciones posteriores recibían una cadena vacía.
+- Fix: el test conserva el contenido fuente y normaliza solo los saltos de línea antes de extraer `persistStudentRecord`; se agregó cobertura parametrizada LF/CRLF y se mantuvieron las mismas aserciones de seguridad sobre workspace, carrera, `select`, filtros, `onConflict` y rechazo de `institution_id,external_code`.
+- Documentación: `RUNBOOK.md` registra el `Quality Gate antes de merge`, alcance/límites de auditorías y procedimiento ante fallos; `PRODUCTION_READINESS.md` actualiza los resultados observados; este worklog registra causa, fix y verificación.
+- Verificación focal: `npm.cmd test -- src/services/adminUsersEdgeFunctionSecurity.test.js` en verde, 8 tests aprobados.
+- Verificación completa: `npm.cmd run check` en verde, con `audit:repo` OK, lint OK, 277 archivos de Vitest y 2203 tests aprobados, build OK y `audit:prod` OK sobre 119 archivos. Se mantienen advertencias no bloqueantes de chunks grandes.
+- Revisión de auditorías: probes aislados en memoria validaron que `audit:repo` y `audit:prod` sigan rechazando rutas `.env`, patrones de secreto sintéticos, sourcemaps y flags demo de producción; no se guardaron archivos ni credenciales reales.
+- Etapa 01.1: CI de GitHub Actions consolidada en `.github/workflows/ci.yml` para PR hacia `main` y pushes a `main`.
+- Versión Node usada por CI: `22.13.0`, compatible con los `engines` reales de Vite, `@vitejs/plugin-react`, Vitest y jsdom en `package-lock.json`.
+- Comando de CI: `npm ci` seguido de `npm run check`; no se duplican manualmente lint/tests/build fuera del script existente.
+- Variables especiales: ninguna; no se agregaron secretos, credenciales Supabase, `service_role` ni variables `VITE_*`.
+- Protección de ramas: `docs/BRANCH_PROTECTION.md` quedó alineado al check `Quality gate (Node 22.13)` y mantiene `Dependency Audit` como auditoría manual mientras `EX-001` siga vigente.
+- `quality:deps`: ejecuta `npm audit --audit-level=high`, no forma parte de `check` y en 01.1 falló por deuda preexistente documentada en `EX-001` (45 vulnerabilidades: 31 high, 13 moderate, 1 low). No se actualizaron dependencias; el workflow de dependencias queda manual hasta un triage específico.
+- Etapa 01.2: política de protección de `main` definida en `docs/BRANCH_PROTECTION.md`, alineada al workflow `CI` y al job `Quality gate (Node 22.13)`.
+- Required check previsto: `Quality gate (Node 22.13)`, pendiente de confirmación exacta tras primera ejecución remota del workflow.
+- Estado remoto: repositorio y default branch `main` verificados por GitHub; rulesets visibles `[]`; branch protection clásica no verificable con el conector disponible por respuesta `403`, por lo que no se afirma protección activa.
+- Política: PR obligatorio, rama actualizada, conversaciones resueltas, force push/borrado de `main` deshabilitados, bypass de administradores evitado salvo emergencia documentada, reviews adaptadas a repo de mantenedor único y preferencia por `squash merge` en PRs pequeños.
+- `quality:deps` se mantiene fuera de required checks mientras `EX-001` esté vigente; no se modificaron dependencias.
+- Etapa 02.1: auditoría documental SQL/Supabase preparada sin ejecutar SQL remoto ni modificar Supabase.
+- Inventario SQL 02.1: 34 scripts `.sql` analizados en `supabase/security/`, `supabase/schema/` y `supabase/docs/`.
+- Clasificación 02.1: 12 scripts de lectura/validación sin mutación permanente esperada y 22 scripts con mutaciones reales, propuestas o capacidades mutantes.
+- Riesgos 02.1: 1 script CRÍTICO (`repair_02_student_records_duplicate_upsert_keys.sql`, por fusión/eliminación de duplicados), múltiples scripts ALTO por RLS/RPC/grants/schema y reparaciones con impacto en datos académicos.
+- Obsoletos/duplicados 02.1: mínimo 6 candidatos (`repair_05_student_portal_career_fallback.sql`, `repair_05_student_portal_classmates.sql`, `repair_05_student_portal_grades_rpc.sql`, `repair_05_portal_connection_read_rpcs.sql`, `repair_05_teacher_student_removal_reset_rpcs.sql`, `repair_07_exam_engine_v21_state.sql`) frente a `schema/07`/`schema/03`; además `schema/05_student_portal_secure_read.sql` queda fuera del orden canónico de `schema/00_README.md` y requiere reconciliación.
+- Orden seguro 02.1: diagnostics/verificaciones de solo lectura primero; para base nueva seguir `schema/00_README.md`; reconciliar `05_student_portal_secure_read.sql` y `repair_*`; luego aplicar bajo riesgo por bloques; permisos/RLS con aprobación humana; constraints solo tras resolver datos; staging obligatorio antes de producción.
+- Documentación 02.1: `SECURITY_LOW_RISK_APPLY_CHECKLIST.md` reemplazado por el checklist integral de aplicación segura, `SECURITY.md` actualizado con filosofía operativa, `PRODUCTION_READINESS.md` actualizado con estados SQL preparado/staging pendiente/producción pendiente, y README/RUNBOOK/checklists/estructura/auditoría de despliegue alineados para no presentar `setup_multi_tenant/` ni `rls_negative_tests.sql` como flujos ejecutables.
+- RLS negative tests 02.1: existe `student_portal_exam_visibility_tests.sql` como prueba focal de visibilidad de mesas del alumno con actores preparados; no existe `supabase/security/rls_negative_tests.sql`, por lo que la matriz negativa integral sigue pendiente.
+- Etapa 02.2: hardening de configuración pública frontend sin tocar SQL, Supabase remoto, deploy ni dependencias.
+- Variables frontend auditadas 02.2: necesarias `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_DISABLE_AUTH`; compatibilidad legacy local `VITE_SUPABASE_ANON_KEY`; privadas/server-only `SERVICE_ROLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SECRET_KEY`, `ADMIN_USERS_ALLOWED_ORIGINS` y variables de scripts no quedan aprobadas para frontend.
+- Guards 02.2: `envGuards.js` bloquea en producción `VITE_DISABLE_AUTH=true`, falta de URL/key pública, URL no HTTPS Supabase y valores públicos que parezcan `service_role`, `sb_secret` o JWT `role=service_role`; los errores reportan nombres, no valores.
+- Tests 02.2: agregada cobertura en `envGuards.test.js` y `supabaseClient.test.js` para configuración segura, faltantes de Supabase, URL local en producción, service_role por nombre y valor, sanitización del error y compatibilidad local/dev.
+- Documentación 02.2: `.env.example`, `SECURITY.md`, `PRODUCTION_READINESS.md` y `RUNBOOK.md` actualizados para listar solo variables públicas, remediación del guard y alcance de CSP/headers sin modificar `vercel.json` ni `.gitignore`.
+- Verificación 02.2: test focal `npm.cmd test -- src/lib/envGuards.test.js src/lib/supabaseClient.test.js` en verde, 2 archivos y 22 tests aprobados.
+- Verificación completa 02.2: `npm.cmd run check` en verde con `audit:repo` OK, lint OK, 277 archivos de Vitest y 2212 tests aprobados, build OK y `[production-build-audit] OK` sobre 119 archivos; `git diff --check` código `0` con solo advertencias LF/CRLF.
+- Revisión independiente 02.2: CHIEF CODE AUDITOR PASS sin P0/P1/P2/P3; queda advertencia de trazabilidad porque el working tree conserva cambios acumulados de etapas anteriores fuera de la lista propia de 02.2.
+- Etapa 02.3: auditoría de creación de usuarios, perfiles, roles y metadata de Auth.
+- Hallazgo 02.3: vulnerabilidad confirmada en SQL versionado anterior; `public.handle_new_user()` copiaba `raw_user_meta_data.account_role` a `profiles.account_role`. El riesgo queda reducido localmente porque `supabase/config.toml` tiene signup deshabilitado y el frontend no llama `signUp`, pero la fuente SQL debía endurecerse igual.
+- Hardening 02.3 preparado localmente: `handle_new_user()` ya no usa `raw_user_meta_data.account_role`, usa `raw_app_meta_data.account_role` solo como metadata administrativa y cae a `alumno` como rol mínimo; mantiene `SECURITY DEFINER`, `set search_path = ''` y `REVOKE EXECUTE` a `public`, `anon` y `authenticated`.
+- SQL relacionado 02.3: actualizados `supabase/schema/01_foundation.sql`, `supabase/security/2026-09-05_low_risk_indexes_search_path_auth_uid.sql` y el bloque comentado de revisión en `supabase/security/2026-09-05_rls_function_permissions_review.sql`. Estado operativo: PREPARADO, NO APLICADO en Supabase remoto.
+- Tests 02.3: ampliado `adminUsersEdgeFunctionSecurity.test.js` para bloquear regresiones del trigger, del fallback mínimo y de la asignación legitima por `admin-users`.
+- Frontend 02.3: `AuthContext` ya no usa `session.user_metadata.account_role` como fallback; durante la carga remota cae a `alumno` hasta recibir `profiles`.
+- Documentación 02.3: actualizados `SECURITY.md`, `PRODUCTION_READINESS.md`, `SECURITY_LOW_RISK_APPLY_CHECKLIST.md`, `RUNBOOK.md`, `supabase/README.md` y `supabase/schema/00_README.md` con flujo de identidad, validación futura de staging y prohibición de usar metadata de cliente como autoridad.
+- Etapa 02.4: auditoría transversal local de funciones PostgreSQL/RPC/`SECURITY DEFINER`/`search_path`/`EXECUTE`, sin tocar Supabase remoto.
+- Inventario 02.4: 57 definiciones SQL versionadas, 41 funciones únicas, 47 definiciones `SECURITY DEFINER`, 10 invoker/default, 6 triggers internos canónicos y 36 RPC invocadas desde frontend/servicios/Edge Function.
+- Hallazgos 02.4: P0/P1 nuevos ninguno confirmado localmente; P2 por hardening incompleto de `search_path` en múltiples `SECURITY DEFINER`; P2/Needs Investigation por 12 RPC invocadas sin definición SQL local auditable; P3 por reparaciones históricas que podrían aplicarse fuera de orden.
+- Artefactos 02.4: creado `docs/SECURITY_FUNCTION_MATRIX.md` con matriz de funciones, RPC frontend, cross-tenant, superadmin, `SECURITY DEFINER` y validación futura de staging.
+- Tests 02.4: agregado `src/services/supabaseFunctionSecurityMatrix.test.js` para impedir reintroducción de `raw_user_meta_data.account_role`, exigir revokes en triggers internos, documentar RPC sin definición SQL local y mantener revokes en RPC locales invocadas.
+- SQL 02.4: no se modificó SQL; cualquier aplicación futura sigue siendo PREPARADO — NO APLICADO hasta staging.
+- Etapa 02.5: intento de discovery remoto/read-only para comparar la matriz local contra Supabase real o staging.
+- Acceso remoto 02.5: el proyecto tiene configuración local de Supabase CLI y pooler generado, pero `supabase db query --linked` devolvió falta de privilegios (`403`) y el pooler configurado no conectó. Se detuvo antes de consultas de catálogo complejas.
+- Artefactos 02.5: creado `docs/SUPABASE_DRIFT_AUDIT.md` con clasificación bloqueada, `docs/STAGING_SECURITY_TEST_MATRIX.md` con pruebas futuras por rol y `supabase/security/remote_readonly_discovery.sql` con consultas exclusivamente `SELECT` para discovery futuro.
+- Estado 02.5: no se extrajeron datos personales, no hubo mutaciones remotas, no se aplicó el SQL 02.3 y producción continúa NO-GO hasta resolver evidencia remota.
+- Remediación 02.5-R: diagnosticado el bloqueo sin abrir `.env` ni usar service-role. `supabase projects list` y `orgs list` pasan, por lo que la sesión CLI está autenticada; el proyecto local vinculado `Hub-Institucional` (`qwrw…mibx`) no aparece entre los proyectos accesibles para esa sesión. El pooler remoto resuelve y acepta TCP 5432, pero la connection string local no incluye password. Creado `docs/SUPABASE_READONLY_ACCESS.md` con pasos mínimos para habilitar auditoría read-only o ejecutar el script manualmente.
+- Reanudación 02.5: acceso CLI recuperado tras autenticación con la cuenta correcta; `Hub-Institucional` aparece `ACTIVE_HEALTHY`, el ref accesible coincide con el link local (`qwrw…mibx`) y el acceso vinculado dejó de devolver `403`.
+- Discovery remoto 02.5: ejecutado `remote_readonly_discovery.sql` y consultas separadas equivalentes dentro de `begin; set transaction read only; ... rollback;`, sin SQL mutante, sin RPC de negocio, sin service-role, sin deploy y sin extracción de datos personales.
+- Hallazgos remotos 02.5: `handle_new_user()` existe como `SECURITY DEFINER`, conserva `search_path=public, pg_temp`, lee `raw_user_meta_data.account_role` y está conectado al trigger `auth.users` `on_auth_user_created`; por lo tanto la vulnerabilidad 02.3 sigue activa remotamente.
+- Drift remoto 02.5: las 12 RPC investigadas no existen en remoto y tampoco tienen definición SQL local auditable; quedan como `LOCAL CALLER / REMOTE ABSENT`, no como `REMOTE AHEAD`.
+- Matriz remota 02.5: 37 funciones remotas, 30 `SECURITY DEFINER`, 96 policies, 42 tablas inventariadas para RLS, 0 tablas públicas inventariadas con RLS deshabilitado, bucket privado `workspace-source-files`, 0 `PUBLIC EXECUTE`, y 30 funciones con `EXECUTE` para `anon`/`authenticated`.
+- Documentación 02.5: actualizados `SUPABASE_DRIFT_AUDIT.md`, `SECURITY_FUNCTION_MATRIX.md`, `STAGING_SECURITY_TEST_MATRIX.md`, `SECURITY.md`, `PRODUCTION_READINESS.md`, `SECURITY_LOW_RISK_APPLY_CHECKLIST.md`, `RUNBOOK.md`, `WORKLOG.md` y `supabase/README.md`. Resultado operativo: **NO-GO — DRIFT DE SEGURIDAD PENDIENTE**; no continuar con 02.3 ni reparaciones sin staging aislado.
 
 ### 2026-04-20
 
@@ -341,6 +459,12 @@ Registro de trabajo del producto para estimar costo, esfuerzo y velocidad real.
 
 ## Plantilla sugerida para siguientes sesiones
 
+## 2026-10-04 — Security Acceptance 1 en Staging
+
+- Tipo: producto / seguridad Supabase.
+- Resultado: 73 checkpoints SQL Auth-trigger/identity/RLS/RPC con fixtures sinteticos A/B pasaron en Staging; ROLLBACK y consulta independiente confirmaron cleanup=0. Sin cambios de schema/grants/RLS ni Production; sin Storage/Edge/frontend. Evidencia y limites (sin Auth HTTP/E2E) en `supabase/baseline/STAGING_SECURITY_1_RESULT.md`.
+- Horas reales: no registradas; no se estima tiempo comercial.
+
 - Fecha:
 - Horas reales:
 - Tipo:
@@ -348,3 +472,31 @@ Registro de trabajo del producto para estimar costo, esfuerzo y velocidad real.
   - soporte
   - comercial
 - Resultado:
+
+## 2026-10-05 — Gateway Storage exclusivamente local
+
+Implementados Edge source-file-storage, helper canónico único, signed upload/commit/delete/recover y SQL preparado restrictivo para escrituras directas. Ningún deploy, SQL remoto, secrets set ni mutación de Staging/Producción. Suite completa 288 archivos / 2345 tests PASS; PostgreSQL local 25 casos PASS; lint/build/diff-check PASS. CHIEF CODE AUDITOR confirma cero P0/P1 locales y aprueba con advertencias. El implementador bloquea readiness por riesgo residual del clear concurrente: lease Storage no protege escrituras posteriores de snapshot/tablas del cliente frente a takeover. Inventario legacy, plan y evidencia en supabase/security/SOURCE_FILE_STORAGE_GATEWAY_LOCAL.md. P1 histórico Staging no cerrado; Security 2 no retomada. QUALITY GATE: FAIL. STORAGE GATEWAY LOCAL — BLOQUEADO — proteger clear completo antes de enforcement.
+
+## 2026-10-05 — Clear concurrente del workspace: corrección LOCAL
+
+Barrera transaccional institution/workspace compartida por snapshot/tablas/RPC Storage, captura de cutoff_revision y keys, clear lógico atómico y cleanup/resume sobre journal inmutable. Cancelación de uploads anteriores impide finalize tardío; se retiraron writes posteriores del cliente y reset remoto del motor. FKs sin scope/cross-workspace provocan rollback fail-closed. PostgreSQL real 17.10 con dos TCP sesiones: 9 escenarios PASS, cleanup=0; PGlite24 PASS; 129 focales PASS; suite 288 archivos / 2348 tests PASS; lint/build/audit:repo/audit:prod/diff-check PASS. No deploy, secrets set, SQL remoto ni mutaciones Staging/Producción. CHIEF CODE AUDITOR final se interrumpió por límite de uso: no se acredita aprobación final; Browser/E2E real pendiente. Evidencia y residual en supabase/security/SOURCE_FILE_STORAGE_GATEWAY_LOCAL.md. QUALITY GATE: FAIL. STORAGE CLEAR CONCURRENCY — BLOQUEADO — falta auditoría independiente final y revisión real del flujo.
+
+## 2026-10-05 - Storage gateway: cierre local detenido en P1
+
+Auditor independiente en contexto limpio confirmo y reprodujo P1: tras commit DB del clear y fallo de cleanup/respuesta, retry UI/HTTP emite nuevo begin_clear/UUID y recaptura datos posteriores a T0, dejando snapshot vacio y manifestCount=0. Handler real + SQL real PGlite, con fallo Storage inyectado. No fix ni cambios de implementacion; no suite global repetida. Deno 2.9.6 check PASS; Deno HTTP y Browser/E2E reales no ejecutados por stop en P1. Docker local disponible; stack no iniciado, 0 containers/fixtures de cierre y configuracion temporal eliminada. No Staging/Produccion, deploy, SQL remoto ni secrets set. Evidencia reproducible y limites en supabase/security/SOURCE_FILE_STORAGE_GATEWAY_LOCAL.md. QUALITY GATE: FAIL. STORAGE GATEWAY LOCAL CLOSURE - BLOQUEADO - retry clear destruye datos post-T0.
+
+## 2026-10-05 - Storage clear HTTP/UI idempotente LOCAL
+
+P1 corregido: operation_id persistido antes de HTTP en sessionStorage por tenant/workspace/actor; retries y remount conservan ID, nuevo clear tras exito usa otro. SQL scoped journal replay exacto, cutoff/targets fijos; terminal sin otro remove/finish. 135 focales PASS; suite global 289 archivos / 2354 tests PASS; Deno check/lint/build/audit:prod/audit:repo/diff-check PASS; 13 escenarios PG real + HTTP PASS incluyendo DB commit/fallo cleanup, B posterior, dos retries simultaneos, partial/terminal/nuevo/A-B; cleanup0. Auditor independiente focal cierra P1 con Code Review/Security local/Adversarial PASS y reproduce 135 focales/24 PG mas6adversariales. P2 import @2 y guard UI hasData tras reload vacio documentados; writer conflicts y Browser/Deno HTTP/Storage real pendientes fuera microtarea. No remoto/deploy/SQL Staging/Prod ni secretos. QUALITY GATE: PASS WITH WARNINGS. STORAGE CLEAR IDEMPOTENCY - PASS - LISTO PARA CIERRE LOCAL. Evidencia completa: supabase/security/SOURCE_FILE_STORAGE_GATEWAY_LOCAL.md.
+
+## 2026-10-05 — Security Acceptance 2 admin-users (Staging)
+
+Matriz HTTP/Auth Admin real detenida en P1: admin A puede resetear Auth de alumno exclusivo B reutilizando su email en bulk_create_students con institution_id A. Creacion/login legitimos, JWT/roles/CORS y ramas superadmin probadas PASS antes del hallazgo; 17 checks PASS, dos registros del mismo P1 FAIL. Cleanup SQL final0 de usuarios/fixtures/objetos. Sin codigo/schema/RLS/grants/deploy/config ni Produccion. Resultado y evidencia en supabase/baseline/STAGING_SECURITY_2_RESULT.md y STAGING_ADMIN_USERS_SECURITY_2_EVIDENCE.json. QUALITY GATE: FAIL.
+
+## 2026-10-06 - admin-users identidad de alumno LOCAL
+
+P1 bulk_create_students corregido localmente: lookup Auth canonico completo, vinculacion inequívoca al tenant y reuse readonly; email ajeno/ambiguo 409 sin mutacion, nuevo crea sin fallback reset. set_user_password mantiene SuperAdmin y valida target membership cuando se proporciona tenant; scope evita fallback destructivo legado. 39 focales PASS, Deno check PASS, lint focal/audit:repo/diff-check PASS. Suite global final 2374 PASS/1 FAIL (appThemeStyles ajeno); lint/build FAIL en Primaria preexistente. CHIEF CODE AUDITOR independiente focal PASS; P1 preexistente reset global destructivo, P2 provisioning parcial y NI password anidado inventariados sin ampliar alcance. Cleanup fixtures memoria0; no Auth/DB reales ni remoto/deploy/SQL/config Staging/Produccion. Evidencia reproducible: supabase/security/ADMIN_USERS_STUDENT_IDENTITY_LOCAL.md. QUALITY GATE: FAIL. ADMIN-USERS CROSS-TENANT IDENTITY - BLOQUEADO - gates globales y P1 preexistente impiden promocion.
+
+## 2026-10-06 - identidad Auth/DB/HTTP REAL LOCAL
+
+Artefacto auditado intacto ejecutado con Deno2.9.6, GoTrue v2.196.0, PostgREST v16.1 y PostgreSQL17.6 reales en DB aislada schema-only. Takeover/case/whitespace409; B password original login200 y propuesta400; reuse readonly200 mismo UUID; nuevo create/login200; sin link/ambiguo409; reset SuperAdmin scope same-tenant200/cross-tenant403; admin institucional reset403 contractual. Cleanup SQL0 usuarios/identities/sessions/refresh_tokens/perfiles/memberships/legajos/tenants/audit/Storage; DB/contenedores/env temporales eliminados. Solo evidencia/documentacion, sin cambios runtime/baseline ni remoto. Reporte, JSON sanitizado y harness reproducible en supabase/security/ADMIN_USERS_STUDENT_IDENTITY_LOCAL.md, ADMIN_USERS_IDENTITY_REAL_EVIDENCE.json y ADMIN_USERS_IDENTITY_REAL_HARNESS.md. Blockers globales anteriores siguen abiertos y QUALITY GATE: FAIL global sin rerun. ADMIN-USERS IDENTITY REAL - PASS - P1 CERRADO localmente, sin acreditar cierre remoto ni release global.

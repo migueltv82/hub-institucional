@@ -127,6 +127,7 @@ describe('useWorkspacePersistence', () => {
   beforeEach(() => {
     vi.useRealTimers()
     vi.clearAllMocks()
+    sessionStorage.clear()
 
     mocks.isSupabaseConfigured = false
     mocks.fetchAccessibleInstitutions.mockResolvedValue({ institutions })
@@ -480,17 +481,28 @@ describe('useWorkspacePersistence', () => {
       ownerEmail: 'admin@example.com',
       ownerUserId: 'user-1',
       useRemote: true,
+      operationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
     })
-    expect(mocks.saveExamEngineV21State).toHaveBeenCalledWith({
-      institutionId: 'institution-remote',
-      workspaceKey: 'main',
-      ownerEmail: 'admin@example.com',
-      ownerUserId: 'user-1',
-      state: null,
-      useRemote: true,
-    })
+    expect(mocks.saveExamEngineV21State).not.toHaveBeenCalled()
     expect(result.current.lastSyncedAt).toBe('2026-04-28T10:05:00.000Z')
     expect(result.current.syncStatus).toBe('saved')
+  })
+
+  it('reuses one operation ID after a lost response, remount and manual retry; a later clear is new', async () => {
+    const options = { contextInstitutions: [{ id: 'institution-remote', name: 'Remoto', role: 'admin' }], contextActiveInstitutionId: 'institution-remote', isRemoteSession: true, onHydrate: vi.fn() }
+    mocks.clearWorkspaceData.mockRejectedValueOnce(new Error('lost response after DB commit'))
+    const first = renderPersistenceHook(options)
+    await waitFor(() => expect(first.result.current.isHydrating).toBe(false))
+    await act(async () => { await expect(first.result.current.clearWorkspaceNow()).rejects.toThrow('lost response') })
+    const firstId = mocks.clearWorkspaceData.mock.calls.at(-1)[0].operationId
+    first.unmount()
+    mocks.clearWorkspaceData.mockResolvedValue({ updatedAt: '2026-10-05T00:00:00Z', source: 'supabase', snapshot: emptySnapshot, cleanup: [] })
+    const retry = renderPersistenceHook(options)
+    await waitFor(() => expect(retry.result.current.isHydrating).toBe(false))
+    await act(async () => { await retry.result.current.clearWorkspaceNow() })
+    expect(mocks.clearWorkspaceData.mock.calls.at(-1)[0].operationId).toBe(firstId)
+    await act(async () => { await retry.result.current.clearWorkspaceNow() })
+    expect(mocks.clearWorkspaceData.mock.calls.at(-1)[0].operationId).not.toBe(firstId)
   })
 
   it('ignora una hidratacion que termina despues del unmount', async () => {

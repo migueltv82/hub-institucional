@@ -186,15 +186,16 @@ order by privilege_type;
 -- RP-07. Hardening de handle_new_user() para no confiar en raw_user_meta_data.account_role.
 -- No aplicar sin revisar provisioning de admin-users para altas de alumno/docente/admin.
 -- Acceso actual: un usuario puede influir account_role inicial mediante user_metadata.
--- Acceso despues: account_role inicial sale de app_metadata.account_role si existe o queda admin_instituto.
--- Riesgo: si alguna alta legitima depende solo de user_metadata.account_role, cambiara el rol inicial.
--- Rollback: recrear public.handle_new_user() desde supabase/schema/01_foundation.sql.
+-- Acceso despues: account_role inicial sale de app_metadata.account_role si existe o queda alumno.
+-- Riesgo: si alguna alta legitima depende solo de user_metadata.account_role, cambiara al rol minimo inicial.
+-- Estado: PREPARADO — NO APLICADO por este repositorio.
+-- Rollback: recrear public.handle_new_user() desde la version previa de supabase/schema/01_foundation.sql.
 /*
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = ''
 as $$
 begin
   insert into public.profiles (
@@ -209,7 +210,7 @@ begin
     new.id,
     lower(new.email),
     coalesce(new.raw_user_meta_data ->> 'nombre', new.raw_user_meta_data ->> 'full_name', new.email),
-    coalesce(new.raw_app_meta_data ->> 'account_role', 'admin_instituto'),
+    coalesce(new.raw_app_meta_data ->> 'account_role', 'alumno'),
     coalesce((new.raw_app_meta_data ->> 'is_global_admin')::boolean, false),
     false
   )
