@@ -594,3 +594,6 @@ Run 397df57e38ab57ee PASS: stack local compartido (`scripts/localSupabaseStack.m
 
 ## 2026-10-16 — 06.2 Resto de acciones administrativas de admin-users
 Run a0fb03219179474c PASS (amplía 06.1): bulk_create_teachers solo del owner en su institución (3 denegaciones sin usuarios Auth; alta OK como docente sin membresías ajenas); create_or_assign_institution_user solo Super Admin (2 denegaciones; asignación admin solo en A); reset_student_academic_records y student_portal_mutation denegados a actores sin derecho sin tocar profiles ni memberships; auditoría solo de éxitos. quality:full PASS. Cleanup 0. Ver SUPERADMIN_EDGE_LOCAL_RESULT.md.
+
+## 2026-10-16 — 05.1 cerrada: paso legacy quitado
+Por decisión del usuario se quitó del validador de punta a punta el paso legacy en slug (supuesto heredado de examenes; el RPC seguro del portal solo expone subject_enrollments) y sus helpers. Run 8bb88c73462370d4 PASS 5/5 contra stack local, sin filas residuales del validador; cleanup 0. CLAUDE.md actualizado.

@@ -1,16 +1,9 @@
 {
-  "run": "ed7a4780909bacfc",
   "staging": "NONE",
   "production": "NONE",
   "validator": {
-    "ok": false,
-    "error": {
-      "message": "La RPC segura no devolvio la fila legacy esperada para el alumno.",
-      "details": {
-        "enrollmentId": "codex_student_teacher_round_trip:mvaigm5x-fdb0cea7:legacy-enrollment",
-        "secureEnrollmentCount": 0
-      }
-    },
+    "ok": true,
+    "error": null,
     "steps": [
       {
         "label": "Validar variables de entorno locales",
@@ -20,7 +13,7 @@
       {
         "label": "Validar institucion de prueba y preparar usuarios",
         "status": "OK",
-        "summary": "institucion=ed7a4780909bacfc-round-trip, workspace=main"
+        "summary": "institucion=8bb88c73462370d4-round-trip, workspace=main"
       },
       {
         "label": "Inscribir alumno con IDs canonicos desde RPC del portal",
@@ -36,19 +29,23 @@
         "label": "Cargar asistencia y nota como docente, releer como alumno",
         "status": "OK",
         "summary": "asistencia=present, nota=8, condicion=regular"
-      },
-      {
-        "label": "Normalizar fila legacy slug y verificarla en roster docente",
-        "status": "FALLA",
-        "summary": "La RPC segura no devolvio la fila legacy esperada para el alumno."
       }
     ],
     "cleanup": "OK",
     "stderrLines": 0
   },
-  "validatorExitCode": 1,
-  "result": "BLOQUEADO",
-  "error": "Failed at round trip validator: AssertionError",
+  "run": "8bb88c73462370d4",
+  "validatorExitCode": 0,
+  "residue": {
+    "studentRecords": 0,
+    "teacherRecords": 0,
+    "enrollments": 0,
+    "grades": 0,
+    "sessions": 0,
+    "attendance": 0,
+    "memberships": 0
+  },
+  "result": "PASS",
   "cleanup": {
     "databases": 0,
     "containers": 0,
