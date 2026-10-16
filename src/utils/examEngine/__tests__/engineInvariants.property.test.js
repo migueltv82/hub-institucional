@@ -37,7 +37,7 @@ function weekdayOf(iso) {
 
 // dense: plantel chico que asiste todos los dias y materias de una misma familia, para que
 // el motor comparta tribunal y fecha y ejercite la compactacion (maximo de materias, no agrupables).
-export function buildInstitution(seed, { dense = false } = {}) {
+export function buildInstitution(seed, { dense = false, special = false } = {}) {
   const random = mulberry32(seed)
   const pick = (items) => items[Math.floor(random() * items.length)]
   const between = (min, max) => min + Math.floor(random() * (max - min + 1))
@@ -82,10 +82,11 @@ export function buildInstitution(seed, { dense = false } = {}) {
     if (previous.length) correlatividades.push({ carrera: target.carrera, carreraId: target.carreraId, materia: target.id, nombreMateria: target.nombreMateria, correlativas: previous.map((subject) => subject.id) })
   }
 
-  const cantidadLlamados = random() < 0.5 ? 1 : 2
+  // Periodo especial: un unico llamado especial, por el mismo generateRegularExamPlan.
+  const cantidadLlamados = special ? 1 : (random() < 0.5 ? 1 : 2)
   const start = '2026-07-27'
   const fechasDisponibles = []
-  const calls = cantidadLlamados === 2 ? ['PRIMER_LLAMADO', 'SEGUNDO_LLAMADO'] : ['PRIMER_LLAMADO']
+  const calls = special ? ['LLAMADO_ESPECIAL'] : (cantidadLlamados === 2 ? ['PRIMER_LLAMADO', 'SEGUNDO_LLAMADO'] : ['PRIMER_LLAMADO'])
   calls.forEach((llamado, callIndex) => {
     for (let offset = 0; offset < 5; offset += 1) {
       if (random() < 0.75) {
@@ -99,7 +100,7 @@ export function buildInstitution(seed, { dense = false } = {}) {
     docentes,
     materias,
     correlatividades,
-    config: { tipoPeriodo: 'REGULAR', cantidadLlamados, fechaInicio: start, fechaFin: addDays(start, 13) },
+    config: { tipoPeriodo: special ? 'ESPECIAL' : 'REGULAR', cantidadLlamados, fechaInicio: start, fechaFin: addDays(start, 13) },
     fechasDisponibles,
     options: { force: true },
   }
@@ -220,6 +221,21 @@ describe('examEngine: invariantes de reglas duras sobre instituciones sinteticas
       }
     }
     expect(grouped).toBeGreaterThan(20)
+    expect(failures).toEqual([])
+  }, 60000)
+
+  it('respeta las reglas en periodos especiales (llamado especial unico)', () => {
+    const failures = []
+    let planned = 0
+    for (let seed = 1; seed <= 100; seed += 1) {
+      const input = buildInstitution(seed, { special: true })
+      const result = generateRegularExamPlan(input)
+      planned += result.plannedMesas.length
+      expect(result.plannedMesas.every((mesa) => mesa.llamado === 'LLAMADO_ESPECIAL')).toBe(true)
+      const violations = checkInvariants(input, result)
+      if (violations.length) failures.push({ seed, violations: violations.slice(0, 3) })
+    }
+    expect(planned).toBeGreaterThan(50)
     expect(failures).toEqual([])
   }, 60000)
 
