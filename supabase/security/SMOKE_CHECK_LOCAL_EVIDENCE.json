@@ -1,0 +1,66 @@
+{
+  "staging": "NONE",
+  "production": "NONE",
+  "run": "b4928f2ec91766fd",
+  "seeded": {
+    "profiles": 1,
+    "memberships": 1,
+    "student_records": 1,
+    "admin_audit_logs": 1
+  },
+  "smoke": {
+    "target": "127.0.0.1:32769",
+    "result": "PASS",
+    "failed": [],
+    "skipped": [
+      "storage",
+      "edge"
+    ],
+    "durationMs": 106,
+    "checks": {
+      "auth": {
+        "status": "PASS",
+        "detail": "HTTP 200"
+      },
+      "rest": {
+        "status": "PASS",
+        "detail": "HTTP 200"
+      },
+      "storage": {
+        "status": "SKIPPED"
+      },
+      "edge": {
+        "status": "SKIPPED"
+      },
+      "anonSensitive": {
+        "status": "PASS",
+        "detail": "9 tablas sin filas para anon"
+      },
+      "invalidJwt": {
+        "status": "PASS",
+        "detail": "HTTP 401 (esperado 401)"
+      },
+      "frontend": {
+        "status": "PASS",
+        "detail": "index + 5 assets + fallback SPA OK"
+      }
+    }
+  },
+  "serviceRoleRefused": true,
+  "gatewayDown": {
+    "result": "FAIL",
+    "failed": [
+      "auth",
+      "rest",
+      "anonSensitive",
+      "invalidJwt"
+    ]
+  },
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

@@ -677,3 +677,15 @@ Resultados:
 - tests focales: PASS.
 
 Evidencia: `supabase/security/ACADEMIC_STATUS_WRITE_LOCAL_RESULT.md`. Sin CHECK ni cambios de datos (eso es 03.5c). Sin remoto.
+
+## 2026-10-16 — 07.1 Smoke check post-deploy read-only (Claude, cubriendo a Codex)
+
+`scripts/smokeCheck.mjs`: chequea Auth, PostgREST, Storage, Edge 405, anon sin filas en 9 tablas sensibles, JWT inválido 401 y frontend con assets y fallback SPA. Solo GET; rechaza claves privadas.
+
+Resultados:
+- test focal: 7/7;
+- validación local `scripts/validateSmokeCheckLocal.mjs`, con filas sembradas y `vite preview`: PASS;
+- control con el gateway apagado: FAIL;
+- cleanup: 0.
+
+Storage y Edge quedan SKIPPED en local. El runbook de Producción ya apunta al script. Sin remoto.

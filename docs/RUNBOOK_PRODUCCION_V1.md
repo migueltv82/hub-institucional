@@ -174,7 +174,7 @@ Si la service role se expuso alguna vez (log, chat, captura): rotarla en Project
 
 ## 8. Smoke post-deploy (≤ 15 min)
 
-1. Automático: `node scripts/smokeCheck.mjs` con la URL y la clave publicable de Producción (tarjeta 07.1). Es read-only y nunca usa service role. Si 07.1 no está cerrada, hacer los mismos checks a mano: health de Auth, PostgREST y Storage; Edge 405; anon sin filas en tablas sensibles; JWT inválido 401; frontend 200 con assets.
+1. Automático: `node scripts/smokeCheck.mjs --supabase-url https://<PROD_REF>.supabase.co --anon-key <clave publicable> --frontend-url https://<dominio>`. Es read-only, nunca usa service role y la rechaza si se la pasan. En Producción no usar `--skip`. Detalle en `supabase/security/SMOKE_CHECK_LOCAL_RESULT.md`.
 2. Manual, por rol, con cuentas reales de la institución piloto. Sin altas masivas ni datos de prueba:
    - Super Admin: login, ver la institución, logout.
    - Admin: login, ver padrones, logout. No crear usuarios en el smoke salvo que Miguel lo pida.
@@ -219,4 +219,4 @@ Comentario en la tarjeta del deploy con: hash, hora de inicio y fin, archivos SQ
 | `SOURCE_FILE_STORAGE_ALLOWED_ORIGINS` no está documentado en `docs/SECURITY.md` ni en el checklist de Staging | Incluido en PROD0 como verificación; doc a cargo de Codex |
 | Plan de Supabase de Producción y existencia de backups automáticos/PITR sin confirmar (P10) | [HUMANO] |
 | R4 sobre Supabase gestionado nunca ensayado; solo hay ensayo local | Riesgo aceptado o ensayo en Staging: decide [HUMANO] |
-| Smoke automático depende de 07.1 | [CODEX] 07.1 (ya en cola) |
+| Smoke automático | Resuelto: `scripts/smokeCheck.mjs` (07.1) |
