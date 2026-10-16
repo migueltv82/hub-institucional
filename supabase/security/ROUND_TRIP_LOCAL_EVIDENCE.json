@@ -1,0 +1,58 @@
+{
+  "run": "ed7a4780909bacfc",
+  "staging": "NONE",
+  "production": "NONE",
+  "validator": {
+    "ok": false,
+    "error": {
+      "message": "La RPC segura no devolvio la fila legacy esperada para el alumno.",
+      "details": {
+        "enrollmentId": "codex_student_teacher_round_trip:mvaigm5x-fdb0cea7:legacy-enrollment",
+        "secureEnrollmentCount": 0
+      }
+    },
+    "steps": [
+      {
+        "label": "Validar variables de entorno locales",
+        "status": "OK",
+        "summary": "variables presentes; service_role solo en SUPABASE_SERVICE_ROLE_KEY"
+      },
+      {
+        "label": "Validar institucion de prueba y preparar usuarios",
+        "status": "OK",
+        "summary": "institucion=ed7a4780909bacfc-round-trip, workspace=main"
+      },
+      {
+        "label": "Inscribir alumno con IDs canonicos desde RPC del portal",
+        "status": "OK",
+        "summary": "ING08 / PROFESORADO DE INGLES, con student_record_id"
+      },
+      {
+        "label": "Leer roster docente por el camino de subjectRoster.js",
+        "status": "OK",
+        "summary": "roster=1, alumno canonico con nombre y DNI"
+      },
+      {
+        "label": "Cargar asistencia y nota como docente, releer como alumno",
+        "status": "OK",
+        "summary": "asistencia=present, nota=8, condicion=regular"
+      },
+      {
+        "label": "Normalizar fila legacy slug y verificarla en roster docente",
+        "status": "FALLA",
+        "summary": "La RPC segura no devolvio la fila legacy esperada para el alumno."
+      }
+    ],
+    "cleanup": "OK",
+    "stderrLines": 0
+  },
+  "validatorExitCode": 1,
+  "result": "BLOQUEADO",
+  "error": "Failed at round trip validator: AssertionError",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

@@ -765,54 +765,47 @@ function assertRosterContains({ roster, studentUserId, studentRecord, label }) {
   return row
 }
 
-async function createClassSessionLikeTeacherService({ supabase, institutionId, workspaceKey, teacherUserId, sessionDate, cleanup }) {
-  const result = await supabase
-    .from('subject_class_sessions')
-    .insert({
-      institution_id: institutionId,
-      workspace_key: workspaceKey,
-      subject_id: CANONICAL_SUBJECT_ID,
-      program_id: CANONICAL_PROGRAM_ID,
-      teacher_id: teacherUserId,
-      session_date: sessionDate,
-      topic: 'Validacion ida y vuelta alumno-docente',
-    })
-    .select('id, session_date')
-    .single()
-
-  assertNoError(result, 'No se pudo crear subject_class_sessions como subjectAttendance.js')
-  cleanup.sessionIds.push(result.data.id)
-  cleanup.auditEntityIds.push(result.data.id)
-  return result.data
+function firstRpcRow(data) {
+  return Array.isArray(data) ? data[0] : data
 }
 
-async function saveAttendanceLikeTeacherService({
-  supabase,
-  institutionId,
-  workspaceKey,
-  sessionId,
-  studentUserId,
-  subjectEnrollmentId,
-  cleanup,
-}) {
-  const result = await supabase
-    .from('subject_attendance_records')
-    .upsert([{
-      session_id: sessionId,
-      institution_id: institutionId,
-      workspace_key: workspaceKey,
+// Mismas RPC y parametros que src/services/subjectAttendance.js y src/services/studentGrades.js:
+// el libro docente ya no escribe tablas directo (RLS lo deniega), solo via funciones seguras.
+async function createClassSessionLikeTeacherService({ supabase, institutionId, workspaceKey, sessionDate, cleanup }) {
+  const result = await supabase.rpc('academic_teacher_create_class_session', {
+    p_institution_id: institutionId,
+    p_workspace_key: workspaceKey,
+    p_subject_id: CANONICAL_SUBJECT_ID,
+    p_program_id: CANONICAL_PROGRAM_ID,
+    p_session_date: sessionDate,
+    p_topic: 'Validacion ida y vuelta alumno-docente',
+  })
+
+  assertNoError(result, 'No se pudo crear la clase con academic_teacher_create_class_session')
+  const session = firstRpcRow(result.data)
+  if (!session?.id) throw new Error('academic_teacher_create_class_session no devolvio id de clase.')
+  cleanup.sessionIds.push(session.id)
+  cleanup.auditEntityIds.push(session.id)
+  return session
+}
+
+async function saveAttendanceLikeTeacherService({ supabase, sessionId, studentUserId, subjectEnrollmentId, cleanup }) {
+  const result = await supabase.rpc('academic_teacher_upsert_attendance_records', {
+    p_session_id: sessionId,
+    p_records: [{
       student_id: studentUserId,
       subject_enrollment_id: subjectEnrollmentId,
       status: 'present',
       observations: 'Validacion ida y vuelta alumno-docente',
-    }], { onConflict: 'session_id,student_id' })
-    .select('id, status')
-    .single()
+    }],
+  })
 
-  assertNoError(result, 'No se pudo guardar subject_attendance_records como subjectAttendance.js')
-  cleanup.attendanceRecordIds.push(result.data.id)
-  cleanup.auditEntityIds.push(result.data.id)
-  return result.data
+  assertNoError(result, 'No se pudo guardar la asistencia con academic_teacher_upsert_attendance_records')
+  const record = asArray(result.data).find((row) => row?.student_id === studentUserId)
+  if (!record?.id) throw new Error('academic_teacher_upsert_attendance_records no devolvio el registro del alumno.')
+  cleanup.attendanceRecordIds.push(record.id)
+  cleanup.auditEntityIds.push(record.id)
+  return record
 }
 
 async function upsertStudentGradeLikeTeacherService({
@@ -822,76 +815,29 @@ async function upsertStudentGradeLikeTeacherService({
   studentUserId,
   studentRecordId,
   subjectEnrollmentId,
-  teacherUserId,
   cleanup,
 }) {
-  const existingResult = await supabase
-    .from('student_grades')
-    .select('id, lock_version')
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-    .eq('student_id', studentUserId)
-    .eq('subject_id', CANONICAL_SUBJECT_ID)
-    .eq('program_id', CANONICAL_PROGRAM_ID)
-    .eq('grade_type', 'final')
-    .eq('attempt_number', 1)
-    .is('deleted_at', null)
-    .limit(1)
+  const result = await supabase.rpc('academic_teacher_upsert_student_grade', {
+    p_institution_id: institutionId,
+    p_workspace_key: workspaceKey,
+    p_student_id: studentUserId,
+    p_student_record_id: studentRecordId ?? null,
+    p_subject_enrollment_id: subjectEnrollmentId,
+    p_subject_id: CANONICAL_SUBJECT_ID,
+    p_program_id: CANONICAL_PROGRAM_ID,
+    p_grade_type: 'final',
+    p_attempt_number: 1,
+    p_grade_value: 8,
+    p_academic_status: 'regular',
+    p_expected_lock_version: null,
+  })
 
-  assertNoError(existingResult, 'No se pudo leer student_grades antes de upsert')
-
-  const existing = asArray(existingResult.data)[0]
-  if (!existing) {
-    const insertResult = await supabase
-      .from('student_grades')
-      .insert({
-        institution_id: institutionId,
-        workspace_key: workspaceKey,
-        student_id: studentUserId,
-        student_record_id: studentRecordId,
-        subject_enrollment_id: subjectEnrollmentId,
-        subject_id: CANONICAL_SUBJECT_ID,
-        program_id: CANONICAL_PROGRAM_ID,
-        teacher_id: teacherUserId,
-        grade_type: 'final',
-        attempt_number: 1,
-        grade_value: 8,
-        grade_scale: 'numeric_0_10',
-        academic_status: 'regular',
-        observations: 'Validacion ida y vuelta alumno-docente',
-        client_mutation_id: `${TEST_SOURCE}:${subjectEnrollmentId}:grade`,
-        metadata: {
-          source: TEST_SOURCE,
-          subject_enrollment_id: subjectEnrollmentId,
-        },
-      })
-      .select('id, grade_value, academic_status')
-      .single()
-
-    assertNoError(insertResult, 'No se pudo insertar student_grades como studentGrades.js')
-    cleanup.gradeIds.push(insertResult.data.id)
-    cleanup.auditEntityIds.push(insertResult.data.id)
-    return insertResult.data
-  }
-
-  const updateResult = await supabase
-    .from('student_grades')
-    .update({
-      grade_value: 8,
-      teacher_id: teacherUserId,
-      student_record_id: studentRecordId,
-      subject_enrollment_id: subjectEnrollmentId,
-      academic_status: 'regular',
-    })
-    .eq('id', existing.id)
-    .eq('lock_version', existing.lock_version)
-    .select('id, grade_value, academic_status')
-    .single()
-
-  assertNoError(updateResult, 'No se pudo actualizar student_grades como studentGrades.js')
-  cleanup.gradeIds.push(updateResult.data.id)
-  cleanup.auditEntityIds.push(updateResult.data.id)
-  return updateResult.data
+  assertNoError(result, 'No se pudo guardar la nota con academic_teacher_upsert_student_grade')
+  const grade = firstRpcRow(result.data)
+  if (!grade?.id) throw new Error('academic_teacher_upsert_student_grade no devolvio id de nota.')
+  cleanup.gradeIds.push(grade.id)
+  cleanup.auditEntityIds.push(grade.id)
+  return grade
 }
 
 async function fetchStudentPortalSecureSnapshotLikeModel({ supabase, institutionId, workspaceKey }) {
@@ -1172,7 +1118,14 @@ async function cleanupTestData({ supabase, institutionId, workspaceKey, cleanup 
   await safe('subject_teacher_assignments', () => deleteByIds({ supabase, table: 'subject_teacher_assignments', ids: cleanup.assignmentIds }))
   await safe('student_records', () => deleteByIds({ supabase, table: 'student_records', ids: cleanup.studentRecordIds }))
   await safe('teacher_records', () => deleteByIds({ supabase, table: 'teacher_records', ids: cleanup.teacherRecordIds }))
-  await safe('academic_audit_logs', () => deleteByIds({ supabase, table: 'academic_audit_logs', column: 'entity_id', ids: cleanup.auditEntityIds }))
+  // academic_audit_logs existe en el schema legacy de examenes pero no en supabase/schema: solo se tolera su ausencia.
+  await safe('academic_audit_logs', async () => {
+    try {
+      await deleteByIds({ supabase, table: 'academic_audit_logs', column: 'entity_id', ids: cleanup.auditEntityIds })
+    } catch (error) {
+      if (!['PGRST205', '42P01'].includes(error?.details?.code ?? error?.code)) throw error
+    }
+  })
 
   const userIds = Array.from(new Set(cleanup.authUserIds.map(clean).filter(Boolean)))
   await safe('memberships', async () => {
@@ -1418,8 +1371,9 @@ async function main() {
     })
 
     const canonicalEnrollment = await logger.run('Inscribir alumno con IDs canonicos desde RPC del portal', async () => {
+      // La RPC exige auth.uid() = alumno (fix P1 identity binding): se llama con la sesion del alumno.
       const enrollment = await upsertSubjectEnrollmentFromPortal({
-        supabase: serviceSupabase,
+        supabase: context.canonicalStudentClient,
         institutionId,
         workspaceKey,
         studentUserId: context.canonicalStudent.userId,
@@ -1569,7 +1523,7 @@ async function main() {
       }
 
       const legacyEnrollment = await upsertSubjectEnrollmentFromPortal({
-        supabase: serviceSupabase,
+        supabase: context.legacyStudentClient,
         institutionId,
         workspaceKey,
         studentUserId: context.legacyStudent.userId,

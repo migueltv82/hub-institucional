@@ -42,10 +42,10 @@ export async function removeOwnedDirectory(directory){
 // Gateway minimo equivalente a Kong: una sola URL con /auth/v1, /rest/v1 y /storage/v1 para que la funcion
 // llame a los servicios restaurados por la red interna de Docker.
 export function edgeGatewayConfig({auth,rest,storage}){
-  for(const host of [auth,rest,storage])assert.match(host,/^gotrue_harness_[a-f0-9]{16}_[a-z_]+$/);
+  for(const host of [auth,rest,...(storage===undefined?[]:[storage])])assert.match(host,/^gotrue_harness_[a-f0-9]{16}_[a-z_]+$/);
   const route=(prefix,target)=>`    location ${prefix}/ { proxy_pass http://${target}/; proxy_set_header Host $host; proxy_redirect off; }`;
   return ['events {}','http {','  client_max_body_size 1m;','  server {','    listen 8000;',
-    route('/auth/v1',auth+':9999'),route('/rest/v1',rest+':3000'),route('/storage/v1',storage+':5000'),
+    route('/auth/v1',auth+':9999'),route('/rest/v1',rest+':3000'),...(storage===undefined?[]:[route('/storage/v1',storage+':5000')]),
     '    location / { return 404; }','  }','}',''].join('\n');
 }
 
