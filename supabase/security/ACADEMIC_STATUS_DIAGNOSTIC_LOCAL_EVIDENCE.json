@@ -1,0 +1,85 @@
+{
+  "run": "1aced670ebc397ce",
+  "target": "supabase_db_codex-baseline-local-7725bdda",
+  "database": "gotrue_harness_1aced670ebc397ce",
+  "staging": "NONE",
+  "production": "NONE",
+  "remoteSql": "NONE",
+  "diagnosticSha256": "2c37c4cbcd1d8182e1ad74cd32390cd74856513ccdb21e7916f9cb318b7483c2",
+  "rows": [
+    [
+      "a1000000-0000-4000-8000-000000000001",
+      "Diagnostic a",
+      "Regular",
+      7,
+      3,
+      2
+    ],
+    [
+      "b1000000-0000-4000-8000-000000000001",
+      "Diagnostic b",
+      "regular ",
+      8,
+      3,
+      2
+    ],
+    [
+      "a1000000-0000-4000-8000-000000000001",
+      "Diagnostic a",
+      "cursando",
+      8,
+      2,
+      1
+    ],
+    [
+      "a1000000-0000-4000-8000-000000000001",
+      "Diagnostic a",
+      "regular ",
+      8,
+      2,
+      1
+    ],
+    [
+      "b1000000-0000-4000-8000-000000000001",
+      "Diagnostic b",
+      "Pendiente",
+      9,
+      2,
+      2
+    ],
+    [
+      "a1000000-0000-4000-8000-000000000001",
+      "Diagnostic a",
+      "Pendiente",
+      9,
+      1,
+      1
+    ],
+    [
+      "b1000000-0000-4000-8000-000000000001",
+      "Diagnostic b",
+      "cursando",
+      8,
+      1,
+      1
+    ],
+    [
+      "b1000000-0000-4000-8000-000000000001",
+      "Diagnostic b",
+      "Regular",
+      7,
+      1,
+      1
+    ]
+  ],
+  "snapshotUnchanged": true,
+  "canonicalExcluded": 14,
+  "deletedExcluded": 4,
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}
