@@ -29,6 +29,14 @@ Corrección: la clave del mapa incluye el llamado normalizado; cada llamado comp
 - Con la corrección: 200/200 (modo por defecto) y 100/100 (`dateAware`) sin violaciones; un barrido descartable de 2000 semillas más y de 600 semillas por variante de compactación y modo tampoco encontró violaciones.
 - Tests existentes del motor: 1262 sin cambios, todos PASS. quality:full 2448 tests en 308 archivos PASS, 0 high/critical.
 
+## Ampliación 04.2: compactación y afinidad de vocales
+
+- **Compactación.** Variante `dense` del generador (plantel de 3 docentes que asisten todos los días, materias de la misma familia, con Prácticas Discursivas III/IV): 120 instituciones × modos `safe` y `aggressive`. Un barrido de medición dio 362 compactaciones y 135 mesas agrupadas, sin violaciones. El chequeo de titularidad ahora cubre cada materia agrupada (conserva su titular original) y verifica que pertenezca al mismo llamado que la mesa.
+- **Afinidad de vocales (regla 11).** Oráculo: `getNivelAfinidadDocenteMesa` del propio motor (la definición institucional de afinidad es compleja; reimplementarla sería frágil). Para que no sea vacío, el generador incluye docentes de otra área (carrera y materia de Historia): en 400 instituciones, 304 tenían alguno y el motor no los asignó nunca como vocales (sí como titulares de sus propias materias, que vienen dadas). Un primer generador sorteaba carrera y materia por separado y producía docentes "de Historia" en carreras de inglés, que la regla institucional considera afines por carrera: era un error del generador, no del motor.
+- **Control no vacío.** Las violaciones fabricadas cubren las 8 reglas: titular obligatorio, titularidad movida, Prácticas Discursivas agrupadas, fecha fuera del llamado, rol duplicado, vocal sin afinidad, docente que no asiste ese día y tope de vocalías.
+
+quality:full 2449 tests en 308 archivos PASS.
+
 ## Límites
 
-Los datos sintéticos casi nunca disparan la compactación (las variantes `safe`, `aggressive` y `off` produjeron la misma cantidad de mesas), así que la regla de máximo de materias por mesa y la de no agrupar Prácticas Discursivas quedan poco ejercitadas por la prueba de propiedades; siguen cubiertas por sus tests dedicados. No verifica afinidad o idoneidad de vocales ni la réplica del segundo llamado respecto del primero.
+La afinidad se verifica con la regla del propio motor, no con una definición independiente. No verifica la réplica del segundo llamado respecto del primero (regla 12, "siempre que sea posible", no es una invariante estricta) ni la generación de períodos especiales.

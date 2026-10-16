@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { generateRegularExamPlan } from '../planning/generateRegular.js'
 import { DOCENTE_A_DESIGNAR, MAX_SUBJECTS_PER_MESA } from '../constants.js'
+import { getNivelAfinidadDocenteMesa } from '../rules/affinities.js'
 
 // Prueba de propiedades del motor: instituciones sinteticas generadas con semilla fija y
 // verificacion independiente de las reglas duras del README sobre la salida final.
@@ -34,29 +35,33 @@ function weekdayOf(iso) {
   return ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][new Date(`${iso}T12:00:00Z`).getUTCDay()]
 }
 
-export function buildInstitution(seed) {
+// dense: plantel chico que asiste todos los dias y materias de una misma familia, para que
+// el motor comparta tribunal y fecha y ejercite la compactacion (maximo de materias, no agrupables).
+export function buildInstitution(seed, { dense = false } = {}) {
   const random = mulberry32(seed)
   const pick = (items) => items[Math.floor(random() * items.length)]
   const between = (min, max) => min + Math.floor(random() * (max - min + 1))
 
-  const docentes = Array.from({ length: between(4, 10) }, (_, index) => {
-    const days = WEEKDAYS.filter(() => random() < 0.6)
+  const docentes = Array.from({ length: dense ? 3 : between(4, 10) }, (_, index) => {
+    const days = dense ? [...WEEKDAYS] : WEEKDAYS.filter(() => random() < 0.6)
+    const otherArea = !dense && random() < 0.2
     return {
       id: `doc-${index}`,
       nombre: `Docente ${index}`,
       activo: true,
-      carrera: pick(CAREERS).name,
-      nombreMateria: pick(SUBJECT_NAMES),
+      // Algunos docentes de otra area (Historia) para que la regla de afinidad de vocales no sea vacia.
+      carrera: dense ? CAREERS[0].name : (otherArea ? 'Profesorado de Historia' : pick(CAREERS).name),
+      nombreMateria: dense ? 'Lengua Inglesa' : (otherArea ? 'Historia Antigua' : pick(SUBJECT_NAMES)),
       diasAsistencia: days.length ? days : [pick(WEEKDAYS)],
-      horasCatedra: between(2, 12),
+      horasCatedra: dense ? between(10, 16) : between(2, 12),
       turnosDisponibles: ['NOCHE'],
     }
   })
 
   const usedNames = new Set()
-  const materias = Array.from({ length: between(2, 7) }, (_, index) => {
-    const career = pick(CAREERS)
-    let name = pick(SUBJECT_NAMES)
+  const materias = Array.from({ length: dense ? between(4, 8) : between(2, 7) }, (_, index) => {
+    const career = dense ? CAREERS[0] : pick(CAREERS)
+    let name = dense ? pick(['Lengua Inglesa', 'Gramatica Inglesa', 'Practicas Discursivas III', 'Practicas Discursivas IV']) : pick(SUBJECT_NAMES)
     if (usedNames.has(`${career.id}:${name}`)) name = `${name} ${index}`
     usedNames.add(`${career.id}:${name}`)
     return {
@@ -133,7 +138,8 @@ export function checkInvariants(input, result) {
       const source = materias.get(subjectId(subject))
       if (!source) { fail('MATERIA_DESCONOCIDA', { subject: subjectId(subject) }); continue }
       const titular = subject.titularId ?? mesa.titularId
-      if (subjects.length === 1 && titular !== source.titular_id) fail('TITULARIDAD_MOVIDA', { expected: source.titular_id, actual: titular })
+      if (titular !== source.titular_id) fail('TITULARIDAD_MOVIDA', { subject: source.id, expected: source.titular_id, actual: titular })
+      if (subject.llamado && subject.llamado !== mesa.llamado) fail('MATERIA_AGRUPADA_DE_OTRO_LLAMADO', { subject: source.id })
       const key = `${source.id}:${mesa.llamado}`
       if (mesa.fecha) datesBySubjectCall.set(key, mesa.fecha)
     }
@@ -141,7 +147,12 @@ export function checkInvariants(input, result) {
     const vocales = [mesa.vocal1Id, mesa.vocal2Id].filter(isAssigned)
     const tribunal = [mesa.titularId, ...vocales].filter(isAssigned)
     if (new Set(tribunal).size !== tribunal.length) fail('ROL_DUPLICADO_EN_TRIBUNAL', { tribunal })
-    for (const vocalId of vocales) vocalias.set(`${vocalId}:${mesa.llamado}`, (vocalias.get(`${vocalId}:${mesa.llamado}`) ?? 0) + 1)
+    for (const vocalId of vocales) {
+      vocalias.set(`${vocalId}:${mesa.llamado}`, (vocalias.get(`${vocalId}:${mesa.llamado}`) ?? 0) + 1)
+      // Regla 11: oraculo = la regla de afinidad del propio motor (definicion institucional compleja).
+      const docente = docentes.get(vocalId)
+      if (docente && !getNivelAfinidadDocenteMesa(docente, mesa).afinidadValida) fail('VOCAL_SIN_AFINIDAD', { vocalId })
+    }
     if (mesa.fecha) {
       const weekday = weekdayOf(mesa.fecha)
       for (const teacherId of tribunal) {
@@ -195,6 +206,23 @@ describe('examEngine: invariantes de reglas duras sobre instituciones sinteticas
     expect(failures).toEqual([])
   }, 60000)
 
+  it('respeta las reglas cuando el motor compacta (plantel chico, materias afines)', () => {
+    const failures = []
+    let grouped = 0
+    for (const compact of ['safe', 'aggressive']) {
+      for (let seed = 1; seed <= 120; seed += 1) {
+        const input = buildInstitution(seed, { dense: true })
+        input.options = { ...input.options, compact }
+        const result = generateRegularExamPlan(input)
+        grouped += result.plannedMesas.filter((mesa) => (mesa.materiasAgrupadas ?? []).length > 1).length
+        const violations = checkInvariants(input, result)
+        if (violations.length) failures.push({ compact, seed, violations: violations.slice(0, 3) })
+      }
+    }
+    expect(grouped).toBeGreaterThan(20)
+    expect(failures).toEqual([])
+  }, 60000)
+
   it('es determinista: la misma entrada produce las mismas mesas', () => {
     for (const seed of [3, 17, 42, 99, 150]) {
       const first = generateRegularExamPlan(buildInstitution(seed)).plannedMesas
@@ -212,7 +240,16 @@ describe('examEngine: invariantes de reglas duras sobre instituciones sinteticas
         { id: 'x2', llamado: 'PRIMER_LLAMADO', fecha: null, titularId: null, materiaId: first.id },
       ],
     }
+    const historia = { id: 'doc-historia', nombre: 'Historia', activo: true, carrera: 'Profesorado de Historia', nombreMateria: 'Historia Antigua', diasAsistencia: ['lunes'], horasCatedra: 2, turnosDisponibles: ['NOCHE'] }
+    input.docentes.push(historia)
+    const lunes = input.fechasDisponibles.find((date) => date.llamado === 'PRIMER_LLAMADO')?.fecha ?? '2026-07-27'
+    const martes = '2026-07-28'
+    fake.plannedMesas.push(
+      { id: 'x3', llamado: 'PRIMER_LLAMADO', fecha: martes, titularId: 'otro-titular', vocal1Id: historia.id, vocal2Id: null, materiaId: second.id, materia: second.nombreMateria },
+      { id: 'x4', llamado: 'PRIMER_LLAMADO', fecha: lunes, titularId: second.titular_id, vocal1Id: historia.id, vocal2Id: null, materiaId: second.id, materia: second.nombreMateria },
+      { id: 'x5', llamado: 'PRIMER_LLAMADO', fecha: lunes, titularId: second.titular_id, vocal1Id: historia.id, vocal2Id: null, materiaId: second.id, materia: second.nombreMateria },
+    )
     const rules = new Set(checkInvariants(input, fake).map((violation) => violation.rule))
-    for (const rule of ['TITULAR_OBLIGATORIO', 'PRACTICAS_DISCURSIVAS_AGRUPADAS', 'FECHA_FUERA_DEL_LLAMADO', 'ROL_DUPLICADO_EN_TRIBUNAL']) expect(rules.has(rule)).toBe(true)
+    for (const rule of ['TITULAR_OBLIGATORIO', 'PRACTICAS_DISCURSIVAS_AGRUPADAS', 'FECHA_FUERA_DEL_LLAMADO', 'ROL_DUPLICADO_EN_TRIBUNAL', 'TITULARIDAD_MOVIDA', 'VOCAL_SIN_AFINIDAD', 'DOCENTE_NO_ASISTE_ESE_DIA', 'LIMITE_VOCALIAS_MITAD_MAS_UNO']) expect(rules.has(rule), rule).toBe(true)
   })
 })
