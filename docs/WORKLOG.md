@@ -689,3 +689,11 @@ Resultados:
 - cleanup: 0.
 
 Storage y Edge quedan SKIPPED en local. El runbook de Producción ya apunta al script. Sin remoto.
+
+## 2026-10-16 — DEP.1 updates de dependencias dentro de rango (Claude, cubriendo a Codex)
+
+Actualizados dompurify (3.4.17), fflate (0.8.3) y la familia @babel (7.29.x). `npm audit` pasa de 10 a 7: 0 high/critical y 0 low.
+
+vitest queda en 4.1.5 por un bug interno de npm 10 (`edgesOut` en arborist), documentado en `docs/DEPENDENCY_TRIAGE_2026-10-16.md`.
+
+Verificación: `quality:full` PASS (311 archivos, 2466 tests) y PDF comprimido con jspdf OK. Solo cambia `package-lock.json`.

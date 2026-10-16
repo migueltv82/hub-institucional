@@ -37,3 +37,23 @@ Los moderate/low quedan como deuda no bloqueante, sin excepción formal, porque 
 Si Miguel prefiere (b), renovar EX-001 acotada: alcance "solo los 9 moderate + 1 low de esta tabla; cualquier high/critical nuevo invalida la excepción", con vencimiento 2026-11-30.
 
 Aplicar la salida elegida en `CONSTRAINTS.md` queda **pendiente de aprobación de Miguel** (tarjeta [HUMANO]).
+
+## Actualización DEP.1 (mismo día)
+
+Updates semver-compatibles con `npm update <paquete>` (npm 10.9.4, el mismo de CI), sin `--force`, sin overrides nuevos y sin tocar `package.json`:
+
+| Paquete | Antes | Después |
+| --- | --- | --- |
+| dompurify (vía jspdf) | 3.4.3 | 3.4.17 |
+| fflate (vía jspdf) | 0.8.2 | 0.8.3 |
+| @babel/core y familia @babel/* (dev, vía eslint-plugin-react-hooks) | 7.29.0 | 7.29.7–7.29.10 |
+| Transitivas de browserslist (baseline-browser-mapping, electron-to-chromium, node-releases) | — | patch |
+
+`npm audit`: **10 → 7** (0 critical, 0 high, 7 moderate, 0 low). Quedan:
+- vitest y @vitest/mocker (dev);
+- mammoth, argparse y sprintf-js (sin fix compatible);
+- exceljs y uuid (sin fix compatible).
+
+**vitest no se pudo actualizar.** `npm update vitest` y `npm install -D vitest@^4.1.12` abortan con un error interno de npm 10 (`TypeError: Cannot read properties of null (reading 'edgesOut')` en `@npmcli/arborist` `#loadPeerSet`). npm 11 no crashea, pero tampoco sube la versión, y reescribe el lockfile con otro formato; se descartó para no desalinear con el `npm ci` de CI (npm 10). Es una dependencia solo de desarrollo y el advisory exige un servidor de Vitest expuesto. Queda como deuda no bloqueante.
+
+Verificación: un PDF comprimido generado con jspdf (FlateDecode vía fflate 0.8.3) se emite bien, y `quality:full` pasa (ver WORKLOG).
