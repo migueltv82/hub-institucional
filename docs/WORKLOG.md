@@ -649,3 +649,15 @@ Hallazgo al prepararlo: `public.is_member_of_institution` no considera `institut
 El historial de `admin_audit_logs` queda cubierto para v1 con una consulta read-only documentada.
 
 Solo documentación: sin remoto.
+
+## 2026-10-16 — EX-001 revalidación de dependencias (Claude, cubriendo a Codex)
+
+`npm audit` sobre release/v1: 0 critical, 0 high, 9 moderate y 1 low. `quality:deps` sale con código 0.
+
+Ninguno de los moderate/low es alcanzable en runtime de producción:
+- son de dev, o
+- jspdf no usa `html()` ni unzip, o
+- uuid se usa con `v4` sin `buf`, o
+- argparse y sprintf-js vienen de la CLI de mammoth.
+
+Salida recomendada: (a) cerrar EX-001. No se aplicó; espera la aprobación de Miguel. Ver `docs/DEPENDENCY_TRIAGE_2026-10-16.md`. Sin cambios de paquetes y sin remoto.
