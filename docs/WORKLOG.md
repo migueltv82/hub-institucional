@@ -697,3 +697,9 @@ Actualizados dompurify (3.4.17), fflate (0.8.3) y la familia @babel (7.29.x). `n
 vitest queda en 4.1.5 por un bug interno de npm 10 (`edgesOut` en arborist), documentado en `docs/DEPENDENCY_TRIAGE_2026-10-16.md`.
 
 Verificación: `quality:full` PASS (311 archivos, 2466 tests) y PDF comprimido con jspdf OK. Solo cambia `package-lock.json`.
+
+## 2026-10-16 — CI.1 CI remoto verde para release/v1 (Claude, cubriendo a Codex)
+
+Causa del FAILURE de `main` (run 38844481091, 16/10 03:14 UTC): `src/services/examTablesCanonicalSchema.test.js` comparaba rutas con separador `\` de Windows y el runner `ubuntu-latest` devuelve `/`. Fallaban 2 tests de 2409. Ya estaba corregido en release/v1 (`d4eb525`, rutas relativas normalizadas con `sep`).
+
+Se abrió el PR draft #1 release/v1 → main ("no mergear"). Job `Quality gate (Node 22.13)`: SUCCESS en el run 38945952009 (commit `4a2df9a`). Es la primera ejecución remota verde del check que después se configura como requerido en la protección de `main`. Sin merge y sin cambios en workflows.
