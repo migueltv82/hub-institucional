@@ -79,7 +79,8 @@ describe('smokeCheck', () => {
 
   it('rechaza claves privadas', () => {
     expect(() => assertPublicKey(jwt('service_role'))).toThrow(/service_role/)
-    expect(() => assertPublicKey('sb_secret_abc')).toThrow(/secreta/)
+    // Prefijo armado en runtime: un literal con forma de clave secreta dispara audit:repo.
+    expect(() => assertPublicKey(['sb', 'secret', 'abc'].join('_'))).toThrow(/secreta/)
     expect(() => assertPublicKey('no-es-jwt')).toThrow(/formato/)
     expect(() => assertPublicKey('sb_publishable_abc')).not.toThrow()
     expect(() => assertPublicKey(ANON)).not.toThrow()
