@@ -591,3 +591,6 @@ Run ed7a4780909bacfc: `validateRoundTripLocal.mjs` ejecuta el validador real `va
 
 ## 2026-10-16 — 06.1 Super Admin y administración multitenant vía Edge
 Run 397df57e38ab57ee PASS: stack local compartido (`scripts/localSupabaseStack.mjs`, también usado ahora por 05.1) + Edge admin-users empaquetada. create_tenant_with_admin solo para Super Admin (3 denegaciones sin filas; alta OK con admin owner solo de su institución), bulk_create_students solo del owner en su institución (3 denegaciones sin usuarios Auth; alta OK sin membresías ajenas), set_user_password denegado a owner/viewer, auditoría solo de éxitos. quality:full 2441 tests/306 archivos PASS. Cleanup 0. Ver SUPERADMIN_EDGE_LOCAL_RESULT.md. Staging/Production/SQL remoto/deploy NONE.
+
+## 2026-10-16 — 06.2 Resto de acciones administrativas de admin-users
+Run a0fb03219179474c PASS (amplía 06.1): bulk_create_teachers solo del owner en su institución (3 denegaciones sin usuarios Auth; alta OK como docente sin membresías ajenas); create_or_assign_institution_user solo Super Admin (2 denegaciones; asignación admin solo en A); reset_student_academic_records y student_portal_mutation denegados a actores sin derecho sin tocar profiles ni memberships; auditoría solo de éxitos. quality:full PASS. Cleanup 0. Ver SUPERADMIN_EDGE_LOCAL_RESULT.md.

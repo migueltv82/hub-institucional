@@ -2,7 +2,7 @@
   "staging": "NONE",
   "production": "NONE",
   "edgeRuntimeImage": "supabase/edge-runtime:v1.77.4",
-  "run": "397df57e38ab57ee",
+  "run": "a0fb03219179474c",
   "lastEdgeStatus": 403,
   "checks": {
     "createTenantDenied": 3,
@@ -20,7 +20,19 @@
       "outsideOwnInstitution": 0
     },
     "setPasswordDenied": 2,
-    "auditRows": 2
+    "bulkTeachers": {
+      "denied": 3,
+      "ownerStatus": 200,
+      "outsideOwnInstitution": 0,
+      "profile": "docente"
+    },
+    "createOrAssignUser": {
+      "denied": 2,
+      "superAdminStatus": 200,
+      "memberships": 1
+    },
+    "resetAndPortalDenied": 4,
+    "auditRows": 4
   },
   "result": "PASS",
   "cleanup": {
