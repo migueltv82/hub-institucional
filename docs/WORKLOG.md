@@ -603,3 +603,6 @@ Prueba de propiedades con semilla fija sobre generateRegularExamPlan (200 instit
 
 ## 2026-10-16 — 04.2 Motor: invariantes de compactación y afinidad de vocales
 La prueba de propiedades suma una variante densa que fuerza compactación (362 compactaciones/135 mesas agrupadas en la medición; titular original por materia agrupada y mismo llamado) y la regla 11 de afinidad de vocales con oráculo del propio motor, con docentes de otra área para que no sea vacía (304/400 instituciones los tienen; 0 asignados como vocales). Control fabricado ahora cubre 8 reglas. Sin violaciones. quality:full 2449 tests/308 archivos PASS. Ver docs/EXAM_ENGINE_INVARIANTS_2026-10-16.md.
+
+## 2026-10-16 — 04.3 Motor: invariantes en períodos especiales
+La prueba de propiedades cubre períodos especiales (tipoPeriodo ESPECIAL, llamado especial único) por generateRegularExamPlan: 100 instituciones en el test, 782 mesas en un barrido de 400, sin violaciones. Hallazgo menor: planning/generateSpecial.js es un stub sin llamadores. quality:full PASS.
