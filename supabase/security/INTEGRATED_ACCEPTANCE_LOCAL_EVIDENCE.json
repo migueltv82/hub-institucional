@@ -1,0 +1,1 @@
+{"task":"QA.1","date":"2026-10-16","result":"BLOCKED_ENVIRONMENT","base":"a42037d","branch":"release/v1","missingImages":["nginx:1.27-alpine","supabase/edge-runtime:v1.77.4"],"browser":"NOT_RUN","edge":"NOT_RUN","cleanup":{"databases":0,"containers":0,"temporaryFiles":0},"staging":"NONE","production":"NONE","remoteSql":"NONE","deploy":"NONE"}
