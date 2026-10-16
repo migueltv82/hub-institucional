@@ -41,11 +41,13 @@ export const IDENTITY_CASES = Object.freeze([
   { name: 'admin API app_metadata superadmin', via: 'admin', appMetadata: { account_role: 'superadmin', is_global_admin: true } },
 ]);
 
-export async function main() {
+export async function main({ escalation = false } = {}) {
+  assert.equal(typeof escalation, 'boolean');
   const run = randomBytes(8).toString('hex');
   const database = disposableDatabase(`gotrue_harness_${run}`);
   const container = `${database}_auth`;
-  const report = { run, staging: 'NONE', production: 'NONE', image: LOCAL_RECOVERY_IMAGES.auth, openSignupOnlyInRehearsal: true };
+  const report = { run, staging: 'NONE', production: 'NONE', image: LOCAL_RECOVERY_IMAGES.auth, openSignupOnlyInRehearsal: true, escalationRequested: escalation };
+  const extraContainers = new Set();
   let step = 'preflight', created = false, containerCreated = false;
   const docker = (args, input, env = process.env) => {
     try { return execFileSync('docker', args, { input, env, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 64 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }); }
@@ -59,7 +61,8 @@ export async function main() {
     assert.deepEqual(Object.keys(source.NetworkSettings.Networks), [NETWORK]);
     docker(['image', 'inspect', LOCAL_RECOVERY_IMAGES.auth]);
     const env = Object.fromEntries(source.Config.Env.map(entry => { const i = entry.indexOf('='); return [entry.slice(0, i), entry.slice(i + 1)]; }));
-    const password = authPassword(docker(['exec', SOURCE, 'cat', '/etc/postgresql.schema.sql']), env);
+    const sourceConfig = docker(['exec', SOURCE, 'cat', '/etc/postgresql.schema.sql']);
+    const password = authPassword(sourceConfig, env);
     step = 'schema preparation';
     const schema = docker(['exec', SOURCE, 'pg_dump', '-U', 'supabase_admin', '-d', 'postgres', '--schema-only', '--no-comments']);
     const migrations = docker(['exec', SOURCE, 'pg_dump', '-U', 'supabase_admin', '-d', 'postgres', '--data-only', '--table=auth.schema_migrations']);
@@ -140,11 +143,17 @@ export async function main() {
     report.privilegedProfiles = privileged.length;
     assert.ok(privileged.every(id => serverIds.includes(id)), 'Privileged profile created from untrusted metadata');
     assert.equal(sql('select count(*) from public.memberships;'), '0');
+    if (escalation) {
+      step = 'Data API escalation';
+      const { runEscalationPhase } = await import('./validateIdentityEscalation.mjs');
+      report.escalation = await runEscalationPhase({ docker, sql, auth, service, source: SOURCE, sourceConfig, sourceEnv: env, database, jwtSecret, network: NETWORK, label: LABEL, run, register: name => extraContainers.add(name), report });
+    }
     const state = JSON.parse(docker(['inspect', container]))[0]; assert.equal(state.State.Running, true); assert.equal(state.RestartCount, 0);
     report.result = 'PASS';
   } catch (error) { report.result = 'BLOQUEADO'; report.error = `Failed at ${step}: ${error.name}`; }
   finally {
     step = 'cleanup'; const errors = [];
+    for (const name of extraContainers) try { if (docker(['ps', '-a', '--filter', `name=^/${name}$`, '--format', '{{.Names}}']).trim()) { assert.equal(JSON.parse(docker(['inspect', name]))[0].Config.Labels[LABEL], run); docker(['rm', '-f', name]); } } catch { errors.push('Extra container cleanup failed'); }
     if (containerCreated) try { if (docker(['ps', '-a', '--filter', `name=^/${container}$`, '--format', '{{.Names}}']).trim()) { assert.equal(JSON.parse(docker(['inspect', container]))[0].Config.Labels[LABEL], run); docker(['rm', '-f', container]); } } catch { errors.push('Container cleanup failed'); }
     if (created) try { if (sql(`select count(*) from pg_database where datname='${database}';`, 'postgres') === '1') { const owner = JSON.parse(sql(`select json_build_object('owner',pg_get_userbyid(datdba),'marker',shobj_description(oid,'pg_database')) from pg_database where datname='${database}';`, 'postgres')); assert.equal(owner.owner, 'supabase_admin'); assert.equal(owner.marker, run); sql(`drop database ${database} with (force);`, 'postgres'); } } catch { errors.push('Database cleanup failed'); }
     try { assert.equal(sql(`select count(*) from pg_database where datname='${database}';`, 'postgres'), '0'); assert.equal(docker(['ps', '-a', '--filter', `label=${LABEL}=${run}`, '--format', '{{.Names}}']).trim(), ''); } catch { errors.push('Cleanup verification failed'); }
