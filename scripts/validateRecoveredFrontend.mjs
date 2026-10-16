@@ -17,16 +17,17 @@ export function edgeOutOfScope(failure){
   return failure?.service==='functions'&&failure.status===404&&typeof failure.endpoint==='string';
 }
 export function frontendProxyTargets(ports){
-  assert.deepEqual(Object.keys(ports).sort(),['auth','rest','storage']);
-  return Object.fromEntries([['/auth/v1','auth'],['/rest/v1','rest'],['/storage/v1','storage']].map(([prefix,kind])=>[prefix,{target:localEndpoint(ports[kind],'/'),changeOrigin:true,followRedirects:false,ws:false,rewrite:path=>path.slice(prefix.length)||'/'}]));
+  const keys=Object.keys(ports).sort();
+  assert.ok(['auth,rest,storage','auth,functions,rest,storage'].includes(keys.join(',')),'Unsupported proxy services');
+  return Object.fromEntries([['/auth/v1','auth'],['/rest/v1','rest'],['/storage/v1','storage'],['/functions/v1','functions']].filter(([,kind])=>kind in ports).map(([prefix,kind])=>[prefix,{target:localEndpoint(ports[kind],'/'),changeOrigin:true,followRedirects:false,ws:false,rewrite:path=>path.slice(prefix.length)||'/'}]));
 }
-export async function validateRecoveredFrontend({ports,anonKey,users,tenants,report}){
-  const proxy=frontendProxyTargets(ports);
+export async function validateRecoveredFrontend({ports,port:reservedPort,anonKey,users,tenants,report}){
+  const proxy=frontendProxyTargets(ports),edgeRecovered='functions' in ports;
   assert.ok(!Object.keys(process.env).some(key=>key.startsWith('VITE_')),'Ambient frontend environment forbidden');
   assert.equal(users.length,4);assert.equal(tenants.length,2);
   assert.ok(JSON.parse(Buffer.from(anonKey.split('.')[1],'base64url').toString()).role==='anon','Public key role mismatch');
   let server,browser,cache;let phase='startup';
-  const errors=[],cases=[],httpFailures=[],edgeFindings=[];let externalRequests=0,serverErrors=0;
+  const errors=[],cases=[],httpFailures=[],edgeFindings=[],edgeSuccesses=[];let externalRequests=0,serverErrors=0;
   report.browserCases=cases;report.browserHttpFailures=httpFailures;report.browserEdgeOutOfScope=edgeFindings;
   report.browserProgress=phase;
   try{
@@ -35,7 +36,7 @@ export async function validateRecoveredFrontend({ports,anonKey,users,tenants,rep
     const {default:tailwindcss}=await import('@tailwindcss/vite');
     const {chromium}=await import('playwright');
     const reservation=netServer();
-    const port=await new Promise((done,reject)=>{reservation.once('error',reject);reservation.listen(0,'127.0.0.1',()=>{const value=reservation.address().port;reservation.close(error=>error?reject(error):done(value));});});
+    const port=reservedPort??await new Promise((done,reject)=>{reservation.once('error',reject);reservation.listen(0,'127.0.0.1',()=>{const value=reservation.address().port;reservation.close(error=>error?reject(error):done(value));});});
     const origin=localEndpoint(port,'/').slice(0,-1);
     cache=await mkdtemp(resolve(tmpdir(),'hub-recovery-browser-'));
     const logger=createLogger('silent');logger.error=()=>{serverErrors++;};
@@ -50,7 +51,7 @@ export async function validateRecoveredFrontend({ports,anonKey,users,tenants,rep
       try{
         await context.route('**/*',async route=>{if(new URL(route.request().url()).origin===origin)await route.continue();else{externalRequests++;await route.abort();}});
         const page=await context.newPage();page.on('pageerror',error=>errors.push(error.name));
-        page.on('response',response=>{const failure=frontendHttpFailure(response.url(),response.status());if(!failure)return;if(edgeOutOfScope(failure))edgeFindings.push({...failure,phase});else httpFailures.push({...failure,phase});});
+        page.on('response',response=>{const failure=frontendHttpFailure(response.url(),response.status());if(!failure){if(edgeRecovered&&new URL(response.url()).pathname==='/functions/v1/admin-users')edgeSuccesses.push(phase);return;}if(!edgeRecovered&&edgeOutOfScope(failure))edgeFindings.push({...failure,phase});else httpFailures.push({...failure,phase});});
         await page.goto(origin+'/login',{waitUntil:'networkidle'});
         const institutions=page.locator('select[name="institutionId"]');await institutions.waitFor({state:'visible',timeout:20000});
         await institutions.selectOption(tenants[1-user.tenant]);
@@ -69,7 +70,7 @@ export async function validateRecoveredFrontend({ports,anonKey,users,tenants,rep
         assert.equal(await page.evaluate(()=>localStorage.getItem('mesaflow.activeInstitutionId')),tenants[user.tenant]);
         await page.getByText('Synthetic browser tenant '+user.tenant,{exact:false}).first().waitFor({state:'visible'});
         assert.equal(await page.getByText('Synthetic browser tenant '+(1-user.tenant),{exact:false}).count(),0);
-        if(user.role==='docente')await page.getByText('Portal docente',{exact:true}).first().waitFor({state:'visible'});
+        if(user.role==='docente'){await page.getByText('Portal docente',{exact:true}).first().waitFor({state:'visible'});if(edgeRecovered){for(let i=0;i<40&&!edgeSuccesses.includes(phase);i++)await page.waitForTimeout(250);assert.ok(edgeSuccesses.includes(phase),'Teacher portal did not load rosters through Edge');}}
         else await page.locator('.student-portal-signout').waitFor({state:'visible'});
         phase='account '+index+' logout';report.browserProgress=phase;
         await logout.click();await page.waitForURL(origin+'/login',{timeout:15000});
@@ -79,7 +80,7 @@ export async function validateRecoveredFrontend({ports,anonKey,users,tenants,rep
       }finally{await context.close();}
     }
     assert.equal(externalRequests,0,'External requests blocked');assert.deepEqual(errors,[],'Browser errors');assert.equal(serverErrors,0,'Local server errors');assert.deepEqual(httpFailures,[],'Browser HTTP errors');
-    report.browserFlow={result:'PASS',accounts:cases,externalRequests,pageErrors:errors.length,serverErrors,authDisabled:false,preloadedSessions:false,edgeOutOfScope:[...new Set(edgeFindings.map(finding=>finding.endpoint))].sort(),edgeCertified:false};
+    report.browserFlow={result:'PASS',accounts:cases,externalRequests,pageErrors:errors.length,serverErrors,authDisabled:false,preloadedSessions:false,edgeOutOfScope:[...new Set(edgeFindings.map(finding=>finding.endpoint))].sort(),edgeCertified:edgeRecovered,edgeRosterLoads:edgeSuccesses.length};
   }catch(error){report.browserProgress=phase;report.browserErrorType=error.name;throw new Error('Recovered frontend verification failed');}
   finally{
     const closed=await Promise.allSettled([browser?.close(),server?.close()]);
