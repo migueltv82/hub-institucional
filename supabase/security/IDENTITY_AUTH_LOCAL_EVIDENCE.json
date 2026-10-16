@@ -1,0 +1,78 @@
+{
+  "run": "2e1054471a740485",
+  "staging": "NONE",
+  "production": "NONE",
+  "image": "public.ecr.aws/supabase/gotrue:v2.196.0",
+  "openSignupOnlyInRehearsal": true,
+  "handleNewUserExecute": {
+    "anon": false,
+    "authenticated": false,
+    "public": false
+  },
+  "cases": [
+    {
+      "name": "signup superadmin metadata",
+      "via": "signup",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0
+    },
+    {
+      "name": "signup admin_instituto metadata",
+      "via": "signup",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0
+    },
+    {
+      "name": "admin API user_metadata only",
+      "via": "admin",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0
+    },
+    {
+      "name": "admin API app_metadata docente",
+      "via": "admin",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0,
+      "appMetadataAppliedByTrigger": false
+    },
+    {
+      "name": "admin API app_metadata superadmin",
+      "via": "admin",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0,
+      "appMetadataAppliedByTrigger": false
+    }
+  ],
+  "lastAuthStatus": 200,
+  "displayNameFromUserMetadata": true,
+  "selfUserMetadataUpdateStatus": 200,
+  "selfAppMetadataUpdateStatus": 403,
+  "claimsAfterSelfUpdate": null,
+  "privilegedProfiles": 0,
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "errors": []
+  }
+}
