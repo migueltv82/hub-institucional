@@ -283,4 +283,20 @@ describe('studentGrades service', () => {
 
     expect(result).toEqual({ success: false, error: 'Otro usuario modifico esta nota. Recarga la pagina.' })
   })
+  it('explica una condicion academica rechazada por la RPC sin guardar la fila', async () => {
+    mocks.nextError = { code: '22023', message: 'ACADEMIC_STATUS_INVALID' }
+
+    const result = await upsertStudentGrade({
+      institutionId: 'inst-1',
+      studentId: 'student-1',
+      subjectId: 'ING13',
+      programId: 'Profesorado de Ingles',
+      gradeType: 'final',
+      academicStatus: 'cursando',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/^Condicion academica no valida/)
+    expect(mocks.store.student_grades).toHaveLength(0)
+  })
 })

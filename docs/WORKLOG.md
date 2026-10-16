@@ -661,3 +661,19 @@ Ninguno de los moderate/low es alcanzable en runtime de producción:
 - argparse y sprintf-js vienen de la CLI de mammoth.
 
 Salida recomendada: (a) cerrar EX-001. No se aplicó; espera la aprobación de Miguel. Ver `docs/DEPENDENCY_TRIAGE_2026-10-16.md`. Sin cambios de paquetes y sin remoto.
+
+## 2026-10-16 — 03.5b academic_status canónico en la escritura del docente (Claude, cubriendo a Codex)
+
+Opción A aprobada por Miguel. `academic_teacher_upsert_student_grade` ahora:
+- normaliza `lower(btrim)` y un mapa explícito de sinónimos al conjunto canónico;
+- rechaza cualquier otro valor con `ACADEMIC_STATUS_INVALID` (22023) sin escribir.
+
+El servicio traduce ese error a un mensaje en español.
+
+Resultados:
+- harness `scripts/validateAcademicStatusWriteLocal.mjs`: PASS 14/14;
+- control contra la función anterior: FAIL 10/14, como se esperaba;
+- paridad 03.3: PASS 17/17;
+- tests focales: PASS.
+
+Evidencia: `supabase/security/ACADEMIC_STATUS_WRITE_LOCAL_RESULT.md`. Sin CHECK ni cambios de datos (eso es 03.5c). Sin remoto.

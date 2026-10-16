@@ -787,6 +787,8 @@ declare
   clean_program_id text := coalesce(p_program_id, '');
   clean_grade_type text := coalesce(nullif(btrim(p_grade_type), ''), 'final');
   clean_attempt_number integer := greatest(coalesce(p_attempt_number, 1), 1);
+  raw_academic_status text := lower(btrim(coalesce(p_academic_status, '')));
+  clean_academic_status text;
   actor_id uuid := (select auth.uid());
   resolved_enrollment_id uuid;
   existing_row public.student_grades%rowtype;
@@ -798,6 +800,23 @@ begin
 
   if p_grade_value is not null and (p_grade_value < 0 or p_grade_value > 10) then
     raise exception 'GRADE_VALUE_OUT_OF_RANGE';
+  end if;
+
+  -- La mesa (upsert_exam_enrollment_from_portal) y las correlativas comparan
+  -- academic_status exacto: aca se guarda solo el conjunto canonico.
+  clean_academic_status := case
+    when raw_academic_status = '' then 'pending'
+    when raw_academic_status in ('pending', 'regular', 'libre', 'promocionado', 'approved', 'failed', 'absent') then raw_academic_status
+    when raw_academic_status = 'pendiente' then 'pending'
+    when raw_academic_status in ('aprobado', 'aprobada') then 'approved'
+    when raw_academic_status in ('desaprobado', 'desaprobada', 'reprobado', 'reprobada') then 'failed'
+    when raw_academic_status in ('promocionada', 'promocion', 'promoción') then 'promocionado'
+    when raw_academic_status = 'ausente' then 'absent'
+    else null
+  end;
+
+  if clean_academic_status is null then
+    raise exception 'ACADEMIC_STATUS_INVALID' using errcode = '22023';
   end if;
 
   if not public.academic_can_manage_subject(p_institution_id, clean_workspace_key, btrim(p_subject_id), clean_program_id) then
@@ -877,7 +896,7 @@ begin
     clean_attempt_number,
     p_grade_value,
     'numeric_0_10',
-    coalesce(nullif(btrim(p_academic_status), ''), 'pending')
+    clean_academic_status
   )
   on conflict (institution_id, workspace_key, student_id, subject_id, program_id, grade_type, attempt_number)
     where deleted_at is null
