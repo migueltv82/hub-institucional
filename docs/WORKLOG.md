@@ -597,3 +597,6 @@ Run a0fb03219179474c PASS (amplía 06.1): bulk_create_teachers solo del owner en
 
 ## 2026-10-16 — 05.1 cerrada: paso legacy quitado
 Por decisión del usuario se quitó del validador de punta a punta el paso legacy en slug (supuesto heredado de examenes; el RPC seguro del portal solo expone subject_enrollments) y sus helpers. Run 8bb88c73462370d4 PASS 5/5 contra stack local, sin filas residuales del validador; cleanup 0. CLAUDE.md actualizado.
+
+## 2026-10-16 — 04.1 Motor: invariantes de reglas duras y fix de correlatividades por llamado
+Prueba de propiedades con semilla fija sobre generateRegularExamPlan (200 instituciones + 100 en modo dateAware, determinismo y control no vacío). Encontró en la semilla 175 una correlatividad invertida en el segundo llamado: el planificador de fechas registraba la fecha de cada materia sin llamado y comparaba contra la del primer llamado. Corregido en planTentativeDates.js (clave por llamado), con regresión puntual que falla sin el fix. Barrido extra de 2000 semillas y variantes de compactación/modo sin violaciones. 1262 tests previos del motor sin cambios; quality:full 2448 tests/308 archivos PASS. Ver docs/EXAM_ENGINE_INVARIANTS_2026-10-16.md.
