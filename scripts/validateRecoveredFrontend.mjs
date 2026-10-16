@@ -12,6 +12,10 @@ export function frontendHttpFailure(url,status){
   const asset=['/favicon.svg','/manifest.webmanifest'].find(name=>path===name);
   return {service,status,...(endpoint?{endpoint}:{}),...(asset?{asset}: {})};
 }
+// Edge Functions no forman parte del backend recuperado: solo un 404 de un endpoint Edge conocido se registra como hallazgo fuera de alcance; cualquier otro error HTTP sigue fallando.
+export function edgeOutOfScope(failure){
+  return failure?.service==='functions'&&failure.status===404&&typeof failure.endpoint==='string';
+}
 export function frontendProxyTargets(ports){
   assert.deepEqual(Object.keys(ports).sort(),['auth','rest','storage']);
   return Object.fromEntries([['/auth/v1','auth'],['/rest/v1','rest'],['/storage/v1','storage']].map(([prefix,kind])=>[prefix,{target:localEndpoint(ports[kind],'/'),changeOrigin:true,followRedirects:false,ws:false,rewrite:path=>path.slice(prefix.length)||'/'}]));
@@ -22,8 +26,8 @@ export async function validateRecoveredFrontend({ports,anonKey,users,tenants,rep
   assert.equal(users.length,4);assert.equal(tenants.length,2);
   assert.ok(JSON.parse(Buffer.from(anonKey.split('.')[1],'base64url').toString()).role==='anon','Public key role mismatch');
   let server,browser,cache;let phase='startup';
-  const errors=[],cases=[],httpFailures=[];let externalRequests=0,serverErrors=0;
-  report.browserCases=cases;report.browserHttpFailures=httpFailures;
+  const errors=[],cases=[],httpFailures=[],edgeFindings=[];let externalRequests=0,serverErrors=0;
+  report.browserCases=cases;report.browserHttpFailures=httpFailures;report.browserEdgeOutOfScope=edgeFindings;
   report.browserProgress=phase;
   try{
     const {createServer,createLogger}=await import('vite');
@@ -46,7 +50,7 @@ export async function validateRecoveredFrontend({ports,anonKey,users,tenants,rep
       try{
         await context.route('**/*',async route=>{if(new URL(route.request().url()).origin===origin)await route.continue();else{externalRequests++;await route.abort();}});
         const page=await context.newPage();page.on('pageerror',error=>errors.push(error.name));
-        page.on('response',response=>{const failure=frontendHttpFailure(response.url(),response.status());if(failure)httpFailures.push({...failure,phase});});
+        page.on('response',response=>{const failure=frontendHttpFailure(response.url(),response.status());if(!failure)return;if(edgeOutOfScope(failure))edgeFindings.push({...failure,phase});else httpFailures.push({...failure,phase});});
         await page.goto(origin+'/login',{waitUntil:'networkidle'});
         const institutions=page.locator('select[name="institutionId"]');await institutions.waitFor({state:'visible',timeout:20000});
         await institutions.selectOption(tenants[1-user.tenant]);
@@ -75,7 +79,7 @@ export async function validateRecoveredFrontend({ports,anonKey,users,tenants,rep
       }finally{await context.close();}
     }
     assert.equal(externalRequests,0,'External requests blocked');assert.deepEqual(errors,[],'Browser errors');assert.equal(serverErrors,0,'Local server errors');assert.deepEqual(httpFailures,[],'Browser HTTP errors');
-    report.browserFlow={result:'PASS',accounts:cases,externalRequests,pageErrors:errors.length,serverErrors,authDisabled:false,preloadedSessions:false};
+    report.browserFlow={result:'PASS',accounts:cases,externalRequests,pageErrors:errors.length,serverErrors,authDisabled:false,preloadedSessions:false,edgeOutOfScope:[...new Set(edgeFindings.map(finding=>finding.endpoint))].sort(),edgeCertified:false};
   }catch(error){report.browserProgress=phase;report.browserErrorType=error.name;throw new Error('Recovered frontend verification failed');}
   finally{
     const closed=await Promise.allSettled([browser?.close(),server?.close()]);
