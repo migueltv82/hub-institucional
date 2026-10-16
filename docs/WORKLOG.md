@@ -633,3 +633,13 @@ Gaps convertidos en tarjetas:
 - R4 nunca ensayado sobre Supabase gestionado.
 
 Solo documentación: sin Staging, Production, SQL remoto ni deploy.
+
+## 2026-10-16 — UAT.0 Guion de UAT en Staging v1 (Claude)
+
+Nuevo `docs/UAT_STAGING_V1.md`: recorrido de ~90 minutos por rol, con 6 cuentas y 2 instituciones, sobre P01–P06 del alcance v1. Marca qué pasos son gate.
+
+Hallazgo al prepararlo: `public.is_member_of_institution` no considera `institutions.status`. Una institución suspendida conserva su acceso por RLS, lo que deja abierto el criterio P06 de suspensión efectiva. Se propone el correctivo [CODEX] 06.3; si entra en v1 lo decide Miguel.
+
+El historial de `admin_audit_logs` queda cubierto para v1 con una consulta read-only documentada.
+
+Solo documentación: sin remoto.
