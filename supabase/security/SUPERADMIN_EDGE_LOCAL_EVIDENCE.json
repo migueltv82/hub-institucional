@@ -1,0 +1,32 @@
+{
+  "staging": "NONE",
+  "production": "NONE",
+  "edgeRuntimeImage": "supabase/edge-runtime:v1.77.4",
+  "run": "397df57e38ab57ee",
+  "lastEdgeStatus": 403,
+  "checks": {
+    "createTenantDenied": 3,
+    "createTenantBySuperAdmin": {
+      "status": 200,
+      "adminMemberships": 1,
+      "adminProfile": "admin_instituto"
+    },
+    "bulkStudentsDenied": 3,
+    "bulkStudentsByOwner": {
+      "status": 200,
+      "memberships": [
+        "viewer"
+      ],
+      "outsideOwnInstitution": 0
+    },
+    "setPasswordDenied": 2,
+    "auditRows": 2
+  },
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}
