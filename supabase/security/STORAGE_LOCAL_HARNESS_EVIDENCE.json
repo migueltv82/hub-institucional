@@ -1,0 +1,37 @@
+{
+  "run": "c44560792d15e420",
+  "image": "public.ecr.aws/supabase/storage-api:v1.70.7",
+  "staging": "NONE",
+  "production": "NONE",
+  "backupRestore": false,
+  "sourceMigrations": 63,
+  "effectiveRole": "supabase_storage_admin",
+  "destinationMigrations": 65,
+  "newMigrations": [
+    {
+      "id": 63,
+      "name": "fix-search-name-relative-to-prefix"
+    },
+    {
+      "id": 64,
+      "name": "fix-search-by-timestamp-sqli"
+    }
+  ],
+  "schemaChangedByMigrations": false,
+  "bytes": 8192,
+  "bytesSha256": "fbbd0b67e2fa41bdbb8334b9ec9679d336129bbc75c0974b354f61729d4d32b5",
+  "migrationHistoryStable": true,
+  "existingAclUnchanged": true,
+  "healthy": true,
+  "healthSamples": 5,
+  "uploadDownloadDelete": true,
+  "crudAclUnchanged": true,
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "volumes": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

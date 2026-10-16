@@ -1,0 +1,6 @@
+interface:
+  display_name: "Spec First Development"
+  short_description: "Especifica y valida cambios antes de implementar"
+  default_prompt: "Usa $spec-first-development para definir la especificacion, el plan y la verificacion de este cambio antes de implementarlo."
+policy:
+  allow_implicit_invocation: true

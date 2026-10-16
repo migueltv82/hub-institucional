@@ -1,0 +1,72 @@
+{
+  "run": "f4bb51fb6f3abaf6",
+  "image": "public.ecr.aws/supabase/storage-api:v1.70.7",
+  "staging": "NONE",
+  "production": "NONE",
+  "backupRestore": true,
+  "rollbackRequested": true,
+  "sourceMigrations": 63,
+  "effectiveRole": "supabase_storage_admin",
+  "destinationMigrations": 65,
+  "newMigrations": [
+    {
+      "id": 63,
+      "name": "fix-search-name-relative-to-prefix"
+    },
+    {
+      "id": 64,
+      "name": "fix-search-by-timestamp-sqli"
+    }
+  ],
+  "schemaChangedByMigrations": false,
+  "bytes": 8192,
+  "bytesSha256": "20d8a4e3d71fdbc90a1c4847f5f1ac151eae7ba0cba8a9eb66ce9e5290688456",
+  "manifest": [
+    {
+      "key": "synthetic/file.bin",
+      "bytes": 8192,
+      "sha256": "20d8a4e3d71fdbc90a1c4847f5f1ac151eae7ba0cba8a9eb66ce9e5290688456"
+    },
+    {
+      "key": "other-prefix/second.bin",
+      "bytes": 16384,
+      "sha256": "a9b8dac1959c2c625e2d9f5069cacae338723c96b0d044749fb0a37266de0c69"
+    }
+  ],
+  "backupMs": 1355,
+  "dbBackupBytes": 738667,
+  "byteBackupBytes": 32768,
+  "dbBackupSha256": "a99d72cf24661526833b968d51c75bc9d9d41874d2cdf44fd1d17599ecf8ec6f",
+  "byteBackupSha256": "70a5b5fc88d25dacc28af7ba01cd237daafc3cab8e10544f5289c1d8fcb9cfe8",
+  "metadataOnlyLeavesBytesEmpty": true,
+  "restoreMs": 5707,
+  "targetHealthSamples": 5,
+  "metadataEqual": true,
+  "structureEqual": true,
+  "restoredDownloads": 2,
+  "recoveryToDownloadMs": 13488,
+  "rpo": "0 synthetic objects lost at frozen metadata/bytes snapshot",
+  "controlledMutationObserved": true,
+  "rollbackMethod": "recreate owned disposable database and restore frozen snapshot",
+  "rollbackMs": 14646,
+  "rollbackHealthSamples": 5,
+  "rollbackDownloads": 2,
+  "rollbackMetadataEqual": true,
+  "rollbackStructureEqual": true,
+  "rollbackResult": "PASS",
+  "migrationHistoryStable": true,
+  "existingAclUnchanged": true,
+  "healthy": true,
+  "healthSamples": 5,
+  "uploadDownloadDelete": true,
+  "crudAclUnchanged": true,
+  "result": "PASS",
+  "archiveBuffersCleared": true,
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "volumes": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

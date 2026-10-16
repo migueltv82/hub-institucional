@@ -1,0 +1,63 @@
+{
+  "run": "6b229d52bd78edbc",
+  "image": "public.ecr.aws/supabase/storage-api:v1.70.7",
+  "staging": "NONE",
+  "production": "NONE",
+  "backupRestore": true,
+  "sourceMigrations": 63,
+  "effectiveRole": "supabase_storage_admin",
+  "destinationMigrations": 65,
+  "newMigrations": [
+    {
+      "id": 63,
+      "name": "fix-search-name-relative-to-prefix"
+    },
+    {
+      "id": 64,
+      "name": "fix-search-by-timestamp-sqli"
+    }
+  ],
+  "schemaChangedByMigrations": false,
+  "bytes": 8192,
+  "bytesSha256": "19a94c5043044a11516f3f8e950be80c0b6722275a5db5afee6dd495039da873",
+  "manifest": [
+    {
+      "key": "synthetic/file.bin",
+      "bytes": 8192,
+      "sha256": "19a94c5043044a11516f3f8e950be80c0b6722275a5db5afee6dd495039da873"
+    },
+    {
+      "key": "other-prefix/second.bin",
+      "bytes": 16384,
+      "sha256": "3adcc3029bd21e4314378a7ee195be9f7763adb5718df3510844665b279f0205"
+    }
+  ],
+  "backupMs": 3415,
+  "dbBackupBytes": 738666,
+  "byteBackupBytes": 32768,
+  "dbBackupSha256": "1790f803c050b5f5d7fe929bb17971555177a29660f2afaa756feba5faabb205",
+  "byteBackupSha256": "3044f6aaf8990d082da9fb4bd29d2b9bfd1fd9054636e117c54996bebf15c871",
+  "metadataOnlyLeavesBytesEmpty": true,
+  "restoreMs": 13370,
+  "targetHealthSamples": 5,
+  "metadataEqual": true,
+  "structureEqual": true,
+  "restoredDownloads": 2,
+  "recoveryToDownloadMs": 39854,
+  "rpo": "0 synthetic objects lost at frozen metadata/bytes snapshot",
+  "migrationHistoryStable": true,
+  "existingAclUnchanged": true,
+  "healthy": true,
+  "healthSamples": 5,
+  "uploadDownloadDelete": true,
+  "crudAclUnchanged": true,
+  "result": "PASS",
+  "archiveBuffersCleared": true,
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "volumes": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

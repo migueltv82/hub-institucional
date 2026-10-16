@@ -1,0 +1,80 @@
+{
+  "run": "c3ba4b53c4cb1636",
+  "image": "public.ecr.aws/supabase/storage-api:v1.70.7",
+  "staging": "NONE",
+  "production": "NONE",
+  "backupRestore": true,
+  "rollbackRequested": false,
+  "integratedRequested": true,
+  "sourceMigrations": 63,
+  "effectiveRole": "supabase_storage_admin",
+  "destinationMigrations": 65,
+  "newMigrations": [
+    {
+      "id": 63,
+      "name": "fix-search-name-relative-to-prefix"
+    },
+    {
+      "id": 64,
+      "name": "fix-search-by-timestamp-sqli"
+    }
+  ],
+  "schemaChangedByMigrations": false,
+  "integratedSourceLogins": 4,
+  "bytes": 8192,
+  "bytesSha256": "68496dafe73a735ed19534cac3e7577de495a808194a3424c9739d09523e764d",
+  "integratedSnapshotSha256": "129dacc9ec1b68eddcb9dd056ea710ceb70945393b0ed5a0bad25510e1613742",
+  "manifest": [
+    {
+      "key": "synthetic/file.bin",
+      "bytes": 8192,
+      "sha256": "68496dafe73a735ed19534cac3e7577de495a808194a3424c9739d09523e764d"
+    },
+    {
+      "key": "other-prefix/second.bin",
+      "bytes": 16384,
+      "sha256": "304851073511e99dab1d85cf492576cd8885f7b6c1d6d6928b15456bd7e101d5"
+    }
+  ],
+  "backupMs": 1393,
+  "dbBackupBytes": 745141,
+  "byteBackupBytes": 32768,
+  "dbBackupSha256": "e4522c38063a7f8df05d7d85cef65ab21080be83d9714ec89af6fbac47914118",
+  "byteBackupSha256": "efc2358d91ea8adac87999773748c62d5de9acc3593332927c04a0aa62904138",
+  "metadataOnlyLeavesBytesEmpty": true,
+  "restoreMs": 24686,
+  "targetHealthSamples": 5,
+  "metadataEqual": true,
+  "structureEqual": true,
+  "restoredDownloads": 2,
+  "recoveryToDownloadMs": 44716,
+  "rpo": "0 synthetic objects lost at frozen metadata/bytes snapshot",
+  "integratedRowsEqual": true,
+  "integratedRestoredLogins": 4,
+  "integratedAuthMigrations": 77,
+  "integratedAuthHealthSamples": 5,
+  "integratedIsolation": {
+    "users": 4,
+    "ownTenantVisible": true,
+    "foreignReadRows": 0,
+    "foreignMembershipRows": 0,
+    "foreignUpdateRows": 0
+  },
+  "integratedResult": "PASS",
+  "integratedRecoveryMs": 92864,
+  "migrationHistoryStable": true,
+  "existingAclUnchanged": true,
+  "healthy": true,
+  "healthSamples": 5,
+  "uploadDownloadDelete": true,
+  "crudAclUnchanged": true,
+  "result": "PASS",
+  "archiveBuffersCleared": true,
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "volumes": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

@@ -500,3 +500,70 @@ P1 bulk_create_students corregido localmente: lookup Auth canonico completo, vin
 ## 2026-10-06 - identidad Auth/DB/HTTP REAL LOCAL
 
 Artefacto auditado intacto ejecutado con Deno2.9.6, GoTrue v2.196.0, PostgREST v16.1 y PostgreSQL17.6 reales en DB aislada schema-only. Takeover/case/whitespace409; B password original login200 y propuesta400; reuse readonly200 mismo UUID; nuevo create/login200; sin link/ambiguo409; reset SuperAdmin scope same-tenant200/cross-tenant403; admin institucional reset403 contractual. Cleanup SQL0 usuarios/identities/sessions/refresh_tokens/perfiles/memberships/legajos/tenants/audit/Storage; DB/contenedores/env temporales eliminados. Solo evidencia/documentacion, sin cambios runtime/baseline ni remoto. Reporte, JSON sanitizado y harness reproducible en supabase/security/ADMIN_USERS_STUDENT_IDENTITY_LOCAL.md, ADMIN_USERS_IDENTITY_REAL_EVIDENCE.json y ADMIN_USERS_IDENTITY_REAL_HARNESS.md. Blockers globales anteriores siguen abiertos y QUALITY GATE: FAIL global sin rerun. ADMIN-USERS IDENTITY REAL - PASS - P1 CERRADO localmente, sin acreditar cierre remoto ni release global.
+
+## 2026-10-13 - GoTrue harness LOCAL
+
+Harness reusable scripts/validateGoTrueLocalHarness.mjs y 5 tests focales: rol supabase_auth_admin, credencial estandar del CLI en memoria/stdin/env sin exponer ni resetear. DB descartable schema-only, historial Auth77/77 completo y nueve SQL canonicos reaplicados; GoTruev2.196.0 healthy5 muestrasHTTP200, GET admin/users readonly vacio, 8 entradas pg_stat_statements acreditan rol/base; sin42501/28P01 y owners/ACL intactos. Cleanup comprobado0DB/0contenedores/0temporales sensibles. Suite2381/291, lint, build/audit:prod, audit:repo y sintaxis/diff-check PASS. CHIEF CODE AUDITOR corrige3P2 y cierra CodeReview/Adversarial PASS; sin hallazgos introducidos abiertos. Dependencias24 vulnerabilidades(13high/10moderate/1low): QUALITY GATE: FAIL global. Sin fixtures/DR completo, secretos persistidos, remoto/deploy/commit/push. Staging/Production=NONE. Evidencia: supabase/security/GOTRUE_LOCAL_HARNESS_RESULT.md. Limites: kill abrupto/creacion parcial no ensayados, ACL solo roles estandar. GOTRUE HARNESS FIX - PASS LOCAL, sin acreditar release.
+
+## 2026-10-13 - Triage dependencias
+
+Inventario npm audit24(13high/10moderate/1low) y rutas npm ls revisados sin actualizar paquetes. Matriz y fuentes primarias completas: docs/DEPENDENCY_TRIAGE_2026-10-13.md. Unidades focales por dependencia, minimo patch Vite8.0.16 primero por Windows, luego router/realtime/documentos/tooling; prohibidos saltos/downgrades automaticos y npm audit fix --force. Triage PASS; QUALITY GATE: FAIL global. Sin remoto/deploy/commit/push.
+
+## 2026-10-13 - Parche focal Vite
+
+Vite8.0.9->8.0.16 exacto y25 dependencias requeridas lock auditadas; UNC/alternate-path Windows corregidos segun changelog oficial. Suite2381/291, lint, audit:repo, build/audit:prod y smokeHTTP index/JSX PASS; auditor independiente CodeReview/Adversarial PASS. Audit13high->9high (24->20totales), Vite/PostCSS/nanoid/source-map-js fuera de advisories. DLL antigua bloqueada EPERM reportada sin matar procesos ajenos. Evidencia docs/VITE_SECURITY_PATCH_2026-10-13.md. QUALITY GATE: FAIL global por9high restantes. Sin remoto/deploy/commit/push.
+
+## 2026-10-13 - Parche focal ws
+
+Unico delta ws8.20.0->8.22.0 lock, parent Supabase2.104.0/rango^8.18.2 intactos. Suite2381/291, lint/audit:repo/build/audit:prod PASS; smokeWebSocket real loopback echo fragmentado y limite maxFragments rechaza exceso PASS, cleanup sockets propios; auditor CodeReview/Adversarial PASS. Audit9high->8high(20->19total), ws fuera de advisories. Evidencia docs/WS_SECURITY_PATCH_2026-10-13.md; Realtime remoto no probado. QUALITY GATE: FAIL global. Sin Staging/Production/deploy/commit/push. Cuatro unidades cerradas del sprint (GoTrue,triage,Vite,ws); siguiente router preparado en Trello segun maximo diario del tablero.
+
+## 2026-10-13 - Parche React Router
+
+react-router-dom/react-router7.14.1->7.18.4, unico delta2packages. Focales18/5 y suite2381/291, lint/build/auditsCode PASS; CHIEF CODE AUDITOR CodeReview/Adversarial PASS. BrowserREAL6redirecciones/loginmobiledesktop sinerrores ni requests externos, contexto aislado/backenddesconfigurado; cleanup navegador/servidor propios. Audit8high->6high(19->17total), Router fuera advisories. Evidencia docs/ROUTER_SECURITY_PATCH_2026-10-13.md. QUALITY GATE: FAIL global; sin Auth real/SQL/remoto/deploy/commit/push.
+
+## 2026-10-13 - Parche tmp/ExcelJS
+
+Unico delta tmp0.2.5->0.2.7 compatible conExcelJS4.4.0 intacto. Suite2381/291 incl import/export, lint/build/audits y CodeReview/Adversarial PASS. SmokeREAL temporal/XLSXroundtrip sintetico y cleanup0 PASS. Audit6high->5high(17->16total). Evidencia docs/TMP_SECURITY_PATCH_2026-10-13.md, fuentes ambos fixes traversal/typeconfusion. QUALITY GATE: FAIL global, sin remoto/deploy/DR/commit/push.
+
+## 2026-10-13 - Parche undici/jsdom
+
+Unico delta undici7.25.0->7.30.0, jsdom29.1.0 y rango^7.25.0 intactos. Suite2381/291 DOM, lint/build/audits y CodeReview/Adversarial PASS; smokeHTTPPool REAL3requests chunkedJSON y cleanupconexiones PASS. Audit5high->4high(16->15total), undici fueradeadvisories; no actualiza Undici built-inNode. Evidencia docs/UNDICI_SECURITY_PATCH_2026-10-13.md. QUALITY GATE: FAIL global, sinremoto/deploy/DR/commit/push.
+
+## 2026-10-13 - Parche XML/Mammoth
+
+Unico delta xmldom0.8.13->0.8.15 compatibleMammoth1.12.0/^0.8.6 intacto, sin override/0.9. Suite2381/291, lint/build/audits y CodeReview/Adversarial PASS. SmokeREAL XMLnamespace/entidades/invalidname y DOCXsynthetic texto/HTML PASS enmemoria. Audit4high->3high(15->14total), XML fueraadvisories; restantes brace-expansion/browserslist/js-yaml. Evidencia docs/XML_SECURITY_PATCH_2026-10-13.md; malformedXML ahora rechaza error como seguridad, corpusreal no probado. QUALITY GATE: FAIL global. Sin remoto/deploy/DR/commit/push. Lote continuado Router/tmp/undici/XML cerrado.
+
+## 2026-10-13 - Parche brace-expansion
+
+Dos ramas1.1.14->1.1.21/2.1.0->2.1.7 compatibles y padres intactos. Suite2381/291, lint/build/audits y CodeReview/Adversarial PASS; smoke ambas ramas range/padding/nesting y entrada acotada PASS. Audit3high->2high(14->13total); evidencia docs/BRACE_SECURITY_PATCH_2026-10-13.md. QUALITY GATE: FAIL global. Sin remoto/deploy/DR/commit/push.
+
+## 2026-10-13 - Parche Browserslist
+
+Browserslist4.28.2->4.29.3 y5transitivos requeridos, padres/manifest intactos. Suite2381/291, lint/build/audits y CodeReview/Adversarial PASS; smoke targets/queryinvalida y resolucionBabel PASS. Datasets dinamicos pueden cambiar targets; Node24.12 satisfaceNode>=18 nuevo. Audit2high->1high(13->11total;moderate10->9). Evidencia docs/BROWSERSLIST_SECURITY_PATCH_2026-10-13.md. QUALITY GATE: FAIL global, pendientejs-yaml. Sin remoto/deploy/DR/commit/push.
+
+## 2026-10-13 - Parche js-yaml y cierre dependencias high
+
+Unico delta js-yaml4.1.1->4.3.2 compatible ESLint intacto, sin salto5. Suite2381/291, lint/build/audits y quality:full(exit0) PASS; CodeReview/Adversarial PASS. SmokeYAML load/dump/rechazos/prototipo y budgetmergesvacios PASS. Audit inicial13high->0high/0critical; quedan9moderate/1low inventariados sin aceptacion automatica. Evidencia docs/YAML_SECURITY_PATCH_2026-10-13.md. Calidadtecnica localverde; QUALITY GATE: FAIL global/release por P1DR/rollback/config pendientes. Sin remoto/deploy/DR/fixtures/commit/push.
+
+## 2026-10-13 — Ensayo local DB/Auth real
+Run78638876b4d4cadc PASS:2tenants/4AuthAPIusers, backup350ms/restore699ms,recuperacion hasta login23737ms. Filas/UUID/FK/identities/secuencias/catalogo77 migraciones preservados; login4/4 y aislamiento A/B PASS; cleanup0. quality:full2383tests/292files,lint/build/auditsPASS,0high/critical. CHIEF PASS, ambosP2 corregidos. Ver supabase/security/LOCAL_DB_AUTH_RECOVERY_RESULT.md. Staging/Production NONE. Gateglobal FAIL por DRStorage/config/rollback/aceptacion pendientes.
+
+## 2026-10-13 — Storage API real local
+Run c44560792d15e420 PASS: rol estándarTCP,Storage1.70.7 healthy5samples,8192bytes APIroundtripSHA256,deleteAPI/metadata0,history63preservado+2migraciones=65estables,ACL/RLSexistingunchanged. Cleanup0DB/container/volume/files. CHIEFCode/AdversarialPASS,0nuevos hallazgos. quality:full2385tests/293files/lint/build/auditsPASS,0high/critical;lint+2focalesfinalesPASS. Ver STORAGE_LOCAL_HARNESS_RESULT.md yEVIDENCE.json. BackuprestoreStorage aún pendiente. ReleaseglobalFAIL. Staging/ProductionNONE.
+
+## 2026-10-13 — Recuperación Storage real
+Run6b229d52bd78edbc PASS: DBcustom+tarfilebackend reales;2DB/2volumesvacíos;2descargas8192/16384bytesSHA256 exactas,metadata/catalogo/history65iguales antes/despuesAPI. Backup3415ms,restore13370ms,recuperacion39854ms,RPO0snapshotfreeze. Primerintento fallópuertorestartDocker,corregido,sincierrePASSfalso;cleanup0ambos. MododefaultregresiónPASS. qualityfull2389tests/294files/lint/build114/auditsPASS,0highcritical;6focaleslintfinalPASS. CHIEFCode/AdversarialPASS. Archivos ylimites en STORAGE_RECOVERY_RESULT.md. Staging/ProductionNONE. ReleaseglobalFAIL:config/secrets/rollback/aceptacionpendientes.
+
+## 2026-10-13 — Configuración local reconstruida
+Contrato+builderversion/host/db/rolefailclosed;5negativos/positivos y2394tests/295filesqualityfullPASS,lint/build/audits0highcritical. Authreal0b481d62f391d4c1PASS,StoragerecoveryrealPASS,cleanup0. Dockerdesapagadoinicio,recuperadosoloCLIlocal;primerpreflight noPASS. CHIEFCode/AdversarialPASS. Edge/frontendyexternosinventariadosnofuncionalmenteensayados;remotoNONE. Ver LOCAL_CONFIGURATION_CONTRACT.md y LOCAL_CONFIGURATION_RECOVERY_RESULT.md. Siguiente rollbacklocal. ReleaseglobalFAIL.
+
+## 2026-10-14 — Rollback local DB y archivos
+Run f4bb51fb6f3abaf6 PASS: mutación API divergente observada, recreación únicamente DBdest propia owner/marker exactos, restore custom+tar volumen nuevo vacío,5health/2downloadSHA256/metadata/catalogo/history65iguales;rollback14646ms. Default/recovery regresiones secuencialesPASS ycleanup0fixtures/archives,bufferssobrescritos. --clean2intentosfallidos no certificados. Docker sockets runtime inaccesibles recuperados preservando5directorios diagnósticos externos;sinreset/config/datachanges. Bases2intentos interrumpidos verified0. qualityfull2398/296lint/build/auditsPASS0highcritical;CHIEFCode/AdversarialPASS. Ver STORAGE_ROLLBACK_RESULT.md yEVIDENCE.json. ReleaseglobalFAIL,remoto/deployNONE. Continúa integración snapshotDB/Auth/Storage to6OoXZC.
+
+## 2026-10-15 — Recuperación integrada local DB/Auth/Storage
+Run c3ba4b53c4cb1636 PASS: cuatro usuarios/dos tenants, snapshot congelado con ambos writers detenidos, filas completas Auth/public/Storage restauradas, cuatro logins/dos descargas SHA256 exactas, catálogo/ACL e historiales77/65 conservados; RLS SQL A/B cuatro cuentas sin acceso ajeno. 92864ms recuperación completa. quality:full2401tests/297files lint/build/auditsPASS 0highcritical,9moderate1low; trabajadores2 sin cambiar tests/timeouts. CHIEF Code/AdversarialPASS. Regresiones default/recovery/rollback secuencialesPASS cleanup0. Docker socket runtime recuperado preservando dos directorios adicionales (siete totales), sin reset/datos/config. Ver INTEGRATED_LOCAL_RECOVERY_RESULT.md y EVIDENCE.json. Release globalFAIL: Data API/Edge/frontend/externos pendientes. Staging/Production/deploy/commit/pushNONE.
+
+
+## 2026-10-15 — Data API real del destino recuperado
+Run5916bdf0f6eaadb9 PASS: PostgREST16.1/authenticatorTCP estándar,cuatro tokens reales GoTrue,own1/foreign0/memberships0/PATCHforeign0,invalidJWT401,GETanoninstitutions0,health5,fullrows/catalogoiguales ycleanup0. Detectada omisión DEFAULT_GROUP_NAME/AUD en builderAuth; fijados authenticated y comprobado role/sub, sinSQL/grants. Tres intentosfallidos preservados (401/22023),todoscleanup0. qualityfull exit0,2403tests/298files lint/build114/auditsPASS0highcritical,9moderate1low inventariadas;CHIEFCode/AdversarialPASS. Regresiones GoTrue e integradaPASS/cleanup0. Ver DATA_API_RECOVERY_RESULT.md y EVIDENCE.json. SinStaging/Production/deploy/commit/push. ReleaseglobalFAIL: navegador/Edge/externos pendientes.
+

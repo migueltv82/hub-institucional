@@ -1,0 +1,101 @@
+{
+  "auth": {
+    "run": "0b481d62f391d4c1",
+    "source": "supabase_db_codex-baseline-local-7725bdda",
+    "image": "public.ecr.aws/supabase/gotrue:v2.196.0",
+    "staging": "NONE",
+    "production": "NONE",
+    "fixtures": 0,
+    "backupRestore": false,
+    "sourceMigrations": 77,
+    "baselineFiles": [
+      "01_foundation.sql",
+      "02_academic_relational_schema.sql",
+      "03_workspace_data.sql",
+      "04_teacher_exam_date_exclusions.sql",
+      "05_workspace_operational_compat.sql",
+      "06_subject_teacher_assignments.sql",
+      "07_academic_operations.sql",
+      "08_exam_tables.sql",
+      "05_student_portal_secure_read.sql"
+    ],
+    "effectiveRole": "supabase_auth_admin",
+    "destinationMigrations": 77,
+    "databaseRoleSessions": "0",
+    "databaseRoleStatements": 8,
+    "healthy": true,
+    "healthSamples": 5,
+    "authAclUnchanged": true,
+    "sqlstateErrors": [],
+    "result": "PASS",
+    "cleanup": {
+      "databases": 0,
+      "containers": 0,
+      "temporaryFiles": 0,
+      "errors": []
+    }
+  },
+  "storage": {
+    "run": "7fafec84976252d3",
+    "image": "public.ecr.aws/supabase/storage-api:v1.70.7",
+    "staging": "NONE",
+    "production": "NONE",
+    "backupRestore": true,
+    "sourceMigrations": 63,
+    "effectiveRole": "supabase_storage_admin",
+    "destinationMigrations": 65,
+    "newMigrations": [
+      {
+        "id": 63,
+        "name": "fix-search-name-relative-to-prefix"
+      },
+      {
+        "id": 64,
+        "name": "fix-search-by-timestamp-sqli"
+      }
+    ],
+    "schemaChangedByMigrations": false,
+    "bytes": 8192,
+    "bytesSha256": "7fafb45ace8813ccd085395a019fa1d4a6ff6049d2f632845860a2ef12d8ec1e",
+    "manifest": [
+      {
+        "key": "synthetic/file.bin",
+        "bytes": 8192,
+        "sha256": "7fafb45ace8813ccd085395a019fa1d4a6ff6049d2f632845860a2ef12d8ec1e"
+      },
+      {
+        "key": "other-prefix/second.bin",
+        "bytes": 16384,
+        "sha256": "40fb7528d632a95a46640edb737edea9426ae761a2b068306133fc78c7a97607"
+      }
+    ],
+    "backupMs": 1268,
+    "dbBackupBytes": 738666,
+    "byteBackupBytes": 32768,
+    "dbBackupSha256": "835b5c00315841bf49306a44a89112784d48038bb71fcf36df7d5af69abb39e3",
+    "byteBackupSha256": "d5f95a79a38bd4d538224e537480c876c92411391115bd4a7b759649920d1d16",
+    "metadataOnlyLeavesBytesEmpty": true,
+    "restoreMs": 5732,
+    "targetHealthSamples": 5,
+    "metadataEqual": true,
+    "structureEqual": true,
+    "restoredDownloads": 2,
+    "recoveryToDownloadMs": 13654,
+    "rpo": "0 synthetic objects lost at frozen metadata/bytes snapshot",
+    "migrationHistoryStable": true,
+    "existingAclUnchanged": true,
+    "healthy": true,
+    "healthSamples": 5,
+    "uploadDownloadDelete": true,
+    "crudAclUnchanged": true,
+    "result": "PASS",
+    "archiveBuffersCleared": true,
+    "cleanup": {
+      "databases": 0,
+      "containers": 0,
+      "volumes": 0,
+      "temporaryFiles": 0,
+      "errors": []
+    }
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "run": "5916bdf0f6eaadb9",
+  "image": "public.ecr.aws/supabase/storage-api:v1.70.7",
+  "staging": "NONE",
+  "production": "NONE",
+  "backupRestore": true,
+  "rollbackRequested": false,
+  "integratedRequested": true,
+  "apiRequested": true,
+  "sourceMigrations": 63,
+  "effectiveRole": "supabase_storage_admin",
+  "destinationMigrations": 65,
+  "newMigrations": [
+    {
+      "id": 63,
+      "name": "fix-search-name-relative-to-prefix"
+    },
+    {
+      "id": 64,
+      "name": "fix-search-by-timestamp-sqli"
+    }
+  ],
+  "schemaChangedByMigrations": false,
+  "integratedSourceLogins": 4,
+  "bytes": 8192,
+  "bytesSha256": "18d19eb3cf06fdfa4aa2c1d921739839b96a1e7e5994635488307b919b3f6757",
+  "integratedSnapshotSha256": "b032c2bfc21759f0b4298d227cf3439ec4e3d425f4d917c1cc0783bd46667df1",
+  "manifest": [
+    {
+      "key": "synthetic/file.bin",
+      "bytes": 8192,
+      "sha256": "18d19eb3cf06fdfa4aa2c1d921739839b96a1e7e5994635488307b919b3f6757"
+    },
+    {
+      "key": "other-prefix/second.bin",
+      "bytes": 16384,
+      "sha256": "2a1f38ef90271e05a28b38194cde73d3fc6095a84760e5700afc2fab0a4591c3"
+    }
+  ],
+  "backupMs": 1359,
+  "dbBackupBytes": 745162,
+  "byteBackupBytes": 32768,
+  "dbBackupSha256": "8a11262ad0342ac65b7d7bbb93c403f83b6e70b42e4449725d296d6e26c436ce",
+  "byteBackupSha256": "a96e8b644c8197c6a15992fb9a4c257bdab8afcebab5cfd22a1f462971677422",
+  "metadataOnlyLeavesBytesEmpty": true,
+  "restoreMs": 26475,
+  "targetHealthSamples": 5,
+  "metadataEqual": true,
+  "structureEqual": true,
+  "restoredDownloads": 2,
+  "recoveryToDownloadMs": 33924,
+  "rpo": "0 synthetic objects lost at frozen metadata/bytes snapshot",
+  "integratedRowsEqual": true,
+  "integratedRestoredLogins": 4,
+  "integratedAuthMigrations": 77,
+  "integratedAuthHealthSamples": 5,
+  "integratedIsolation": {
+    "users": 4,
+    "ownTenantVisible": true,
+    "foreignReadRows": 0,
+    "foreignMembershipRows": 0,
+    "foreignUpdateRows": 0
+  },
+  "integratedResult": "PASS",
+  "dataApiEffectiveRole": "authenticator",
+  "dataApiReadinessStatus": 200,
+  "dataApiLastStatus": 200,
+  "dataApi": {
+    "result": "PASS",
+    "users": 4,
+    "ownReadRows": 1,
+    "foreignReadRows": 0,
+    "foreignMembershipRows": 0,
+    "foreignPatchRows": 0,
+    "invalidJwtStatus": 401,
+    "anonymousRows": 0,
+    "healthSamples": 5,
+    "rowsUnchanged": true
+  },
+  "integratedRecoveryMs": 107123,
+  "migrationHistoryStable": true,
+  "existingAclUnchanged": true,
+  "healthy": true,
+  "healthSamples": 5,
+  "uploadDownloadDelete": true,
+  "crudAclUnchanged": true,
+  "result": "PASS",
+  "archiveBuffersCleared": true,
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "volumes": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}
