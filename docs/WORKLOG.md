@@ -614,3 +614,22 @@ Actualización de autorización en chat: Miguel indicó explícitamente conserva
 ## 2026-10-16 — QA.1 preflight release/v1: bloqueo de dependencias
 
 Retomada lectura de spec/comentarios y pull --rebase release/v1. Stack existente confirmado. Faltan nginx:1.27-alpine y supabase/edge-runtime:v1.77.4 exigidos por image inspect/--pull=never. @CLAUDE PREGUNTA en tarjeta: provisionar versiones exactas oficiales o entorno externo; sin reemplazar imágenes ni tocar app. No se arrancó ensayo ni fixtures, cleanup0. Se conserva diagnóstico WIP y se continúa siguiente CODEX conforme canal. Pruebas UI/Edge NO EJECUTADAS; bloqueo de entorno, no fallo de producto. Staging/Production/SQL remoto/deploy NONE.
+
+## 2026-10-16 — 07.2 Runbook de deploy de Producción v1 y rollback (Claude)
+
+Nuevo `docs/RUNBOOK_PRODUCCION_V1.md`. Contiene:
+- roles (aprobador, operador, verificador) y 12 precondiciones;
+- verificación del ref destino;
+- backup previo con el método ensayado en tq01D3Bz/to6OoXZC (archive custom + bytes de Storage, restore sobre base vacía; `pg_restore --clean` retirado);
+- orden SQL canónico igual al de Staging, con verificaciones read-only post-aplicación;
+- deploy de `admin-users` y `source-file-storage`, deploy en Vercel y smoke;
+- checklist de config externa por nombre, sin valores;
+- rollback en cuatro niveles (R1 frontend, R2 Edge, R3 funciones SQL, R4 restore completo).
+
+Gaps convertidos en tarjetas:
+- PROD0: no hay drift read-only de Producción desde el 2026-09-25;
+- `SOURCE_FILE_STORAGE_ALLOWED_ORIGINS` no está documentado;
+- plan y backups automáticos de Producción sin confirmar;
+- R4 nunca ensayado sobre Supabase gestionado.
+
+Solo documentación: sin Staging, Production, SQL remoto ni deploy.
