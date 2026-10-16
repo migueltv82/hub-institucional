@@ -3,6 +3,7 @@ import {
   getAcademicStatusLabel,
   getLatestAcademicStatusForSubject,
   getProgramId,
+  getServerAcademicStatusForSubject,
   getSubjectId,
   matchesSubjectAndProgram,
   normalizeAcademicStatus,
@@ -117,6 +118,8 @@ function getMissingPrerequisitesReason(missingSubjects) {
   return `Correlativas pendientes para rendir esta mesa: ${names.join(', ')}. Deben figurar aprobadas.`
 }
 
+const NON_CANONICAL_CONDITION_REASON = 'La condicion cargada no esta registrada en el formato que valida el sistema para mesas. Pedi a tu docente o a la institucion que la vuelva a cargar.'
+
 const ADEUDA_CUOTA_REASON = 'No podes inscribirte a mesas: el registro indica que adeudas el pago de la cuota.'
 
 export function getExamEnrollmentEligibility({
@@ -136,7 +139,9 @@ export function getExamEnrollmentEligibility({
     enrollments,
     grades,
   })
-  const hasRegularCondition = EXAM_ELIGIBLE_ACADEMIC_STATUSES.has(academicStatus)
+  // La habilitacion sale de la misma regla literal que la RPC; academicStatus queda solo para mostrar.
+  const serverAcademicStatus = getServerAcademicStatusForSubject({ subjectId, programIds: [programId], grades })
+  const hasRegularCondition = EXAM_ELIGIBLE_ACADEMIC_STATUSES.has(serverAcademicStatus)
   const absencePenalty = getAbsencePenaltyForExam({ exam, exams, grades })
   const prerequisiteCheck = hasRegularCondition
     ? getFinalExamPrerequisiteCheck({ subjectId, prerequisites, grades, subjects })
@@ -145,7 +150,7 @@ export function getExamEnrollmentEligibility({
 
   let reason = ''
   if (!hasRegularCondition) {
-    reason = getBlockedReason(academicStatus)
+    reason = academicStatus === 'regular' ? NON_CANONICAL_CONDITION_REASON : getBlockedReason(academicStatus)
   } else if (missingPrerequisiteSubjects.length > 0) {
     reason = getMissingPrerequisitesReason(missingPrerequisiteSubjects)
   } else if (absencePenalty.blocked) {
@@ -166,6 +171,7 @@ export function getExamEnrollmentEligibility({
     subjectId,
     programId,
     academicStatus,
+    serverAcademicStatus,
     label: getAcademicStatusLabel(academicStatus),
     absencePenalty,
     missingPrerequisites: missingPrerequisiteSubjects,

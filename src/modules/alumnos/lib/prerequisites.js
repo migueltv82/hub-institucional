@@ -1,4 +1,5 @@
 import { getLatestAcademicStatusForSubject } from './examEligibility.js'
+import { getServerAcademicStatusForSubject } from './academicStatus.js'
 
 function normalizeStatus(status) {
   return String(status || '').toLowerCase()
@@ -123,9 +124,15 @@ export function getFinalExamPrerequisiteCheck({
       programId: getSubjectProgramId(requiredSubject),
       grades,
     })
-    const requirementMet = ['promocionado', 'approved'].includes(status)
+    // Igual que la RPC: estado crudo exacto 'approved' o 'promocionado' en la ultima nota viva.
+    const serverStatus = getServerAcademicStatusForSubject({
+      subjectId: requiredSubjectId,
+      programIds: [getSubjectProgramId(requiredSubject)],
+      grades,
+    })
+    const requirementMet = ['promocionado', 'approved'].includes(serverStatus)
 
-    const result = { prerequisite, subject: requiredSubject, status }
+    const result = { prerequisite, subject: requiredSubject, status, serverStatus }
 
     if (requirementMet) {
       met.push(result)
