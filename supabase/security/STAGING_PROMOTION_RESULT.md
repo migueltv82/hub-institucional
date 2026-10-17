@@ -17,8 +17,8 @@ Con esto, la base de Staging queda **sin diferencias** contra release/v1. Las ú
 No se desplegaron por el conector. `admin-users` tiene 136 KB en un archivo: subirla obligaría a retranscribir el código de seguridad dentro de la llamada. La CLI sube el archivo del repo tal cual. Comandos, desde release/v1 actualizado:
 
 ```powershell
-supabase functions deploy admin-users --project-ref lzjpycejdjpzkdyzaeco --no-verify-jwt
-supabase functions deploy source-file-storage --project-ref lzjpycejdjpzkdyzaeco --no-verify-jwt
+supabase functions deploy admin-users --project-ref $env:STG_REF --no-verify-jwt
+supabase functions deploy source-file-storage --project-ref $env:STG_REF --no-verify-jwt
 ```
 
 Después: Claude verifica las versiones nuevas y corre `scripts/smokeCheck.mjs` contra Staging.

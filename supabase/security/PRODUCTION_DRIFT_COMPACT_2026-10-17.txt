@@ -1,0 +1,185 @@
+b|workspace-source-files|68934a3e
+f|academic_admin_confirm_exam_assignment(uuid,text,text,uuid)|9c33b19b
+f|academic_admin_reset_exam_process(uuid,text)|36d53c47
+f|academic_can_manage_subject(uuid,text,text,text)|3c208562
+f|academic_create_teacher_subject_leave(uuid,text,uuid[],uuid,uuid,date,date,text)|3a37967a
+f|academic_get_student_portal_grades(uuid,text)|90c76081
+f|academic_get_student_subject_teacher_notices(uuid,text)|2df5ed3b
+f|academic_get_teacher_subject_rosters(uuid,text)|6648af82
+f|academic_reconcile_expired_exam_confirmations(uuid,text,text)|20bbfa46
+f|academic_resolve_member_profile_by_email(uuid,text,text,text)|1aac266c
+f|academic_resolve_subject_enrollment(uuid,text,uuid,text,text)|6ae13dc2
+f|academic_teacher_confirm_exam_assignment(uuid,text,text,text,text)|a5a4548c
+f|academic_teacher_create_class_session(uuid,text,text,text,date,text)|57525a1a
+f|academic_teacher_object_exam_assignment(uuid,text,text,text,text,text,text)|ec7b65d8
+f|academic_teacher_upsert_attendance_records(uuid,jsonb)|46c2165a
+f|academic_teacher_upsert_student_grade(uuid,text,uuid,uuid,uuid,text,text,text,integer,numeric,text,integer)|34815253
+f|academic_update_teacher_assignment_condition(uuid,text)|8dc4e4e5
+f|delete_institution_user(uuid)|cc84ca8f
+f|foundation_active_institution_admin_count(uuid,uuid)|6d10ed2b
+f|foundation_require_super_admin()|1379bfd5
+f|get_public_app_status()|32a8f2e6
+f|get_student_portal_workspace_snapshot(uuid,text)|c0a09c19
+f|handle_new_user()|f263742b
+f|is_member_of_institution(uuid,text[])|2e5f9b1d
+f|is_super_admin()|892e8c45
+f|list_active_login_institutions()|42ac3fa4
+f|remove_user_membership(uuid,uuid)|835019e3
+f|set_user_access_status(uuid,boolean)|6a83d37f
+f|storage_object_institution_id(text)|577952ed
+f|sync_student_record_ui_compat_fields()|96b4dd61
+f|sync_teacher_record_ui_compat_fields()|3925fdf9
+f|teacher_remove_student_subject_records(uuid,text,uuid,uuid,text,text)|dddc64b7
+f|teacher_reset_student_subject_academic_records(uuid,text,uuid,uuid,text,text)|1ea60abb
+f|touch_academic_operations_updated_at()|e5b7ef2e
+f|touch_subject_teacher_assignments_updated_at()|f4e4f337
+f|touch_workspace_operational_updated_at()|89b67dd3
+f|update_membership_role(uuid,uuid,text)|6cb6a52c
+f|upsert_subject_enrollment_from_portal(uuid,text,uuid,uuid,text,text,uuid,text,timestamp with time zone,timestamp with time zone,text,text,jsonb)|96528bd6
+g|auth.users.on_auth_user_created|24bc8898
+g|exam_enrollments.exam_enrollments_touch_updated_at|abc335b8
+g|exam_teacher_assignments.exam_teacher_assignments_touch_updated_at|29238f75
+g|legacy_exam_sessions.touch_workspace_operational_updated_at|e985aea2
+g|legacy_subject_prerequisites.touch_workspace_operational_updated_at|b21a00e9
+g|legacy_subjects_catalog.touch_workspace_operational_updated_at|f31513af
+g|student_financial_status.touch_academic_operations_updated_at|9c980c85
+g|student_grades.touch_academic_operations_updated_at|00dbe59d
+g|student_records.sync_student_record_ui_compat_fields|1c8e5d8c
+g|subject_attendance_records.touch_academic_operations_updated_at|47ab1e89
+g|subject_class_sessions.touch_academic_operations_updated_at|811b46a9
+g|subject_enrollments.touch_academic_operations_updated_at|dee33902
+g|subject_teacher_assignments.touch_subject_teacher_assignments_updated_at|8250e3ac
+g|teacher_availability_records.touch_workspace_operational_updated_at|7e2b68f5
+g|teacher_records.sync_teacher_record_ui_compat_fields|be54eebe
+g|teacher_workload_records.touch_workspace_operational_updated_at|4ea4e42c
+g|workspace_source_files.touch_workspace_operational_updated_at|2eedbb58
+p|public.admin_audit_logs.super admins can read admin audit logs|0e8adf55
+p|public.app_settings.public can read public app settings|5e4dc1b2
+p|public.app_settings.super admins manage app settings|b14dcbc0
+p|public.careers.careers members read|d917bead
+p|public.course_schedules.course_schedules members read|d917bead
+p|public.deleted_person_records.deleted person records editors insert|abd70076
+p|public.deleted_person_records.deleted person records editors restore|e5e3d8ea
+p|public.deleted_person_records.deleted person records members read|10ec87f1
+p|public.deleted_person_records.deleted person records super admins manage|b14dcbc0
+p|public.exam_enrollments.exam_enrollments admins delete|0ac24da9
+p|public.exam_enrollments.exam_enrollments admins insert|6f74710a
+p|public.exam_enrollments.exam_enrollments admins update|845137b6
+p|public.exam_enrollments.exam_enrollments members read|1103dfb0
+p|public.exam_teacher_assignments.exam_teacher_assignments admins delete|0ac24da9
+p|public.exam_teacher_assignments.exam_teacher_assignments admins insert|6f74710a
+p|public.exam_teacher_assignments.exam_teacher_assignments admins update|845137b6
+p|public.exam_teacher_assignments.exam_teacher_assignments members read|a0a7c4b3
+p|public.institutions.members can read institutions|b0c8de19
+p|public.institutions.super admins manage institutions|b14dcbc0
+p|public.legacy_exam_sessions.legacy_exam_sessions editors delete|0ac24da9
+p|public.legacy_exam_sessions.legacy_exam_sessions editors insert|6f74710a
+p|public.legacy_exam_sessions.legacy_exam_sessions editors update|845137b6
+p|public.legacy_exam_sessions.legacy_exam_sessions members read|d917bead
+p|public.legacy_subject_prerequisites.legacy_subject_prerequisites editors delete|0ac24da9
+p|public.legacy_subject_prerequisites.legacy_subject_prerequisites editors insert|6f74710a
+p|public.legacy_subject_prerequisites.legacy_subject_prerequisites editors update|845137b6
+p|public.legacy_subject_prerequisites.legacy_subject_prerequisites members read|d917bead
+p|public.legacy_subjects_catalog.legacy_subjects_catalog editors delete|0ac24da9
+p|public.legacy_subjects_catalog.legacy_subjects_catalog editors insert|6f74710a
+p|public.legacy_subjects_catalog.legacy_subjects_catalog editors update|845137b6
+p|public.legacy_subjects_catalog.legacy_subjects_catalog members read|d917bead
+p|public.memberships.members can read memberships|05ad7e50
+p|public.memberships.super admins manage memberships|b14dcbc0
+p|public.plan_equivalences.plan_equivalences members read|d917bead
+p|public.profiles.profiles can read themselves|cef13968
+p|public.profiles.super admins can delete profiles|85589dc0
+p|public.profiles.super admins can read profiles|0e8adf55
+p|public.profiles.super admins can update profiles|5ec26cfe
+p|public.student_academic_statuses.student_academic_statuses members read|d917bead
+p|public.student_career_plans.student_career_plans members read|d917bead
+p|public.student_financial_status.student_financial_status editors delete|0ac24da9
+p|public.student_financial_status.student_financial_status editors insert|6f74710a
+p|public.student_financial_status.student_financial_status editors update|845137b6
+p|public.student_financial_status.student_financial_status members read|d917bead
+p|public.student_grades.student_grades editors delete|0ac24da9
+p|public.student_grades.student_grades editors insert|6f74710a
+p|public.student_grades.student_grades editors update|845137b6
+p|public.student_grades.student_grades members read|d917bead
+p|public.student_records.student_records editors manage|b4524590
+p|public.student_records.student_records members read|d917bead
+p|public.study_plan_subjects.study_plan_subjects members read|d917bead
+p|public.study_plans.study_plans members read|d917bead
+p|public.subject_attendance_records.subject_attendance_records editors delete|0ac24da9
+p|public.subject_attendance_records.subject_attendance_records editors insert|6f74710a
+p|public.subject_attendance_records.subject_attendance_records editors update|845137b6
+p|public.subject_attendance_records.subject_attendance_records members read|d917bead
+p|public.subject_class_sessions.subject_class_sessions editors delete|0ac24da9
+p|public.subject_class_sessions.subject_class_sessions editors insert|6f74710a
+p|public.subject_class_sessions.subject_class_sessions editors update|845137b6
+p|public.subject_class_sessions.subject_class_sessions members read|d917bead
+p|public.subject_enrollments.subject_enrollments editors delete|0ac24da9
+p|public.subject_enrollments.subject_enrollments editors insert|6f74710a
+p|public.subject_enrollments.subject_enrollments editors update|845137b6
+p|public.subject_enrollments.subject_enrollments members read|d917bead
+p|public.subject_prerequisites.subject_prerequisites members read|d917bead
+p|public.subject_teacher_assignments.subject_teacher_assignments editors delete|0ac24da9
+p|public.subject_teacher_assignments.subject_teacher_assignments editors insert|6f74710a
+p|public.subject_teacher_assignments.subject_teacher_assignments editors update|845137b6
+p|public.subject_teacher_assignments.subject_teacher_assignments members read|d917bead
+p|public.subjects.subjects members read|d917bead
+p|public.teacher_availability_records.teacher_availability_records editors delete|0ac24da9
+p|public.teacher_availability_records.teacher_availability_records editors insert|6f74710a
+p|public.teacher_availability_records.teacher_availability_records editors update|845137b6
+p|public.teacher_availability_records.teacher_availability_records members read|d917bead
+p|public.teacher_exam_date_exclusions.teacher_exam_date_exclusions editors delete|0ac24da9
+p|public.teacher_exam_date_exclusions.teacher_exam_date_exclusions editors insert|6f74710a
+p|public.teacher_exam_date_exclusions.teacher_exam_date_exclusions editors update|845137b6
+p|public.teacher_exam_date_exclusions.teacher_exam_date_exclusions members read|d917bead
+p|public.teacher_records.teacher_records editors manage|b4524590
+p|public.teacher_records.teacher_records members read|d917bead
+p|public.teacher_subject_assignments.teacher_subject_assignments members read|d917bead
+p|public.teacher_workload_records.teacher_workload_records editors delete|0ac24da9
+p|public.teacher_workload_records.teacher_workload_records editors insert|6f74710a
+p|public.teacher_workload_records.teacher_workload_records editors update|845137b6
+p|public.teacher_workload_records.teacher_workload_records members read|d917bead
+p|public.workspace_snapshots.workspace_snapshots editors insert|6f74710a
+p|public.workspace_snapshots.workspace_snapshots editors update|845137b6
+p|public.workspace_snapshots.workspace_snapshots members read|d917bead
+p|public.workspace_source_files.workspace_source_files editors delete|0ac24da9
+p|public.workspace_source_files.workspace_source_files editors insert|6f74710a
+p|public.workspace_source_files.workspace_source_files editors update|845137b6
+p|public.workspace_source_files.workspace_source_files members read|d917bead
+p|storage.objects.workspace source files editors delete objects|cf84088a
+p|storage.objects.workspace source files editors insert objects|8c07a568
+p|storage.objects.workspace source files editors update objects|49b47d59
+p|storage.objects.workspace source files members read objects|5a90e218
+t|public.admin_audit_logs|620fe28e
+t|public.app_settings|0dbfab44
+t|public.careers|7f71c2de
+t|public.course_schedules|3c478596
+t|public.deleted_person_records|de09e52a
+t|public.exam_enrollments|fb0bb45b
+t|public.exam_teacher_assignments|1a7d4085
+t|public.institutions|82923605
+t|public.legacy_exam_sessions|e69ea738
+t|public.legacy_subject_prerequisites|6869af64
+t|public.legacy_subjects_catalog|2215aa11
+t|public.memberships|5d7e1211
+t|public.plan_equivalences|b3597a72
+t|public.profiles|77a0469c
+t|public.student_academic_statuses|ff441364
+t|public.student_career_plans|36cbbc8b
+t|public.student_financial_status|44826284
+t|public.student_grades|8d116da6
+t|public.student_records|71b21614
+t|public.study_plan_subjects|35af7de0
+t|public.study_plans|eac9bcbd
+t|public.subject_attendance_records|45aa6fcd
+t|public.subject_class_sessions|38feb7cc
+t|public.subject_enrollments|d2066bb5
+t|public.subject_prerequisites|6dbc2de3
+t|public.subject_teacher_assignments|694bfc3d
+t|public.subjects|0fa46527
+t|public.teacher_availability_records|8064fc98
+t|public.teacher_exam_date_exclusions|da1ac38a
+t|public.teacher_records|5933adc7
+t|public.teacher_subject_assignments|3cf0ece4
+t|public.teacher_workload_records|dcd7ca8e
+t|public.workspace_snapshots|2c3a3c61
+t|public.workspace_source_files|de396d66

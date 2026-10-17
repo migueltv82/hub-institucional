@@ -779,3 +779,13 @@ En Staging:
 La base de Staging queda sin diferencias contra release/v1. Edge pendiente de deploy por CLI (Miguel).
 
 Correcciones al runbook: `--no-verify-jwt` también para `source-file-storage`, y la verificación del §4.1 ahora no depende de una RPC que exige sesión.
+
+## 2026-10-17 — PROD0 drift read-only de Producción (Miguel corrió el kit; Claude comparó)
+
+Producción tiene 434 usuarios reales, 1 institución y un esquema viejo:
+- faltan `upsert_exam_enrollment_from_portal`, `get_academic_transition_config` y el modelo canónico de mesas;
+- 10 funciones y 11 tablas son distintas, entre ellas `handle_new_user`;
+- hay 5 RPC del flujo diferido;
+- ya está en `dual_write`.
+
+El deploy del 21/10 pasa a ser una migración sobre datos reales: hace falta un ensayo sobre el esquema de Producción (PROD1). Detalle en `supabase/security/PRODUCTION_DRIFT_RESULT.md`.
