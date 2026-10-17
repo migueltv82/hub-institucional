@@ -703,3 +703,7 @@ Verificación: `quality:full` PASS (311 archivos, 2466 tests) y PDF comprimido c
 Causa del FAILURE de `main` (run 38844481091, 16/10 03:14 UTC): `src/services/examTablesCanonicalSchema.test.js` comparaba rutas con separador `\` de Windows y el runner `ubuntu-latest` devuelve `/`. Fallaban 2 tests de 2409. Ya estaba corregido en release/v1 (`d4eb525`, rutas relativas normalizadas con `sep`).
 
 Se abrió el PR draft #1 release/v1 → main ("no mergear"). Job `Quality gate (Node 22.13)`: SUCCESS en el run 38945952009 (commit `4a2df9a`). Es la primera ejecución remota verde del check que después se configura como requerido en la protección de `main`. Sin merge y sin cambios en workflows.
+
+## 2026-10-17 — ENG.1 retiro del stub generateSpecialExams (Claude, cubriendo a Codex)
+
+Se borró `src/utils/examEngine/planning/generateSpecial.js` y su export del barrel `src/utils/examEngine/index.js`. No tenía llamadores en `src/` ni en `scripts/`, ni siquiera dinámicos. Los períodos especiales se generan con `generateRegularExamPlan` (`tipoPeriodo: 'ESPECIAL'`), cubierto por los invariantes de 04.3. Sin cambios en el motor.

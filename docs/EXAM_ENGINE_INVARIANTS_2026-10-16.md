@@ -39,8 +39,10 @@ quality:full 2449 tests en 308 archivos PASS.
 
 ## Ampliación 04.3: períodos especiales
 
-Los períodos especiales no tienen un generador propio en uso: `planning/generateSpecial.js` (`generateSpecialExams`) es un stub que devuelve un cronograma vacío y no tiene llamadores. Pasan por `generateRegularExamPlan` con `tipoPeriodo: 'ESPECIAL'` y fechas `LLAMADO_ESPECIAL`. La prueba suma 100 instituciones en esa variante: todas las mesas quedan en el llamado especial y sin violaciones (barrido de medición: 400 instituciones, 782 mesas, 0 violaciones).
+Los períodos especiales no tienen un generador propio: pasan por `generateRegularExamPlan` con `tipoPeriodo: 'ESPECIAL'` y fechas `LLAMADO_ESPECIAL`. La prueba suma 100 instituciones en esa variante: todas las mesas quedan en el llamado especial y sin violaciones (barrido de medición: 400 instituciones, 782 mesas, 0 violaciones).
 
 ## Límites
 
-La afinidad se verifica con la regla del propio motor, no con una definición independiente. No verifica la réplica del segundo llamado respecto del primero (regla 12, "siempre que sea posible", no es una invariante estricta) ni el stub `generateSpecialExams` (sin uso).
+La afinidad se verifica con la regla del propio motor, no con una definición independiente. No verifica la réplica del segundo llamado respecto del primero (regla 12, "siempre que sea posible", no es una invariante estricta).
+
+ENG.1 (2026-10-17): se retiró `planning/generateSpecial.js` (`generateSpecialExams`). Era un stub que devolvía un cronograma vacío, sin llamadores en `src/` ni en `scripts/`, exportado solo por `src/utils/examEngine/index.js`. El camino real de los períodos especiales es `generateRegularExamPlan` con `tipoPeriodo: 'ESPECIAL'`, cubierto por los invariantes de 04.3.
