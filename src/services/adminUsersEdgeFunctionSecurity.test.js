@@ -177,4 +177,15 @@ describe('admin-users edge function security posture', () => {
       expect(body).toMatch(/join public\.institutions institution\s+on institution\.id = membership\.institution_id\s+and institution\.status = 'active'/)
     }
   })
+
+  it('cancela mesas con id relacional y con su propio client_mutation_id (PB.1)', () => {
+    const cancelBranch = extractSqlBlock(edgeFunction, /\} else if \(mutationType === 'cancel_exam'\) \{/, /\} else if \(mutationType === 'update_profile'\)/)
+    expect(cancelBranch).toContain(".from('exam_enrollments')")
+    expect(cancelBranch).toContain(".eq('student_id', callerId)")
+    expect(cancelBranch).toContain('legacy_snapshot_id')
+    const relationalWriter = extractSqlBlock(edgeFunction, /async function writeExamEnrollmentRelational\(/, /\nasync function writeStudentPortalRelational\(/)
+    expect(relationalWriter).toMatch(/mutationType === 'cancel_exam'\s*\?\s*`\$\{legacySnapshotId \|\| examTableId\}:cancel_exam:\$\{now\}`/)
+    const registerBranch = extractSqlBlock(edgeFunction, /\} else if \(mutationType === 'register_exam'\) \{/, /\} else if \(mutationType === 'cancel_exam'\)/)
+    expect(registerBranch).toContain('result = asRecordArray(snapshot.examEnrollments).find(isSameExamEnrollment) ?? nextExamEnrollment')
+  })
 })

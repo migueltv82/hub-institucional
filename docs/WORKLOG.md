@@ -843,3 +843,17 @@ Verificación:
 - §4 OK.
 
 Pendiente: redeploy de las Edge (Miguel, CLI). Detalle en `supabase/security/STAGING_PROMOTION_RESULT.md`.
+
+## 2026-10-17 — PB.1 cancelar inscripción a mesa en dual_write (Claude; hallazgo de QA.1)
+
+QA.1 encontró que, en `dual_write` (el modo elegido para Producción), el alumno no podía cancelar una inscripción a mesa. Las causas:
+- la lectura segura del portal devuelve el uuid relacional y `cancel_exam` solo buscaba ids del snapshot → 404;
+- la baja reusaba el `client_mutation_id` de la inscripción, así que la RPC idempotente devolvía la fila sin cancelarla;
+- al reinscribirse, el Edge devolvía un id distinto al que quedaba guardado en el snapshot.
+
+Fix en `admin-users`:
+- se resuelve el uuid a `legacy_snapshot_id`, solo si la inscripción es propia;
+- la baja usa su propio mutation id;
+- `register_exam` devuelve la fila guardada.
+
+Evidencia: el harness integrado pasa en 3 ciclos (dual_write, default, dual_write); con el Edge anterior da 404.

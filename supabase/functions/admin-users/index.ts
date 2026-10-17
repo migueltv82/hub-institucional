@@ -2629,7 +2629,11 @@ async function writeExamEnrollmentRelational({
   const studentRecordId = getOptionalString(enrollment.student_record_id)
   const status = getOptionalString(enrollment.status) || (mutationType === 'cancel_exam' ? 'cancelled' : 'registered')
   const legacySnapshotId = getOptionalString(enrollment.id)
-  const clientMutationId = getOptionalString(enrollment.client_mutation_id) || legacySnapshotId || null
+  // PB.1: la RPC es idempotente por client_mutation_id. La baja necesita su propio id: si reusa el de
+  // la inscripcion (el id estable de la fila del snapshot), la RPC devuelve la fila sin cancelarla.
+  const clientMutationId = mutationType === 'cancel_exam'
+    ? `${legacySnapshotId || examTableId}:cancel_exam:${now}`
+    : getOptionalString(enrollment.client_mutation_id) || legacySnapshotId || null
 
   const { data, error } = await context.userClient.rpc('upsert_exam_enrollment_from_portal', {
     target_institution_id: institutionId,
@@ -2847,16 +2851,36 @@ async function handleStudentPortalMutation(
       updated_at: now,
     }
 
+    const isSameExamEnrollment = (row: Record<string, unknown>) => sameOwner(row, callerId) && row.exam_session_id === examSessionId
     snapshot.examEnrollments = upsertRecord(
       asRecordArray(snapshot.examEnrollments),
       nextExamEnrollment,
-      (row) => sameOwner(row, callerId) && row.exam_session_id === examSessionId,
+      isSameExamEnrollment,
     )
-    result = nextExamEnrollment
+    // PB.1: upsertRecord conserva el id de una fila previa (reinscripcion). Se devuelve la fila guardada,
+    // asi la UI y legacy_snapshot_id usan el mismo id que despues busca cancel_exam.
+    result = asRecordArray(snapshot.examEnrollments).find(isSameExamEnrollment) ?? nextExamEnrollment
   } else if (mutationType === 'cancel_exam') {
-    const examEnrollmentId = requireString(payload.exam_enrollment_id, 'La inscripcion a mesa')
+    const requestedEnrollmentId = requireString(payload.exam_enrollment_id, 'La inscripcion a mesa')
     const rows = asRecordArray(snapshot.examEnrollments)
+    let examEnrollmentId = requestedEnrollmentId
     let found = false
+
+    // PB.1: la lectura segura del portal lista las inscripciones relacionales, con su uuid.
+    // Ese uuid se resuelve a la fila del snapshot por legacy_snapshot_id, solo si es propia.
+    if (!rows.some((row) => row.id === requestedEnrollmentId && sameOwner(row, callerId)) && isUuid(requestedEnrollmentId)) {
+      const { data: relationalEnrollment, error: relationalLookupError } = await adminClient
+        .from('exam_enrollments')
+        .select('legacy_snapshot_id')
+        .eq('id', requestedEnrollmentId)
+        .eq('institution_id', institutionId)
+        .eq('workspace_key', workspaceKey)
+        .eq('student_id', callerId)
+        .maybeSingle()
+
+      if (relationalLookupError) throw relationalLookupError
+      examEnrollmentId = getOptionalString(relationalEnrollment?.legacy_snapshot_id) || requestedEnrollmentId
+    }
 
     snapshot.examEnrollments = rows.map((row) => {
       if (row.id !== examEnrollmentId || !sameOwner(row, callerId)) return row
