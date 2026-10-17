@@ -740,3 +740,14 @@ Otras decisiones de Miguel del mismo lote:
 - 05.1b ratificado;
 - STG2 aprobado después de STG1;
 - fecha del 21/10 condicional, con revisión el 19/10.
+
+## 2026-10-17 — KIT.1 kit de drift read-only para STG0/PROD0 sin Codex (Claude)
+
+`supabase/security/remote_drift_snapshot.sql` (un solo SELECT read-only) y `scripts/compareDriftSnapshot.mjs`: comparan un snapshot remoto pegado por Miguel contra el baseline de release/v1 y listan los archivos de `supabase/schema/` a aplicar.
+
+Controles:
+- base sin baseline → 9 archivos;
+- release/v1 contra sí mismo → 0 diferencias;
+- base con el 07 previo a 03.5b → 1 diferencia (solo `07_academic_operations.sql`).
+
+Test focal 4/4. Instrucciones en `supabase/security/DRIFT_KIT_README.md`.
