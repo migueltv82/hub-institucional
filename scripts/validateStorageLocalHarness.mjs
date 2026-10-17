@@ -24,7 +24,7 @@ export function assertOwnedRollbackTarget(database,owner,marker,run) {
   assert.ok(typeof run==='string' && /^[a-f0-9]{16}$/.test(run),'Invalid run');
   assert.ok(owner==='supabase_admin' && marker===run,'Rollback ownership mismatch');
 }
-export async function main({ recovery=false, rollback=false, integrated=false, api=false, browser=false } = {}) {
+export async function main({ recovery=false, rollback=false, integrated=false, api=false, browser=false, edge=false } = {}) {
   assert.equal(typeof recovery,'boolean');
   assert.equal(typeof rollback,'boolean');
   assert.ok(!rollback || recovery,'Rollback requires recovery');
@@ -33,13 +33,15 @@ export async function main({ recovery=false, rollback=false, integrated=false, a
   assert.equal(typeof api,'boolean');
   assert.ok(!api || (integrated && recovery && !rollback),'Data API requires integrated recovery without rollback');
   assert.equal(typeof browser,'boolean');assert.ok(!browser || (api && integrated && recovery && !rollback),'Browser requires integrated Data API recovery');
+  assert.equal(typeof edge,'boolean');assert.ok(!edge || browser,'Edge requires recovered frontend browser');
   const run=randomBytes(8).toString('hex');
   const db=disposableDatabase(`gotrue_harness_${run}`);
   const container=`${db}_storage`; const volume=`${db}_bytes`;
   let dbIntent=false, containerIntent=false, volumeIntent=false, step='preflight';
   const extraContainers=new Set(), extraVolumes=new Set(), extraDatabases=new Set();
+  let edgeDirectory;
   let dbArchive, byteArchive;
-  const report={run,image:IMAGE,staging:'NONE',production:'NONE',backupRestore:recovery,rollbackRequested:rollback,integratedRequested:integrated,apiRequested:api,browserRequested:browser};
+  const report={run,image:IMAGE,staging:'NONE',production:'NONE',backupRestore:recovery,rollbackRequested:rollback,integratedRequested:integrated,apiRequested:api,browserRequested:browser,edgeRequested:edge};
   const docker=(args,input,env=process.env)=>{
     try {return execFileSync('docker',args,{input,env,encoding:'utf8',windowsHide:true,timeout:60000,maxBuffer:64*1024*1024,stdio:['pipe','pipe','pipe']});}
     catch(error) {throw new Error(`Local operation ${step} failed; SQLSTATE=${String(error.stderr??'').match(/\b(?:42501|28P01)\b/)?.[0]??'unavailable'}`);}
@@ -338,9 +340,33 @@ export async function main({ recovery=false, rollback=false, integrated=false, a
           const restState=JSON.parse(docker(['inspect',restName]))[0];assert.equal(restState.State.Running,true);assert.equal(restState.RestartCount,0);
           report.dataApi={result:'PASS',users:4,ownReadRows:1,foreignReadRows:0,foreignMembershipRows:0,foreignPatchRows:0,invalidJwtStatus:401,anonymousRows:0,healthSamples:5,rowsUnchanged:true};
           if(browser){
+            const ports={auth:targetAuth.port,rest:restPort,storage:targetPort};let frontendPort,edgeModule;
+            if(edge){
+              step='restored Edge';edgeModule=await import('./validateRecoveredEdge.mjs');
+              frontendPort=await edgeModule.reserveLoopbackPort();edgeDirectory=await edgeModule.bundleEdgeFunction('admin-users');
+              const edgeKeys=buildLocalRecoveryEnvironment({kind:'storage',image:IMAGE,host:SOURCE,database:target,password,jwtSecret:secret});
+              const recoveredEdge=await edgeModule.startRecoveredEdge({docker,network:'supabase_network_codex-baseline-local-7725bdda',label:LABEL,run,directory:edgeDirectory,target,authName:targetAuth.name,restName,storageName:targetContainer,anonKey:edgeKeys.ANON_KEY,serviceKey:edgeKeys.SERVICE_KEY,origin:localEndpoint(frontendPort,'/').slice(0,-1),register:name=>extraContainers.add(name)});
+              ports.functions=recoveredEdge.port;report.edgeRuntimeImage=edgeModule.EDGE_RUNTIME_IMAGE;report.edgeGatewayImage=edgeModule.EDGE_GATEWAY_IMAGE;
+            }
             step='recovered frontend browser';const {validateRecoveredFrontend}=await import('./validateRecoveredFrontend.mjs');
-            await validateRecoveredFrontend({ports:{auth:targetAuth.port,rest:restPort,storage:targetPort},anonKey:settings.ANON_KEY,users:integrationUsers,tenants:integrationTenants,report});
-            assert.equal(structure(target),beforeStructure);const afterBrowser=metadata(target,true);for(const [table,rows] of Object.entries(beforeApi)){if(table.startsWith('public.')||table.startsWith('storage.')||table==='auth.schema_migrations')assert.equal(afterBrowser[table],rows,'Browser changed protected rows');}
+            await validateRecoveredFrontend({ports,port:frontendPort,anonKey:settings.ANON_KEY,users:integrationUsers,tenants:integrationTenants,report});
+            assert.equal(structure(target),beforeStructure);const afterBrowser=metadata(target,true);for(const [table,rows] of Object.entries(beforeApi)){if(edge&&table==='public.admin_audit_logs')continue;if(table.startsWith('public.')||table.startsWith('storage.')||table==='auth.schema_migrations')assert.equal(afterBrowser[table],rows,'Browser changed protected rows');}
+            if(edge){
+              const docenteIds=integrationUsers.filter(user=>user.role==='docente').map(user=>user.id);
+              const auditRows=()=>JSON.parse(sql("select coalesce(json_agg(json_build_object('actor_user_id',actor_user_id,'action',action,'status',status)),'[]') from public.admin_audit_logs;",target));
+              step='Edge browser audit';report.edgeBrowserAudit=edgeModule.assertEdgeAudit(auditRows(),docenteIds);assert.ok(report.edgeBrowserAudit.teacher_subject_rosters>=2,'Edge browser audit missing');
+              // El logout del navegador revoca globalmente las sesiones previas: el token de la fase Data API ya no debe servir en Edge.
+              step='Edge revoked session';const revoked=restoredTokens.find(entry=>entry.user.role==='docente');
+              report.edgeRevokedSessionStatus=(await edgeModule.edgeCall(ports.functions,{token:revoked.token,origin:localEndpoint(frontendPort,'/').slice(0,-1),body:{action:'teacher_subject_rosters',institution_id:integrationTenants[revoked.user.tenant],workspace_key:'main'}})).status;
+              assert.equal(report.edgeRevokedSessionStatus,401,'Revoked session accepted by Edge');
+              step='Edge fresh sessions';const edgeTokens=[];
+              for(const user of integrationUsers){const login=await authPost(targetAuth,'/token?grant_type=password',{email:user.email,password:user.password});assert.equal(login.user.id,user.id);edgeTokens.push({user,token:login.access_token});}
+              step='Edge authorization';report.edge=await edgeModule.verifyRecoveredEdge({port:ports.functions,origin:localEndpoint(frontendPort,'/').slice(0,-1),tokens:edgeTokens,tenants:integrationTenants,sql,metadata,target,progress:report});
+              step='Edge audit';report.edgeAudit=edgeModule.assertEdgeAudit(auditRows(),docenteIds);assert.equal(report.edgeAudit.teacher_profile_update,1);
+              assert.equal(structure(target),beforeStructure);
+              for(const name of [target+'_gateway',target+'_edge']){const state=JSON.parse(docker(['inspect',name]))[0];assert.equal(state.State.Running,true);assert.equal(state.RestartCount,0);}
+              report.edge.result='PASS';
+            }
           }
         }
         report.integratedRecoveryMs=Math.round(performance.now()-restoreStart);
@@ -441,6 +467,7 @@ export async function main({ recovery=false, rollback=false, integrated=false, a
     if(volumeIntent)try {if(docker(['volume','ls','--filter',`name=^${volume}$`,'--format','{{.Name}}']).trim()){assert.equal(JSON.parse(docker(['volume','inspect',volume]))[0].Labels[LABEL],run);docker(['volume','rm',volume]);}}catch{errors.push('Volume cleanup failed');}
     if(dbIntent)try {disposableDatabase(db);if(sql(`select count(*) from pg_database where datname='${db}';`,'postgres')==='1'){const ownership=JSON.parse(sql(`select json_build_object('owner',pg_get_userbyid(datdba),'marker',shobj_description(oid,'pg_database')) from pg_database where datname='${db}';`,'postgres'));assert.equal(ownership.owner,'supabase_admin');assert.ok(ownership.marker===run||ownership.marker===null);sql(`drop database ${db} with (force);`,'postgres');}}catch{errors.push('Database cleanup failed');}
     try {assert.equal(sql(`select count(*) from pg_database where datname='${db}';`,'postgres'),'0');assert.equal(docker(['ps','-a','--filter',`label=${LABEL}=${run}`,'--format','{{.Names}}']).trim(),'');assert.equal(docker(['volume','ls','--filter',`label=${LABEL}=${run}`,'--format','{{.Name}}']).trim(),'');}catch{errors.push('Cleanup verification failed');}
+    if(edgeDirectory)try{const {removeOwnedDirectory}=await import('./validateRecoveredEdge.mjs');await removeOwnedDirectory(edgeDirectory);}catch{errors.push('Edge bundle cleanup failed');}
     if(report.browserOwnedResourcesClosed===false)errors.push('Browser runtime cleanup unverified');
     report.cleanup={databases:errors.length?'unverified':0,containers:errors.length?'unverified':0,volumes:errors.length?'unverified':0,temporaryFiles:report.browserOwnedResourcesClosed===false?'unverified':0,errors};if(errors.length)report.result='BLOQUEADO';
   }

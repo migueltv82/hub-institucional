@@ -1,0 +1,145 @@
+{
+  "task": "RB.2b",
+  "mode": "repair",
+  "staging": "NONE",
+  "production": "NONE",
+  "role": "postgres",
+  "disableTriggers": false,
+  "run": "f41fa8d5c0adc9d7",
+  "postgresRole": {
+    "rolsuper": false,
+    "rolbypassrls": true
+  },
+  "before": {
+    "a": {
+      "student_records": {
+        "count": 2,
+        "md5": "7891b800b3a299f4ffa1326190808774"
+      },
+      "subject_enrollments": {
+        "count": 4,
+        "md5": "5e3b29c182fca9e92896ffc37088a85d"
+      },
+      "student_grades": {
+        "count": 4,
+        "md5": "82636dd5d4963e6c41dae1795811448c"
+      }
+    },
+    "b": {
+      "student_records": {
+        "count": 1,
+        "md5": "e2abce1c85968506cbdef7a9bdde7872"
+      },
+      "subject_enrollments": {
+        "count": 2,
+        "md5": "581ee9e9382ac264e6ed371b790b1330"
+      },
+      "student_grades": {
+        "count": 2,
+        "md5": "021a5002b170faa564f742dca9cab1b4"
+      }
+    },
+    "profiles": {
+      "count": 4,
+      "md5": "ea7383d1f6c1a57a68eb7ba1beea538c"
+    },
+    "auth": {
+      "users": "4249367d2a9a2815b6785688e4d5a6af",
+      "identities": "34601c5da8ac70ca485909282ddea6bc"
+    },
+    "rls_on": 40
+  },
+  "damaged": {
+    "a": {
+      "student_records": {
+        "count": 2,
+        "md5": "7db9bbfc6fa34b80837798d0d8e1982c"
+      },
+      "subject_enrollments": {
+        "count": 3,
+        "md5": "937f15f499d4204db0ccd5b193548dc9"
+      },
+      "student_grades": {
+        "count": 3,
+        "md5": "708054103791cefb4f703582c9253cbc"
+      }
+    },
+    "b": {
+      "student_records": {
+        "count": 1,
+        "md5": "e2abce1c85968506cbdef7a9bdde7872"
+      },
+      "subject_enrollments": {
+        "count": 2,
+        "md5": "581ee9e9382ac264e6ed371b790b1330"
+      },
+      "student_grades": {
+        "count": 2,
+        "md5": "021a5002b170faa564f742dca9cab1b4"
+      }
+    },
+    "profiles": {
+      "count": 4,
+      "md5": "ea7383d1f6c1a57a68eb7ba1beea538c"
+    },
+    "auth": {
+      "users": "4249367d2a9a2815b6785688e4d5a6af",
+      "identities": "34601c5da8ac70ca485909282ddea6bc"
+    },
+    "rls_on": 40
+  },
+  "archiveHasNonAscii": true,
+  "repairMs": 107,
+  "after": {
+    "a": {
+      "student_records": {
+        "count": 2,
+        "md5": "7891b800b3a299f4ffa1326190808774"
+      },
+      "subject_enrollments": {
+        "count": 4,
+        "md5": "5e3b29c182fca9e92896ffc37088a85d"
+      },
+      "student_grades": {
+        "count": 4,
+        "md5": "82636dd5d4963e6c41dae1795811448c"
+      }
+    },
+    "b": {
+      "student_records": {
+        "count": 1,
+        "md5": "e2abce1c85968506cbdef7a9bdde7872"
+      },
+      "subject_enrollments": {
+        "count": 2,
+        "md5": "581ee9e9382ac264e6ed371b790b1330"
+      },
+      "student_grades": {
+        "count": 2,
+        "md5": "021a5002b170faa564f742dca9cab1b4"
+      }
+    },
+    "profiles": {
+      "count": 4,
+      "md5": "ea7383d1f6c1a57a68eb7ba1beea538c"
+    },
+    "auth": {
+      "users": "4249367d2a9a2815b6785688e4d5a6af",
+      "identities": "34601c5da8ac70ca485909282ddea6bc"
+    },
+    "rls_on": 40
+  },
+  "touched": {
+    "student_records": 1,
+    "subject_enrollments": 1,
+    "student_grades": 2
+  },
+  "failures": [],
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

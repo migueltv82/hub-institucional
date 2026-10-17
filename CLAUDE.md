@@ -154,7 +154,7 @@ Checklist más amplia: `docs/TESTING_CHECKLIST.md`. Operación y diagnóstico: `
 
 ### Validador automático
 
-`scripts/validateStudentTeacherRoundTrip.mjs` hace ese circuito completo contra Supabase real: crea usuarios de Auth, legajo, asignación docente, inscripción, sesión de clase, asistencia y nota, verifica el roster del lado docente y la lectura del lado alumno, cubre el caso legacy en slug, y limpia todo al final.
+`scripts/validateStudentTeacherRoundTrip.mjs` hace ese circuito completo contra Supabase real: crea usuarios de Auth, legajo, asignación docente, inscripción, sesión de clase, asistencia y nota, verifica el roster del lado docente y la lectura del lado alumno, y limpia todo al final. Inscribe con la sesión del alumno y escribe el libro docente por las mismas RPC que la app. El caso legacy en slug se quitó: el RPC seguro del portal solo expone `subject_enrollments`. Para correrlo sin Supabase real: `node scripts/validateRoundTripLocal.mjs` (stack local descartable, ver `supabase/security/ROUND_TRIP_LOCAL_RESULT.md`).
 
 ```powershell
 $env:SUPABASE_SERVICE_ROLE_KEY = "..."

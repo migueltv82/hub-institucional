@@ -1,6 +1,6 @@
 import {it,expect} from 'vitest';
 import {main} from './validateStorageLocalHarness.mjs';
-import {frontendProxyTargets,frontendHttpFailure} from './validateRecoveredFrontend.mjs';
+import {frontendProxyTargets,frontendHttpFailure,edgeOutOfScope} from './validateRecoveredFrontend.mjs';
 it('rejects frontend without integrated Data API before resources',async()=>{await expect(main({browser:true})).rejects.toThrow();await expect(main({browser:true,integrated:true,recovery:true})).rejects.toThrow();await expect(main({browser:'true'})).rejects.toThrow();});
 it('rejects remote injection and unknown proxy services',()=>{expect(()=>frontendProxyTargets({auth:'https://example.com',rest:3000,storage:5000})).toThrow();expect(()=>frontendProxyTargets({auth:9999,rest:3000,storage:5000,external:443})).toThrow();});
 it('pins proxy targets to loopback and strips only service prefixes',()=>{const p=frontendProxyTargets({auth:9999,rest:3000,storage:5000});expect(p['/auth/v1'].target).toBe('http://127.0.0.1:9999/');expect(p['/rest/v1'].followRedirects).toBe(false);expect(p['/rest/v1'].rewrite('/rest/v1/institutions?select=id')).toBe('/institutions?select=id');});
@@ -9,3 +9,4 @@ it('blocks failures on deep hyphenated API and frontend routes',()=>{for(const p
 it('reports HTTP failures without sensitive path or query values',()=>{expect(frontendHttpFailure('http://127.0.0.1:4173/auth/v1/secret-path?token=synthetic-sensitive',401)).toEqual({service:'auth',status:401});});
 
 it('classifies known Edge dependencies without arbitrary URLs',()=>{expect(frontendHttpFailure('http://127.0.0.1:4173/functions/v1/admin-users?secret=hidden',404)).toEqual({service:'functions',status:404,endpoint:'admin-users'});expect(frontendHttpFailure('http://127.0.0.1:4173/functions/v1/private-secret-name?secret=hidden',404)).toEqual({service:'functions',status:404});});
+it('treats only a 404 from a known Edge endpoint as out of scope',()=>{const at=(path,status)=>edgeOutOfScope(frontendHttpFailure('http://127.0.0.1:4173'+path,status));expect(at('/functions/v1/admin-users',404)).toBe(true);expect(at('/functions/v1/source-file-storage',404)).toBe(true);for(const status of [401,403,500,502])expect(at('/functions/v1/admin-users',status)).toBe(false);expect(at('/functions/v1/private-secret-name',404)).toBe(false);for(const path of ['/rest/v1/profiles','/auth/v1/token','/storage/v1/object/x','/app'])expect(at(path,404)).toBe(false);expect(edgeOutOfScope(null)).toBe(false);});

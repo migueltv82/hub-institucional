@@ -1,0 +1,207 @@
+{
+  "task": "QA.1",
+  "staging": "NONE",
+  "production": "NONE",
+  "remoteSql": "NONE",
+  "deploy": "NONE",
+  "checks": [
+    {
+      "role": "alumno",
+      "institution": "a",
+      "login": true,
+      "correctRole": true,
+      "foreignInstitutionRejected": true,
+      "logout": true,
+      "protectedRouteAfterLogout": true
+    },
+    {
+      "role": "docente",
+      "institution": "a",
+      "login": true,
+      "correctRole": true,
+      "foreignInstitutionRejected": true,
+      "logout": true,
+      "protectedRouteAfterLogout": true
+    }
+  ],
+  "httpFailures": [
+    {
+      "phase": "adversarial dual_write: Edge replay",
+      "service": "functions",
+      "status": 403,
+      "endpoint": "admin-users"
+    },
+    {
+      "phase": "adversarial dual_write: direct RPC",
+      "service": "rest",
+      "status": 400
+    },
+    {
+      "phase": "adversarial default: Edge replay",
+      "service": "functions",
+      "status": 403,
+      "endpoint": "admin-users"
+    },
+    {
+      "phase": "adversarial default: direct RPC",
+      "service": "rest",
+      "status": 400
+    },
+    {
+      "phase": "adversarial dual_write: Edge replay",
+      "service": "functions",
+      "status": 403,
+      "endpoint": "admin-users"
+    },
+    {
+      "phase": "adversarial dual_write: direct RPC",
+      "service": "rest",
+      "status": 400
+    },
+    {
+      "phase": "student withdraws subject through UI",
+      "service": "functions",
+      "status": 404,
+      "endpoint": "admin-users"
+    }
+  ],
+  "pageErrors": [],
+  "externalRequests": 0,
+  "images": {
+    "nginx:1.27-alpine": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+    "supabase/edge-runtime:v1.77.4": "supabase/edge-runtime@sha256:ad45164b7548bf5820ed7be714789c17ac2865edce79a09cfb4c3756c3d365a8"
+  },
+  "run": "f669668cc728b300",
+  "lastFixtureAuthStatus": 200,
+  "fixtureAccounts": {
+    "sharedFixtureUsers": 10,
+    "browserAccounts": 4
+  },
+  "examModes": [
+    {
+      "mode": "dual_write",
+      "sources": {
+        "snapshot": true,
+        "relational": true
+      },
+      "writeMode": "dual_write",
+      "readMode": "snapshot_only",
+      "afterRegister": {
+        "relational": 1,
+        "snapshot": 1
+      },
+      "cancelSources": {
+        "snapshot": true,
+        "relational": true,
+        "relationalError": null
+      },
+      "afterCancel": {
+        "relational": 0,
+        "snapshot": 0
+      },
+      "positive": true,
+      "uiBlocked": true,
+      "edge": {
+        "status": 403
+      },
+      "rpc": {
+        "status": 400,
+        "message": "EXAM_REGULARITY_REQUIRED"
+      },
+      "afterNegatives": {
+        "relational": 0,
+        "snapshot": 0
+      },
+      "negatives": true
+    },
+    {
+      "mode": "default",
+      "sources": {
+        "snapshot": true,
+        "relational": false
+      },
+      "writeMode": "snapshot_only",
+      "readMode": "snapshot_only",
+      "afterRegister": {
+        "relational": 0,
+        "snapshot": 1
+      },
+      "cancelSources": {
+        "snapshot": true,
+        "relational": false,
+        "relationalError": null
+      },
+      "afterCancel": {
+        "relational": 0,
+        "snapshot": 0
+      },
+      "positive": true,
+      "uiBlocked": true,
+      "edge": {
+        "status": 403
+      },
+      "rpc": {
+        "status": 400,
+        "message": "EXAM_REGULARITY_REQUIRED"
+      },
+      "afterNegatives": {
+        "relational": 0,
+        "snapshot": 0
+      },
+      "negatives": true
+    },
+    {
+      "mode": "dual_write",
+      "sources": {
+        "snapshot": true,
+        "relational": true
+      },
+      "writeMode": "dual_write",
+      "readMode": "snapshot_only",
+      "afterRegister": {
+        "relational": 1,
+        "snapshot": 1
+      },
+      "cancelSources": {
+        "snapshot": true,
+        "relational": true,
+        "relationalError": null
+      },
+      "afterCancel": {
+        "relational": 0,
+        "snapshot": 0
+      },
+      "positive": true,
+      "uiBlocked": true,
+      "edge": {
+        "status": 403
+      },
+      "rpc": {
+        "status": 400,
+        "message": "EXAM_REGULARITY_REQUIRED"
+      },
+      "afterNegatives": {
+        "relational": 0,
+        "snapshot": 0
+      },
+      "negatives": true
+    }
+  ],
+  "examRegistered": true,
+  "teacherWrites": {
+    "attendance": true,
+    "grade": true
+  },
+  "studentReread": true,
+  "subjectWithdrawStatus": 404,
+  "result": "FAIL",
+  "failedAt": "student withdraws subject through UI",
+  "errorType": "AssertionError",
+  "errorMessage": "Subject withdraw failed |  | 404 !== 200 | ",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

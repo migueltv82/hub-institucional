@@ -186,6 +186,30 @@ const academicTransitionConfigJsFields = [
 ]
 
 describe('Supabase function security matrix', () => {
+  it('mantiene la copia de is_member_of_institution del SQL de bajo riesgo igual al baseline (06.3)', () => {
+    const extract = (filePath) => {
+      const sql = readText(join(SUPABASE_DIR, filePath))
+      const start = sql.indexOf('create or replace function public.is_member_of_institution(')
+      expect(start, filePath).toBeGreaterThanOrEqual(0)
+      return sql.slice(start, sql.indexOf('$$;', start) + 3)
+    }
+    expect(extract('security/2026-09-05_low_risk_indexes_search_path_auth_uid.sql')).toBe(extract('schema/01_foundation.sql'))
+  })
+
+  it('fija search_path en toda funcion del baseline y del gateway (advisor 0011)', () => {
+    const files = [
+      ...walkFiles(join(SUPABASE_DIR, 'schema'), (filePath) => filePath.endsWith('.sql')),
+      join(SUPABASE_DIR, 'security/source_file_storage_gateway.sql'),
+    ]
+    const missing = files.flatMap((filePath) => {
+      const sql = readText(filePath)
+      return [...sql.matchAll(/create or replace function\s+([\w.]+)\s*\(/gi)]
+        .filter((match) => !/\bset\s+search_path\b/i.test(sql.slice(match.index, sql.indexOf('$$', match.index))))
+        .map((match) => match[1])
+    })
+    expect(missing).toEqual([])
+  })
+
   it('mantiene inventariadas todas las RPC invocadas por codigo local', () => {
     expect([...extractInvokedRpcContracts()].sort()).toEqual([...invokedRpcContracts].sort())
   }, 15000)

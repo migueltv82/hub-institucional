@@ -121,6 +121,47 @@ function statusFromGrade(grade) {
   return score >= PASSING_SCORE ? 'approved' : 'failed'
 }
 
+function getNullableTimestamp(value) {
+  const timestamp = Date.parse(value ?? '')
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+function compareDescNullsLast(left, right) {
+  if (left === right) return 0
+  if (left === null) return 1
+  if (right === null) return -1
+  return right - left
+}
+
+// Espejo literal del filtro de student_grades en upsert_exam_enrollment_from_portal:
+// solo filas vivas, subject_id/program_id de la fila sin normalizar contra los ids
+// buscados (con btrim, como la RPC), academic_status crudo distinto de 'pending' y
+// orden updated_at desc nulls last, created_at desc nulls last. Devuelve el estado
+// crudo o null. No normaliza mayusculas, espacios ni sinonimos: decide lo mismo que
+// el servidor. Para mostrar el estado usar getLatestAcademicStatusForSubject.
+export function getServerAcademicStatusForSubject({ subjectId, programIds = [], grades = [] }) {
+  const targetSubjectId = clean(subjectId)
+  // Una carrera vacia solo coincide con otra vacia, como program_id = '' en SQL: nunca es comodin.
+  const targetProgramIds = programIds.map(clean)
+  if (!targetSubjectId || targetProgramIds.length === 0) return null
+
+  const latest = grades
+    .filter((grade) => (
+      grade &&
+      !grade.deleted_at &&
+      typeof grade.academic_status === 'string' &&
+      grade.academic_status !== 'pending' &&
+      grade.subject_id === targetSubjectId &&
+      targetProgramIds.includes(grade.program_id)
+    ))
+    .sort((left, right) => (
+      compareDescNullsLast(getNullableTimestamp(left.updated_at), getNullableTimestamp(right.updated_at)) ||
+      compareDescNullsLast(getNullableTimestamp(left.created_at), getNullableTimestamp(right.created_at))
+    ))[0]
+
+  return latest ? latest.academic_status : null
+}
+
 export function getLatestAcademicStatusForSubject({
   subjectId,
   programId = '',

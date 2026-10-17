@@ -358,6 +358,20 @@ async function getAuthenticatedContext(req: Request) {
   return { userClient, adminClient, caller: userData.user, profile }
 }
 
+// 06.3: la Edge consulta memberships con service role (sin RLS), asi que la suspension se valida aca.
+async function assertInstitutionActive(adminClient: ReturnType<typeof getClients>['adminClient'], institutionId: string) {
+  const { data: institution, error } = await adminClient
+    .from('institutions')
+    .select('status')
+    .eq('id', institutionId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (institution?.status !== 'active') {
+    throw new HttpError('Acceso denegado: la institucion esta suspendida.', 403)
+  }
+}
+
 async function requireStudentPortalMember(req: Request, institutionId: string) {
   if (!institutionId) {
     throw badRequest('La institucion es obligatoria para guardar cambios del alumno.')
@@ -383,6 +397,7 @@ async function requireStudentPortalMember(req: Request, institutionId: string) {
     throw new HttpError('Acceso denegado: el alumno no pertenece a esta institucion.', 403)
   }
 
+  await assertInstitutionActive(context.adminClient, institutionId)
   return context
 }
 
@@ -410,6 +425,7 @@ async function requireTeacherPortalMember(req: Request, institutionId: string) {
     throw new HttpError('Acceso denegado: el docente no pertenece a esta institucion.', 403)
   }
 
+  await assertInstitutionActive(context.adminClient, institutionId)
   return context
 }
 
@@ -437,6 +453,7 @@ async function requireInstitutionAdmin(req: Request, institutionId: string) {
     throw new HttpError('Acceso denegado: se requieren permisos de administrador institucional.', 403)
   }
 
+  await assertInstitutionActive(context.adminClient, institutionId)
   return context
 }
 
@@ -2612,7 +2629,11 @@ async function writeExamEnrollmentRelational({
   const studentRecordId = getOptionalString(enrollment.student_record_id)
   const status = getOptionalString(enrollment.status) || (mutationType === 'cancel_exam' ? 'cancelled' : 'registered')
   const legacySnapshotId = getOptionalString(enrollment.id)
-  const clientMutationId = getOptionalString(enrollment.client_mutation_id) || legacySnapshotId || null
+  // PB.1: la RPC es idempotente por client_mutation_id. La baja necesita su propio id: si reusa el de
+  // la inscripcion (el id estable de la fila del snapshot), la RPC devuelve la fila sin cancelarla.
+  const clientMutationId = mutationType === 'cancel_exam'
+    ? `${legacySnapshotId || examTableId}:cancel_exam:${now}`
+    : getOptionalString(enrollment.client_mutation_id) || legacySnapshotId || null
 
   const { data, error } = await context.userClient.rpc('upsert_exam_enrollment_from_portal', {
     target_institution_id: institutionId,
@@ -2750,16 +2771,39 @@ async function handleStudentPortalMutation(
       updated_at: now,
     }
 
+    const isSameSubjectEnrollment = (row: Record<string, unknown>) => sameOwner(row, callerId) && row.subject_id === subjectId && row.program_id === programId
     snapshot.enrollments = upsertRecord(
       asRecordArray(snapshot.enrollments),
       nextEnrollment,
-      (row) => sameOwner(row, callerId) && row.subject_id === subjectId && row.program_id === programId,
+      isSameSubjectEnrollment,
     )
-    result = nextEnrollment
+    // PB.3: igual que register_exam, se devuelve la fila guardada (upsertRecord conserva el id previo).
+    result = asRecordArray(snapshot.enrollments).find(isSameSubjectEnrollment) ?? nextEnrollment
   } else if (mutationType === 'withdraw_subject') {
-    const enrollmentId = requireString(payload.enrollment_id, 'La inscripcion')
+    const requestedEnrollmentId = requireString(payload.enrollment_id, 'La inscripcion')
     const rows = asRecordArray(snapshot.enrollments)
+    let enrollmentId = requestedEnrollmentId
+    let relationalEnrollment: Record<string, unknown> | null = null
     let found = false
+
+    // PB.3: la lectura segura del portal lista las cursadas relacionales, con su uuid. Se resuelve a la fila del
+    // snapshot por legacy_snapshot_id, solo si es propia; una cursada cargada solo en la tabla (p. ej. por el admin)
+    // no tiene fila de snapshot y se da de baja directo en la tabla.
+    if (!rows.some((row) => row.id === requestedEnrollmentId && sameOwner(row, callerId)) && isUuid(requestedEnrollmentId)) {
+      const { data, error: relationalLookupError } = await adminClient
+        .from('subject_enrollments')
+        .select('id, legacy_snapshot_id, subject_id, program_id, student_record_id')
+        .eq('id', requestedEnrollmentId)
+        .eq('institution_id', institutionId)
+        .eq('workspace_key', workspaceKey)
+        .eq('student_id', callerId)
+        .is('deleted_at', null)
+        .maybeSingle()
+
+      if (relationalLookupError) throw relationalLookupError
+      relationalEnrollment = isRecord(data) ? data : null
+      enrollmentId = getOptionalString(relationalEnrollment?.legacy_snapshot_id) || requestedEnrollmentId
+    }
 
     snapshot.enrollments = rows.map((row) => {
       if (row.id !== enrollmentId || !sameOwner(row, callerId)) return row
@@ -2772,6 +2816,22 @@ async function handleStudentPortalMutation(
       }
       return result
     })
+
+    if (!found && relationalEnrollment) {
+      found = true
+      result = {
+        id: getOptionalString(relationalEnrollment.legacy_snapshot_id) || requestedEnrollmentId,
+        profile_id: callerId,
+        student_id: callerId,
+        institution_id: institutionId,
+        subject_id: relationalEnrollment.subject_id,
+        program_id: relationalEnrollment.program_id,
+        student_record_id: relationalEnrollment.student_record_id ?? undefined,
+        status: 'dropped',
+        dropped_at: now,
+        updated_at: now,
+      }
+    }
 
     if (!found) {
       throw new HttpError('No se encontro una inscripcion propia para dar de baja.', 404)
@@ -2830,16 +2890,36 @@ async function handleStudentPortalMutation(
       updated_at: now,
     }
 
+    const isSameExamEnrollment = (row: Record<string, unknown>) => sameOwner(row, callerId) && row.exam_session_id === examSessionId
     snapshot.examEnrollments = upsertRecord(
       asRecordArray(snapshot.examEnrollments),
       nextExamEnrollment,
-      (row) => sameOwner(row, callerId) && row.exam_session_id === examSessionId,
+      isSameExamEnrollment,
     )
-    result = nextExamEnrollment
+    // PB.1: upsertRecord conserva el id de una fila previa (reinscripcion). Se devuelve la fila guardada,
+    // asi la UI y legacy_snapshot_id usan el mismo id que despues busca cancel_exam.
+    result = asRecordArray(snapshot.examEnrollments).find(isSameExamEnrollment) ?? nextExamEnrollment
   } else if (mutationType === 'cancel_exam') {
-    const examEnrollmentId = requireString(payload.exam_enrollment_id, 'La inscripcion a mesa')
+    const requestedEnrollmentId = requireString(payload.exam_enrollment_id, 'La inscripcion a mesa')
     const rows = asRecordArray(snapshot.examEnrollments)
+    let examEnrollmentId = requestedEnrollmentId
     let found = false
+
+    // PB.1: la lectura segura del portal lista las inscripciones relacionales, con su uuid.
+    // Ese uuid se resuelve a la fila del snapshot por legacy_snapshot_id, solo si es propia.
+    if (!rows.some((row) => row.id === requestedEnrollmentId && sameOwner(row, callerId)) && isUuid(requestedEnrollmentId)) {
+      const { data: relationalEnrollment, error: relationalLookupError } = await adminClient
+        .from('exam_enrollments')
+        .select('legacy_snapshot_id')
+        .eq('id', requestedEnrollmentId)
+        .eq('institution_id', institutionId)
+        .eq('workspace_key', workspaceKey)
+        .eq('student_id', callerId)
+        .maybeSingle()
+
+      if (relationalLookupError) throw relationalLookupError
+      examEnrollmentId = getOptionalString(relationalEnrollment?.legacy_snapshot_id) || requestedEnrollmentId
+    }
 
     snapshot.examEnrollments = rows.map((row) => {
       if (row.id !== examEnrollmentId || !sameOwner(row, callerId)) return row

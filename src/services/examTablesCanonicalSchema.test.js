@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
@@ -20,6 +20,10 @@ const canonicalTables = [
 
 function readText(filePath) {
   return readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n')
+}
+
+function repoPath(filePath) {
+  return relative(ROOT, filePath).split(sep).join('/')
 }
 
 function allSqlFiles() {
@@ -82,10 +86,10 @@ describe('canonical exam tables schema', () => {
         const source = readText(filePath)
         return canonicalTables.some((tableName) => new RegExp(`create\\s+table\\s+if\\s+not\\s+exists\\s+public\\.${tableName}\\b`, 'i').test(source))
       })
-      .map((filePath) => filePath.replace(ROOT, ''))
+      .map(repoPath)
 
     expect(repairFilesWithCanonicalTables).toEqual([
-      '\\supabase\\docs\\repair_06_exam_teacher_assignments.sql',
+      'supabase/docs/repair_06_exam_teacher_assignments.sql',
     ])
   })
 
@@ -176,9 +180,9 @@ describe('canonical exam tables schema', () => {
     const functionPattern = /create\s+(?:or\s+replace\s+)?function\s+public\.upsert_exam_enrollment_from_portal\s*\(/i
     const filesWithRpc = allSqlFiles()
       .filter((filePath) => functionPattern.test(readText(filePath)))
-      .map((filePath) => filePath.replace(ROOT, ''))
+      .map(repoPath)
 
-    expect(filesWithRpc).toEqual(['\\supabase\\schema\\08_exam_tables.sql'])
+    expect(filesWithRpc).toEqual(['supabase/schema/08_exam_tables.sql'])
   })
 
   it('mantiene compatibilidad contractual con el documento aprobado', () => {

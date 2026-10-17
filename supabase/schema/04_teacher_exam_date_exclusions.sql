@@ -28,7 +28,7 @@ create policy "teacher_exam_date_exclusions members read"
 on public.teacher_exam_date_exclusions
 for select
 to authenticated
-using (public.is_super_admin() or public.is_member_of_institution(institution_id));
+using (public.is_super_admin() or public.is_staff_of_institution(institution_id));
 
 create policy "teacher_exam_date_exclusions editors insert"
 on public.teacher_exam_date_exclusions

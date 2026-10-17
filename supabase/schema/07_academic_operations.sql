@@ -657,6 +657,10 @@ begin
     join public.memberships membership
       on membership.user_id = profile.user_id
      and membership.institution_id = target_institution_id
+    -- 06.3: una institucion suspendida no acepta autogestion del alumno.
+    join public.institutions institution
+      on institution.id = membership.institution_id
+     and institution.status = 'active'
     where profile.user_id = target_student_id
       and profile.account_role = 'alumno'
       and profile.is_blocked = false
@@ -787,6 +791,8 @@ declare
   clean_program_id text := coalesce(p_program_id, '');
   clean_grade_type text := coalesce(nullif(btrim(p_grade_type), ''), 'final');
   clean_attempt_number integer := greatest(coalesce(p_attempt_number, 1), 1);
+  raw_academic_status text := lower(btrim(coalesce(p_academic_status, '')));
+  clean_academic_status text;
   actor_id uuid := (select auth.uid());
   resolved_enrollment_id uuid;
   existing_row public.student_grades%rowtype;
@@ -798,6 +804,23 @@ begin
 
   if p_grade_value is not null and (p_grade_value < 0 or p_grade_value > 10) then
     raise exception 'GRADE_VALUE_OUT_OF_RANGE';
+  end if;
+
+  -- La mesa (upsert_exam_enrollment_from_portal) y las correlativas comparan
+  -- academic_status exacto: aca se guarda solo el conjunto canonico.
+  clean_academic_status := case
+    when raw_academic_status = '' then 'pending'
+    when raw_academic_status in ('pending', 'regular', 'libre', 'promocionado', 'approved', 'failed', 'absent') then raw_academic_status
+    when raw_academic_status = 'pendiente' then 'pending'
+    when raw_academic_status in ('aprobado', 'aprobada') then 'approved'
+    when raw_academic_status in ('desaprobado', 'desaprobada', 'reprobado', 'reprobada') then 'failed'
+    when raw_academic_status in ('promocionada', 'promocion', 'promoción') then 'promocionado'
+    when raw_academic_status = 'ausente' then 'absent'
+    else null
+  end;
+
+  if clean_academic_status is null then
+    raise exception 'ACADEMIC_STATUS_INVALID' using errcode = '22023';
   end if;
 
   if not public.academic_can_manage_subject(p_institution_id, clean_workspace_key, btrim(p_subject_id), clean_program_id) then
@@ -877,7 +900,7 @@ begin
     clean_attempt_number,
     p_grade_value,
     'numeric_0_10',
-    coalesce(nullif(btrim(p_academic_status), ''), 'pending')
+    clean_academic_status
   )
   on conflict (institution_id, workspace_key, student_id, subject_id, program_id, grade_type, attempt_number)
     where deleted_at is null
@@ -1556,6 +1579,7 @@ grant execute on function public.teacher_remove_student_subject_records(uuid, te
 do $$
 declare
   target_table text;
+  own_rows text;
 begin
   foreach target_table in array array[
     'subject_enrollments',
@@ -1565,6 +1589,12 @@ begin
     'student_financial_status'
   ]
   loop
+    -- SEC.3: el personal de la institucion lee todo; un alumno solo lo propio.
+    own_rows := case target_table
+      when 'student_financial_status' then 'public.current_user_owns_student_record(student_record_id)'
+      when 'subject_class_sessions' then 'exists (select 1 from public.subject_enrollments enrollment where enrollment.institution_id = subject_class_sessions.institution_id and enrollment.workspace_key = subject_class_sessions.workspace_key and enrollment.subject_id = subject_class_sessions.subject_id and enrollment.program_id = subject_class_sessions.program_id and enrollment.student_id = (select auth.uid()) and enrollment.deleted_at is null and enrollment.status in (''active'', ''enrolled'')) or exists (select 1 from public.subject_attendance_records attendance where attendance.session_id = subject_class_sessions.id and attendance.student_id = (select auth.uid()))'
+      else 'student_id = (select auth.uid())'
+    end;
     execute format('alter table public.%I enable row level security', target_table);
     execute format('drop policy if exists %I on public.%I', target_table || ' members read', target_table);
     execute format('drop policy if exists %I on public.%I', target_table || ' editors insert', target_table);
@@ -1572,9 +1602,10 @@ begin
     execute format('drop policy if exists %I on public.%I', target_table || ' editors delete', target_table);
 
     execute format(
-      'create policy %I on public.%I for select to authenticated using (public.is_super_admin() or public.is_member_of_institution(institution_id))',
+      'create policy %I on public.%I for select to authenticated using (public.is_super_admin() or public.is_staff_of_institution(institution_id) or (public.is_member_of_institution(institution_id) and (%s)))',
       target_table || ' members read',
-      target_table
+      target_table,
+      own_rows
     );
 
     execute format(

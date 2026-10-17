@@ -1,0 +1,144 @@
+{
+  "run": "b99c03cefb505784",
+  "staging": "NONE",
+  "production": "NONE",
+  "fixture": "supabase/baseline/local_ab_rls_rpc_validation.sql",
+  "scenarios": [
+    {
+      "name": "regular",
+      "server": "registered",
+      "mirrorAllows": true,
+      "mirrorStatus": "regular",
+      "parity": "match"
+    },
+    {
+      "name": "libre",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": false,
+      "mirrorStatus": "libre",
+      "parity": "match"
+    },
+    {
+      "name": "sin notas",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": false,
+      "mirrorStatus": "pending",
+      "parity": "match"
+    },
+    {
+      "name": "regular luego libre",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": false,
+      "mirrorStatus": "libre",
+      "parity": "match"
+    },
+    {
+      "name": "libre luego regular",
+      "server": "registered",
+      "mirrorAllows": true,
+      "mirrorStatus": "regular",
+      "parity": "match"
+    },
+    {
+      "name": "regular luego approved",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": false,
+      "mirrorStatus": "approved",
+      "parity": "match"
+    },
+    {
+      "name": "regular luego pending",
+      "server": "registered",
+      "mirrorAllows": true,
+      "mirrorStatus": "regular",
+      "parity": "match"
+    },
+    {
+      "name": "Regular con mayuscula",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": true,
+      "mirrorStatus": "regular",
+      "parity": "mirror_more_permissive"
+    },
+    {
+      "name": "regular con espacio final",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": true,
+      "mirrorStatus": "regular",
+      "parity": "mirror_more_permissive"
+    },
+    {
+      "name": "regular luego Pendiente",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": true,
+      "mirrorStatus": "regular",
+      "parity": "mirror_more_permissive"
+    },
+    {
+      "name": "regular luego cursando",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": true,
+      "mirrorStatus": "regular",
+      "parity": "mirror_more_permissive"
+    },
+    {
+      "name": "regular luego pending con nota final 8",
+      "server": "registered",
+      "mirrorAllows": false,
+      "mirrorStatus": "approved",
+      "parity": "mirror_stricter"
+    },
+    {
+      "name": "regular parcial",
+      "server": "registered",
+      "mirrorAllows": true,
+      "mirrorStatus": "regular",
+      "parity": "match"
+    },
+    {
+      "name": "regular en otra carrera",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": false,
+      "mirrorStatus": "pending",
+      "parity": "match"
+    },
+    {
+      "name": "regular con codigo en minuscula",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": false,
+      "mirrorStatus": "pending",
+      "parity": "match"
+    },
+    {
+      "name": "libre vivo y regular borrado mas nuevo",
+      "server": "EXAM_REGULARITY_REQUIRED",
+      "mirrorAllows": false,
+      "mirrorStatus": "libre",
+      "parity": "match"
+    },
+    {
+      "name": "empate updated_at, regular creado despues",
+      "server": "registered",
+      "mirrorAllows": false,
+      "mirrorStatus": "libre",
+      "parity": "mirror_stricter"
+    }
+  ],
+  "matches": 11,
+  "mirrorMorePermissive": [
+    "Regular con mayuscula",
+    "regular con espacio final",
+    "regular luego Pendiente",
+    "regular luego cursando"
+  ],
+  "mirrorStricter": [
+    "regular luego pending con nota final 8",
+    "empate updated_at, regular creado despues"
+  ],
+  "result": "FAIL",
+  "error": "Failed at parity: AssertionError",
+  "cleanup": {
+    "databases": 0,
+    "errors": []
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "task": "QA.1",
+  "staging": "NONE",
+  "production": "NONE",
+  "remoteSql": "NONE",
+  "deploy": "NONE",
+  "checks": [],
+  "httpFailures": [
+    {
+      "phase": "student exam dual_write: cancel through UI",
+      "service": "functions",
+      "status": 404,
+      "endpoint": "admin-users"
+    }
+  ],
+  "pageErrors": [],
+  "externalRequests": 0,
+  "images": {
+    "nginx:1.27-alpine": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+    "supabase/edge-runtime:v1.77.4": "supabase/edge-runtime@sha256:ad45164b7548bf5820ed7be714789c17ac2865edce79a09cfb4c3756c3d365a8"
+  },
+  "run": "f05f9bbcb6a3af15",
+  "lastFixtureAuthStatus": 200,
+  "fixtureAccounts": {
+    "sharedFixtureUsers": 10,
+    "browserAccounts": 4
+  },
+  "examModes": [],
+  "result": "FAIL",
+  "failedAt": "student exam dual_write: cancel through UI",
+  "errorType": "AssertionError",
+  "errorMessage": "Exam cancel failed |  | 404 !== 200 | ",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

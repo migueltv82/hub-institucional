@@ -16,7 +16,7 @@ beforeAll(async () => {
 })
 
 function fixture(options = {}) {
-  const tables = { profiles: [], memberships: [], student_records: [], admin_audit_logs: [] }
+  const tables = { institutions: [{ id: A, status: 'active' }, { id: B, status: 'active' }], profiles: [], memberships: [], student_records: [], admin_audit_logs: [] }
   const users = []
   const writes = []
   const authWrites = []
@@ -116,6 +116,15 @@ afterEach(() => {
 })
 
 describe('admin-users: identidad alumno y credenciales aisladas', () => {
+  it('institucion suspendida corta al admin institucional sin escribir (06.3)', async () => {
+    const f = fixture()
+    f.tables.institutions.find((row) => row.id === A).status = 'suspended'
+    const response = await f.bulk('nuevo@example.invalid')
+    expect(response.status).toBe(403)
+    expect(response.body.error).toMatch(/suspendida/)
+    expect(f.authWrites).toEqual([])
+    expect(f.writes).toEqual([])
+  })
   it.each(['foreign@example.invalid', ' FOREIGN@EXAMPLE.INVALID ', '\tForeign@example.invalid\n'])('deniega email ajeno %s sin modificar password, metadata o links', async (email) => {
     const f = fixture()
     const before = JSON.stringify({ users: f.users, tables: f.tables })

@@ -290,9 +290,12 @@ as $$
     select 1
     from public.memberships membership
     join public.profiles profile on profile.user_id = membership.user_id
+    -- 06.3: suspender la institucion corta RLS y RPCs de sus miembros; is_super_admin no depende de esto.
+    join public.institutions institution on institution.id = membership.institution_id
     where membership.institution_id = target_institution_id
       and membership.user_id = (select auth.uid())
       and profile.is_blocked = false
+      and institution.status = 'active'
       and (
         allowed_roles is null
         or membership.role = any(allowed_roles)
@@ -304,6 +307,30 @@ revoke execute on function public.is_super_admin() from public, anon;
 revoke execute on function public.is_member_of_institution(uuid, text[]) from public, anon;
 grant execute on function public.is_super_admin() to authenticated;
 grant execute on function public.is_member_of_institution(uuid, text[]) to authenticated;
+
+-- SEC.3: personal de la institucion = panel admin (owner/admin/editor) o docente. Los alumnos (membership viewer
+-- con account_role alumno) solo leen sus propias filas de las tablas con datos personales.
+create or replace function public.is_staff_of_institution(target_institution_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
+    or (
+      public.is_member_of_institution(target_institution_id)
+      and exists (
+        select 1
+        from public.profiles profile
+        where profile.user_id = (select auth.uid())
+          and profile.account_role in ('docente', 'teacher', 'profesor')
+      )
+    );
+$$;
+
+revoke execute on function public.is_staff_of_institution(uuid) from public, anon;
+grant execute on function public.is_staff_of_institution(uuid) to authenticated;
 
 -- ============================================================
 -- Login publico: institucion activa + estado de mantenimiento
@@ -981,7 +1008,8 @@ using (
   public.is_super_admin()
   or (
     institution_id is not null
-    and public.is_member_of_institution(institution_id)
+    -- SEC.3: guarda datos personales de bajas; solo el personal de la institucion.
+    and public.is_staff_of_institution(institution_id)
   )
 );
 

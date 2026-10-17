@@ -130,9 +130,12 @@ as $$
     select 1
     from public.memberships membership
     join public.profiles profile on profile.user_id = membership.user_id
+    -- 06.3: suspender la institucion corta RLS y RPCs de sus miembros; is_super_admin no depende de esto.
+    join public.institutions institution on institution.id = membership.institution_id
     where membership.institution_id = target_institution_id
       and membership.user_id = (select auth.uid())
       and profile.is_blocked = false
+      and institution.status = 'active'
       and (
         allowed_roles is null
         or membership.role = any(allowed_roles)

@@ -1,0 +1,11 @@
+{
+  "driftCount": 1,
+  "filesToApply": [
+    {
+      "file": "07_academic_operations.sql",
+      "reasons": [
+        "function academic_teacher_upsert_student_grade(uuid,text,uuid,uuid,uuid,text,text,text,integer,numeric,text,integer) (different)"
+      ]
+    }
+  ]
+}

@@ -13,9 +13,6 @@ vi.mock('../../../auth/AuthContext.jsx', () => ({
   }),
 }))
 
-vi.mock('../../../hooks/useSyncData.js', () => ({
-  useSyncData: () => ({ isSubscribed: false }),
-}))
 
 function renderPage(props = {}) {
   const queryClient = new QueryClient({

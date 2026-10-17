@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useAuth } from '../../../auth/AuthContext.jsx'
-import { useSyncData } from '../../../hooks/useSyncData.js'
-import { STUDENT_WORKSPACE_KEY } from '../services/studentPortalData.js'
 import { useStudentStore } from '../stores/studentStore'
+
+const EXAM_REFRESH_INTERVAL_MS = 60_000
 import { getExamEnrollmentEligibility } from '../lib/examEligibility.js'
 
 function normalizeStatus(status) {
@@ -162,18 +162,17 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
 
   const [activeTab, setActiveTab] = useState('proximas')
 
-  const { isSubscribed: isRealtimeConnected } = useSyncData({
-    table: 'workspace_snapshots',
-    filter: currentInstitution?.id ? `institution_id=eq.${currentInstitution.id}` : undefined,
-    enabled: Boolean(isRemoteSession && currentInstitution?.id),
-    onChange: (payload) => {
-      const workspaceKey = payload.new?.workspace_key ?? payload.old?.workspace_key
-
-      if (workspaceKey !== STUDENT_WORKSPACE_KEY) return
-
-      void queryClient.invalidateQueries({ queryKey: portalQueryKey })
-    },
-  })
+  // SEC.3: el alumno no lee workspace_snapshots (RLS), asi que Realtime no le entrega eventos de esa tabla.
+  // Las mesas se refrescan releyendo el portal (RPC segura) cada minuto mientras la pestana esta visible.
+  useEffect(() => {
+    if (!isRemoteSession || !currentInstitution?.id) return undefined
+    const intervalId = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void queryClient.invalidateQueries({ queryKey: portalQueryKey })
+      }
+    }, EXAM_REFRESH_INTERVAL_MS)
+    return () => clearInterval(intervalId)
+  }, [currentInstitution?.id, isRemoteSession, portalQueryKey, queryClient])
 
   const handleRegister = async exam => {
     const examId = getExamId(exam)
@@ -255,7 +254,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
           </p>
           {isRemoteSession && (
             <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--student-lavender-ink)]">
-              {isRealtimeConnected ? 'Sincronizacion en vivo activa' : 'Conectando sincronizacion en vivo'}
+              Actualizacion automatica cada minuto
             </p>
           )}
         </div>

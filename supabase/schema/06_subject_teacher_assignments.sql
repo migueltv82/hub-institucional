@@ -303,9 +303,10 @@ as $$
       target_account_role is null
       or profile.account_role = target_account_role
     )
+    -- SEC.2: solo el panel admin resuelve perfiles por email; un alumno o docente (viewer) no enumera miembros.
     and (
       public.is_super_admin()
-      or public.is_member_of_institution(target_institution_id)
+      or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
     )
   order by
     case

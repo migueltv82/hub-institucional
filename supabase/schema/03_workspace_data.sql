@@ -45,7 +45,8 @@ create policy "workspace_snapshots members read"
 on public.workspace_snapshots
 for select
 to authenticated
-using (public.is_super_admin() or public.is_member_of_institution(institution_id));
+-- SEC.3: el payload tiene las planillas completas; los alumnos usan get_student_portal_workspace_snapshot.
+using (public.is_super_admin() or public.is_staff_of_institution(institution_id));
 
 create policy "workspace_snapshots editors insert"
 on public.workspace_snapshots
@@ -64,7 +65,8 @@ create policy "exam_engine_v21_states members read"
 on public.exam_engine_v21_states
 for select
 to authenticated
-using (public.is_super_admin() or public.is_member_of_institution(institution_id));
+-- SEC.3: el payload tiene las planillas completas; los alumnos usan get_student_portal_workspace_snapshot.
+using (public.is_super_admin() or public.is_staff_of_institution(institution_id));
 
 create policy "exam_engine_v21_states editors insert"
 on public.exam_engine_v21_states

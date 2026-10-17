@@ -1,0 +1,205 @@
+{
+  "run": "d2d166d6b6bffd93",
+  "result": "FAIL",
+  "failed": [
+    "Regular con mayuscula",
+    "APROBADO",
+    "ausente",
+    "Pendiente",
+    "desaprobada",
+    "promoción con tilde",
+    "cursando rechazado",
+    "xyz rechazado",
+    "rechazo no pisa la fila",
+    "libre bloquea la mesa"
+  ],
+  "cleanup": {
+    "databases": 0,
+    "errors": []
+  },
+  "scenarios": [
+    {
+      "name": "canonico regular",
+      "steps": [
+        "saved"
+      ],
+      "enroll": "registered",
+      "rows": [
+        {
+          "status": "regular",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "Regular con mayuscula",
+      "steps": [
+        "saved"
+      ],
+      "enroll": "EXAM_REGULARITY_REQUIRED",
+      "rows": [
+        {
+          "status": "Regular",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "regular con espacios",
+      "steps": [
+        "saved"
+      ],
+      "enroll": "registered",
+      "rows": [
+        {
+          "status": "regular",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "APROBADO",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "APROBADO",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "ausente",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "ausente",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "Pendiente",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "Pendiente",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "desaprobada",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "desaprobada",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "promoción con tilde",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "Promoción",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "null",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "pending",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "vacio",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "pending",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "cursando rechazado",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "cursando",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "xyz rechazado",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "xyz",
+          "lock": 1
+        }
+      ]
+    },
+    {
+      "name": "rechazo no pisa la fila",
+      "steps": [
+        "saved",
+        "saved"
+      ],
+      "enroll": "EXAM_REGULARITY_REQUIRED",
+      "rows": [
+        {
+          "status": "cursando",
+          "lock": 2
+        }
+      ]
+    },
+    {
+      "name": "libre bloquea la mesa",
+      "steps": [
+        "saved"
+      ],
+      "enroll": "EXAM_REGULARITY_REQUIRED",
+      "rows": [
+        {
+          "status": "Libre",
+          "lock": 1
+        }
+      ]
+    }
+  ]
+}

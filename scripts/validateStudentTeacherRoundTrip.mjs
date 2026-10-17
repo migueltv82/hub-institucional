@@ -21,8 +21,6 @@ const FORBIDDEN_SERVICE_ROLE_ENV_KEYS = [
 
 const CANONICAL_SUBJECT_ID = 'ING08'
 const CANONICAL_PROGRAM_ID = 'PROFESORADO DE INGLES'
-const LEGACY_SUBJECT_ID = 'profesorado-de-ingles:ing08'
-const LEGACY_PROGRAM_ID = 'profesorado-de-ingles'
 
 function clean(value) {
   return String(value ?? '').trim()
@@ -121,260 +119,6 @@ function normalizeText(value) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-}
-
-function slugify(value) {
-  return normalizeText(value)
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'general'
-}
-
-function sameIdentity(left, right) {
-  const leftValue = clean(left)
-  const rightValue = clean(right)
-
-  return Boolean(
-    leftValue &&
-    rightValue &&
-    (
-      leftValue === rightValue ||
-      normalizeText(leftValue) === normalizeText(rightValue) ||
-      slugify(leftValue) === slugify(rightValue)
-    ),
-  )
-}
-
-function getFirst(row, keys) {
-  if (!row || typeof row !== 'object') return ''
-
-  for (const key of keys) {
-    const value = row[key]
-    if (value !== undefined && value !== null && clean(value) !== '') return value
-  }
-
-  return ''
-}
-
-function subjectIdFor(programId, subjectId) {
-  return `${slugify(programId)}:${slugify(subjectId)}`
-}
-
-function getCareer(row) {
-  return clean(getFirst(row, ['carrera', 'programa', 'program', 'program_name', 'career']))
-}
-
-function getSubjectCode(row) {
-  return clean(getFirst(row, ['materia', 'code', 'codigo', 'subject_code', 'subject_id']))
-}
-
-function getSubjectName(row) {
-  return clean(getFirst(row, ['nombre', 'nombremateria', 'name', 'subject_name'])) || getSubjectCode(row)
-}
-
-function getSubjectCanonicalId(subject) {
-  return clean(
-    subject?.canonical_subject_id ||
-    subject?.relational_subject_id ||
-    subject?.subject_id ||
-    subject?.code ||
-    subject?.codigo ||
-    subject?.materia,
-  )
-}
-
-function getSubjectPortalId(subject) {
-  return clean(subject?.portal_subject_id || subject?.id)
-}
-
-function getSubjectProgramId(subject) {
-  return clean(
-    subject?.canonical_program_id ||
-    subject?.program_id ||
-    subject?.carrera ||
-    subject?.career,
-  )
-}
-
-function getPlanCareers(plans) {
-  const byKey = new Map()
-
-  asArray(plans).forEach((row) => {
-    const career = getCareer(row)
-    const key = normalizeText(career)
-    if (!career || !key || byKey.has(key)) return
-    byKey.set(key, career)
-  })
-
-  return Array.from(byKey.values())
-}
-
-function resolveCareerAgainstPlan(rawCareer, planCareers = []) {
-  const cleanedCareer = clean(rawCareer)
-  if (!cleanedCareer) return ''
-
-  const normalizedCareer = normalizeText(cleanedCareer)
-  const careerSlug = slugify(cleanedCareer)
-  if (!normalizedCareer) return cleanedCareer
-
-  const exactMatch = planCareers.find((career) => (
-    normalizeText(career) === normalizedCareer ||
-    slugify(career) === careerSlug
-  ))
-  if (exactMatch) return exactMatch
-
-  const partialMatches = planCareers.filter((career) => {
-    const normalizedPlanCareer = normalizeText(career)
-    const planCareerSlug = slugify(career)
-    return (
-      normalizedPlanCareer.includes(normalizedCareer) ||
-      normalizedCareer.includes(normalizedPlanCareer) ||
-      planCareerSlug.includes(careerSlug) ||
-      careerSlug.includes(planCareerSlug)
-    )
-  })
-
-  if (partialMatches.length === 1) return partialMatches[0]
-  return cleanedCareer
-}
-
-function buildSubjects(plans, selectedCareer, planCareers = []) {
-  return asArray(plans)
-    .filter((row) => {
-      if (!selectedCareer) return true
-      const resolvedCareer = resolveCareerAgainstPlan(getCareer(row), planCareers) || getCareer(row)
-      return sameIdentity(resolvedCareer, selectedCareer)
-    })
-    .map((row) => {
-      const programId = resolveCareerAgainstPlan(getCareer(row), planCareers) || selectedCareer || 'Carrera general'
-      const subjectCode = getSubjectCode(row)
-      const subjectName = getSubjectName(row)
-      const canonicalSubjectId = subjectCode || subjectName
-
-      return {
-        id: subjectIdFor(programId, canonicalSubjectId),
-        portal_subject_id: subjectIdFor(programId, canonicalSubjectId),
-        subject_id: canonicalSubjectId,
-        canonical_subject_id: canonicalSubjectId,
-        program_id: programId,
-        canonical_program_id: programId,
-        carrera: programId,
-        code: canonicalSubjectId,
-        name: subjectName || canonicalSubjectId || 'Materia sin nombre',
-      }
-    })
-}
-
-function findSubject(subjects, programId, subjectId) {
-  const wantedSubjectId = clean(subjectId)
-  if (!wantedSubjectId) return null
-
-  return asArray(subjects).find((subject) => {
-    const sameProgram = !programId || sameIdentity(getSubjectProgramId(subject), programId) || sameIdentity(subject.carrera, programId)
-    const sameSubject = [
-      getSubjectPortalId(subject),
-      getSubjectCanonicalId(subject),
-      subject.code,
-      subject.name,
-    ].some((value) => sameIdentity(value, wantedSubjectId))
-
-    return sameProgram && sameSubject
-  }) ?? null
-}
-
-function getRowSubjectId(row) {
-  return clean(
-    row?.subject_id ||
-    row?.canonical_subject_id ||
-    row?.relational_subject_id ||
-    row?.subject?.canonical_subject_id ||
-    row?.subject?.subject_id ||
-    row?.subject?.code ||
-    row?.subject?.id,
-  )
-}
-
-function getRowProgramId(row) {
-  return clean(
-    row?.program_id ||
-    row?.canonical_program_id ||
-    row?.subject?.canonical_program_id ||
-    row?.subject?.program_id ||
-    row?.subject?.carrera ||
-    row?.carrera,
-  )
-}
-
-function matchesStudent(row, user) {
-  if (!row || typeof row !== 'object') return false
-
-  const email = getFirst(row, ['email', 'correo', 'mail'])
-  const userId = getFirst(row, ['user_id', 'profile_id', 'student_id', 'id'])
-
-  return (
-    (email && normalizeText(email) === normalizeText(user?.email)) ||
-    (userId && clean(userId) === clean(user?.id))
-  )
-}
-
-function resolveEnrollmentSubject(row, subjects, selectedCareer, planCareers = []) {
-  const subjectId = getRowSubjectId(row)
-  if (subjectId) {
-    const rowProgram = resolveCareerAgainstPlan(getRowProgramId(row), planCareers) || selectedCareer
-    const subject = findSubject(subjects, rowProgram, subjectId)
-    if (subject) return subject
-  }
-
-  const rowProgram = resolveCareerAgainstPlan(getCareer(row), planCareers) || selectedCareer
-  return findSubject(subjects, rowProgram, getSubjectCode(row)) ||
-    findSubject(subjects, rowProgram, getSubjectName(row)) ||
-    row?.subject ||
-    null
-}
-
-function normalizeLegacyEnrollmentFromSecureSnapshot({ snapshot, user, enrollmentId }) {
-  const planCareers = getPlanCareers(snapshot?.planesEstudio)
-  const selectedCareer = resolveCareerAgainstPlan(CANONICAL_PROGRAM_ID, planCareers) || CANONICAL_PROGRAM_ID
-  const subjects = buildSubjects(snapshot?.planesEstudio, selectedCareer, planCareers)
-  const row = asArray(snapshot?.enrollments).find((candidate) => clean(candidate?.id) === clean(enrollmentId))
-
-  if (!row) {
-    const error = new Error('La RPC segura no devolvio la fila legacy esperada para el alumno.')
-    error.details = {
-      enrollmentId,
-      secureEnrollmentCount: asArray(snapshot?.enrollments).length,
-    }
-    throw error
-  }
-
-  if (!matchesStudent(row, user)) {
-    const error = new Error('La fila legacy devuelta por la RPC segura no corresponde al alumno de prueba.')
-    error.details = {
-      enrollmentId,
-      userId: user?.id,
-      userEmail: user?.email,
-    }
-    throw error
-  }
-
-  const rawSubjectId = getRowSubjectId(row)
-  const rawProgramId = getRowProgramId(row)
-  const subject = resolveEnrollmentSubject(row, subjects, selectedCareer, planCareers)
-  const canonicalProgramFromRow = resolveCareerAgainstPlan(rawProgramId, planCareers)
-  const normalizedSubjectId = getSubjectCanonicalId(subject) || rawSubjectId
-  const normalizedProgramId = getSubjectProgramId(subject) || canonicalProgramFromRow || rawProgramId || selectedCareer
-  const portalSubjectId = getSubjectPortalId(subject) || (rawSubjectId.includes(':') ? rawSubjectId : '')
-
-  return {
-    raw: {
-      subjectId: rawSubjectId,
-      programId: rawProgramId,
-    },
-    normalized: {
-      subjectId: normalizedSubjectId,
-      programId: normalizedProgramId,
-      portalSubjectId,
-    },
-  }
 }
 
 function makeSupabaseClient(supabaseUrl, supabaseKey) {
@@ -765,54 +509,47 @@ function assertRosterContains({ roster, studentUserId, studentRecord, label }) {
   return row
 }
 
-async function createClassSessionLikeTeacherService({ supabase, institutionId, workspaceKey, teacherUserId, sessionDate, cleanup }) {
-  const result = await supabase
-    .from('subject_class_sessions')
-    .insert({
-      institution_id: institutionId,
-      workspace_key: workspaceKey,
-      subject_id: CANONICAL_SUBJECT_ID,
-      program_id: CANONICAL_PROGRAM_ID,
-      teacher_id: teacherUserId,
-      session_date: sessionDate,
-      topic: 'Validacion ida y vuelta alumno-docente',
-    })
-    .select('id, session_date')
-    .single()
-
-  assertNoError(result, 'No se pudo crear subject_class_sessions como subjectAttendance.js')
-  cleanup.sessionIds.push(result.data.id)
-  cleanup.auditEntityIds.push(result.data.id)
-  return result.data
+function firstRpcRow(data) {
+  return Array.isArray(data) ? data[0] : data
 }
 
-async function saveAttendanceLikeTeacherService({
-  supabase,
-  institutionId,
-  workspaceKey,
-  sessionId,
-  studentUserId,
-  subjectEnrollmentId,
-  cleanup,
-}) {
-  const result = await supabase
-    .from('subject_attendance_records')
-    .upsert([{
-      session_id: sessionId,
-      institution_id: institutionId,
-      workspace_key: workspaceKey,
+// Mismas RPC y parametros que src/services/subjectAttendance.js y src/services/studentGrades.js:
+// el libro docente ya no escribe tablas directo (RLS lo deniega), solo via funciones seguras.
+async function createClassSessionLikeTeacherService({ supabase, institutionId, workspaceKey, sessionDate, cleanup }) {
+  const result = await supabase.rpc('academic_teacher_create_class_session', {
+    p_institution_id: institutionId,
+    p_workspace_key: workspaceKey,
+    p_subject_id: CANONICAL_SUBJECT_ID,
+    p_program_id: CANONICAL_PROGRAM_ID,
+    p_session_date: sessionDate,
+    p_topic: 'Validacion ida y vuelta alumno-docente',
+  })
+
+  assertNoError(result, 'No se pudo crear la clase con academic_teacher_create_class_session')
+  const session = firstRpcRow(result.data)
+  if (!session?.id) throw new Error('academic_teacher_create_class_session no devolvio id de clase.')
+  cleanup.sessionIds.push(session.id)
+  cleanup.auditEntityIds.push(session.id)
+  return session
+}
+
+async function saveAttendanceLikeTeacherService({ supabase, sessionId, studentUserId, subjectEnrollmentId, cleanup }) {
+  const result = await supabase.rpc('academic_teacher_upsert_attendance_records', {
+    p_session_id: sessionId,
+    p_records: [{
       student_id: studentUserId,
       subject_enrollment_id: subjectEnrollmentId,
       status: 'present',
       observations: 'Validacion ida y vuelta alumno-docente',
-    }], { onConflict: 'session_id,student_id' })
-    .select('id, status')
-    .single()
+    }],
+  })
 
-  assertNoError(result, 'No se pudo guardar subject_attendance_records como subjectAttendance.js')
-  cleanup.attendanceRecordIds.push(result.data.id)
-  cleanup.auditEntityIds.push(result.data.id)
-  return result.data
+  assertNoError(result, 'No se pudo guardar la asistencia con academic_teacher_upsert_attendance_records')
+  const record = asArray(result.data).find((row) => row?.student_id === studentUserId)
+  if (!record?.id) throw new Error('academic_teacher_upsert_attendance_records no devolvio el registro del alumno.')
+  cleanup.attendanceRecordIds.push(record.id)
+  cleanup.auditEntityIds.push(record.id)
+  return record
 }
 
 async function upsertStudentGradeLikeTeacherService({
@@ -822,76 +559,29 @@ async function upsertStudentGradeLikeTeacherService({
   studentUserId,
   studentRecordId,
   subjectEnrollmentId,
-  teacherUserId,
   cleanup,
 }) {
-  const existingResult = await supabase
-    .from('student_grades')
-    .select('id, lock_version')
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-    .eq('student_id', studentUserId)
-    .eq('subject_id', CANONICAL_SUBJECT_ID)
-    .eq('program_id', CANONICAL_PROGRAM_ID)
-    .eq('grade_type', 'final')
-    .eq('attempt_number', 1)
-    .is('deleted_at', null)
-    .limit(1)
+  const result = await supabase.rpc('academic_teacher_upsert_student_grade', {
+    p_institution_id: institutionId,
+    p_workspace_key: workspaceKey,
+    p_student_id: studentUserId,
+    p_student_record_id: studentRecordId ?? null,
+    p_subject_enrollment_id: subjectEnrollmentId,
+    p_subject_id: CANONICAL_SUBJECT_ID,
+    p_program_id: CANONICAL_PROGRAM_ID,
+    p_grade_type: 'final',
+    p_attempt_number: 1,
+    p_grade_value: 8,
+    p_academic_status: 'regular',
+    p_expected_lock_version: null,
+  })
 
-  assertNoError(existingResult, 'No se pudo leer student_grades antes de upsert')
-
-  const existing = asArray(existingResult.data)[0]
-  if (!existing) {
-    const insertResult = await supabase
-      .from('student_grades')
-      .insert({
-        institution_id: institutionId,
-        workspace_key: workspaceKey,
-        student_id: studentUserId,
-        student_record_id: studentRecordId,
-        subject_enrollment_id: subjectEnrollmentId,
-        subject_id: CANONICAL_SUBJECT_ID,
-        program_id: CANONICAL_PROGRAM_ID,
-        teacher_id: teacherUserId,
-        grade_type: 'final',
-        attempt_number: 1,
-        grade_value: 8,
-        grade_scale: 'numeric_0_10',
-        academic_status: 'regular',
-        observations: 'Validacion ida y vuelta alumno-docente',
-        client_mutation_id: `${TEST_SOURCE}:${subjectEnrollmentId}:grade`,
-        metadata: {
-          source: TEST_SOURCE,
-          subject_enrollment_id: subjectEnrollmentId,
-        },
-      })
-      .select('id, grade_value, academic_status')
-      .single()
-
-    assertNoError(insertResult, 'No se pudo insertar student_grades como studentGrades.js')
-    cleanup.gradeIds.push(insertResult.data.id)
-    cleanup.auditEntityIds.push(insertResult.data.id)
-    return insertResult.data
-  }
-
-  const updateResult = await supabase
-    .from('student_grades')
-    .update({
-      grade_value: 8,
-      teacher_id: teacherUserId,
-      student_record_id: studentRecordId,
-      subject_enrollment_id: subjectEnrollmentId,
-      academic_status: 'regular',
-    })
-    .eq('id', existing.id)
-    .eq('lock_version', existing.lock_version)
-    .select('id, grade_value, academic_status')
-    .single()
-
-  assertNoError(updateResult, 'No se pudo actualizar student_grades como studentGrades.js')
-  cleanup.gradeIds.push(updateResult.data.id)
-  cleanup.auditEntityIds.push(updateResult.data.id)
-  return updateResult.data
+  assertNoError(result, 'No se pudo guardar la nota con academic_teacher_upsert_student_grade')
+  const grade = firstRpcRow(result.data)
+  if (!grade?.id) throw new Error('academic_teacher_upsert_student_grade no devolvio id de nota.')
+  cleanup.gradeIds.push(grade.id)
+  cleanup.auditEntityIds.push(grade.id)
+  return grade
 }
 
 async function fetchStudentPortalSecureSnapshotLikeModel({ supabase, institutionId, workspaceKey }) {
@@ -995,68 +685,6 @@ function assertStudentSideRead({ secureSnapshot, relationalRead, studentRecord, 
   }
 }
 
-function buildSnapshotTestRows({ runId, legacyStudent, legacyRecord }) {
-  const planRow = {
-    id: `${TEST_SOURCE}:${runId}:plan`,
-    test_run_id: runId,
-    source: TEST_SOURCE,
-    carrera: CANONICAL_PROGRAM_ID,
-    program_id: CANONICAL_PROGRAM_ID,
-    materia: CANONICAL_SUBJECT_ID,
-    codigo: CANONICAL_SUBJECT_ID,
-    nombre: 'Idioma Ingles VIII',
-    anio: 4,
-  }
-  const legacyEnrollmentId = `${TEST_SOURCE}:${runId}:legacy-enrollment`
-  const legacyEnrollmentRow = {
-    id: legacyEnrollmentId,
-    test_run_id: runId,
-    source: TEST_SOURCE,
-    email: legacyStudent.email,
-    student_id: legacyStudent.userId,
-    profile_id: legacyStudent.userId,
-    student_record_id: legacyRecord.id,
-    subject_id: LEGACY_SUBJECT_ID,
-    program_id: LEGACY_PROGRAM_ID,
-    carrera: LEGACY_PROGRAM_ID,
-    status: 'cursando',
-  }
-  const legacyStudentRow = {
-    id: legacyRecord.id,
-    test_run_id: runId,
-    source: TEST_SOURCE,
-    user_id: legacyStudent.userId,
-    profile_id: legacyStudent.userId,
-    email: legacyStudent.email,
-    full_name: legacyStudent.fullName,
-    dni: legacyStudent.dni,
-    carrera: CANONICAL_PROGRAM_ID,
-  }
-
-  return {
-    legacyEnrollmentId,
-    rows: {
-      planesEstudio: [planRow],
-      enrollments: [legacyEnrollmentRow],
-      alumnos: [legacyStudentRow],
-      students: [legacyStudentRow],
-    },
-  }
-}
-
-function appendSnapshotRows(payload, rowsByKey) {
-  const nextPayload = {
-    ...(payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}),
-  }
-
-  Object.entries(rowsByKey).forEach(([key, rows]) => {
-    const existingRows = asArray(nextPayload[key]).filter((row) => clean(row?.test_run_id) !== clean(rows[0]?.test_run_id))
-    nextPayload[key] = existingRows.concat(rows)
-  })
-
-  return nextPayload
-}
-
 function removeSnapshotRowsForRun(payload, runId) {
   const nextPayload = {
     ...(payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}),
@@ -1069,42 +697,6 @@ function removeSnapshotRowsForRun(payload, runId) {
   })
 
   return nextPayload
-}
-
-async function appendLegacyRowsToWorkspaceSnapshot({ supabase, institutionId, workspaceKey, ownerUserId, ownerEmail, runId, legacyStudent, legacyRecord, cleanup }) {
-  const existingResult = await supabase
-    .from('workspace_snapshots')
-    .select('institution_id, workspace_key, owner_user_id, owner_email, payload')
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-    .maybeSingle()
-
-  assertNoError(existingResult, 'No se pudo leer workspace_snapshots para preparar caso legacy')
-
-  const { legacyEnrollmentId, rows } = buildSnapshotTestRows({
-    runId,
-    legacyStudent,
-    legacyRecord,
-  })
-  const nextPayload = appendSnapshotRows(existingResult.data?.payload ?? {}, rows)
-
-  const upsertResult = await supabase
-    .from('workspace_snapshots')
-    .upsert({
-      institution_id: institutionId,
-      workspace_key: workspaceKey,
-      owner_user_id: existingResult.data?.owner_user_id ?? ownerUserId,
-      owner_email: existingResult.data?.owner_email ?? ownerEmail,
-      payload: nextPayload,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'institution_id,workspace_key' })
-    .select('institution_id')
-    .single()
-
-  assertNoError(upsertResult, 'No se pudo actualizar workspace_snapshots para caso legacy')
-  cleanup.snapshotRunId = runId
-
-  return { legacyEnrollmentId }
 }
 
 async function cleanupSnapshotRows({ supabase, institutionId, workspaceKey, runId }) {
@@ -1172,7 +764,14 @@ async function cleanupTestData({ supabase, institutionId, workspaceKey, cleanup 
   await safe('subject_teacher_assignments', () => deleteByIds({ supabase, table: 'subject_teacher_assignments', ids: cleanup.assignmentIds }))
   await safe('student_records', () => deleteByIds({ supabase, table: 'student_records', ids: cleanup.studentRecordIds }))
   await safe('teacher_records', () => deleteByIds({ supabase, table: 'teacher_records', ids: cleanup.teacherRecordIds }))
-  await safe('academic_audit_logs', () => deleteByIds({ supabase, table: 'academic_audit_logs', column: 'entity_id', ids: cleanup.auditEntityIds }))
+  // academic_audit_logs existe en el schema legacy de examenes pero no en supabase/schema: solo se tolera su ausencia.
+  await safe('academic_audit_logs', async () => {
+    try {
+      await deleteByIds({ supabase, table: 'academic_audit_logs', column: 'entity_id', ids: cleanup.auditEntityIds })
+    } catch (error) {
+      if (!['PGRST205', '42P01'].includes(error?.details?.code ?? error?.code)) throw error
+    }
+  })
 
   const userIds = Array.from(new Set(cleanup.authUserIds.map(clean).filter(Boolean)))
   await safe('memberships', async () => {
@@ -1418,8 +1017,9 @@ async function main() {
     })
 
     const canonicalEnrollment = await logger.run('Inscribir alumno con IDs canonicos desde RPC del portal', async () => {
+      // La RPC exige auth.uid() = alumno (fix P1 identity binding): se llama con la sesion del alumno.
       const enrollment = await upsertSubjectEnrollmentFromPortal({
-        supabase: serviceSupabase,
+        supabase: context.canonicalStudentClient,
         institutionId,
         workspaceKey,
         studentUserId: context.canonicalStudent.userId,
@@ -1520,94 +1120,6 @@ async function main() {
       }
     })
 
-    await logger.run('Normalizar fila legacy slug y verificarla en roster docente', async () => {
-      const { legacyEnrollmentId } = await appendLegacyRowsToWorkspaceSnapshot({
-        supabase: serviceSupabase,
-        institutionId,
-        workspaceKey,
-        ownerUserId: context.teacher.userId,
-        ownerEmail: context.teacher.email,
-        runId,
-        legacyStudent: context.legacyStudent,
-        legacyRecord: context.legacyStudentRecord,
-        cleanup,
-      })
-      const secureSnapshot = await fetchStudentPortalSecureSnapshotLikeModel({
-        supabase: context.legacyStudentClient,
-        institutionId,
-        workspaceKey,
-      })
-      const normalized = normalizeLegacyEnrollmentFromSecureSnapshot({
-        snapshot: secureSnapshot.payload,
-        user: {
-          id: context.legacyStudent.userId,
-          email: context.legacyStudent.email,
-        },
-        enrollmentId: legacyEnrollmentId,
-      })
-
-      if (normalized.raw.subjectId !== LEGACY_SUBJECT_ID) {
-        const error = new Error('El caso legacy no partio de la fila slug esperada.')
-        error.details = {
-          expectedLegacySubjectId: LEGACY_SUBJECT_ID,
-          actualRawSubjectId: normalized.raw.subjectId,
-        }
-        throw error
-      }
-
-      if (normalized.normalized.subjectId !== CANONICAL_SUBJECT_ID || normalized.normalized.programId !== CANONICAL_PROGRAM_ID) {
-        const error = new Error('La fila legacy no normalizo a subject_id/program_id canonicos.')
-        error.details = {
-          raw: normalized.raw,
-          normalized: normalized.normalized,
-          expected: {
-            subjectId: CANONICAL_SUBJECT_ID,
-            programId: CANONICAL_PROGRAM_ID,
-          },
-        }
-        throw error
-      }
-
-      const legacyEnrollment = await upsertSubjectEnrollmentFromPortal({
-        supabase: serviceSupabase,
-        institutionId,
-        workspaceKey,
-        studentUserId: context.legacyStudent.userId,
-        studentRecordId: context.legacyStudentRecord.id,
-        subjectId: normalized.normalized.subjectId,
-        programId: normalized.normalized.programId,
-        legacySnapshotId: legacyEnrollmentId,
-        mutationLabel: 'legacy-normalized',
-        runId,
-        cleanup,
-      })
-
-      assertCanonicalEnrollment(legacyEnrollment, 'La inscripcion legacy normalizada', context.legacyStudentRecord.id)
-
-      const roster = await fetchSubjectRosterLikeTeacherService({
-        supabase: context.teacherClient,
-        institutionId,
-        workspaceKey,
-        subjectId: CANONICAL_SUBJECT_ID,
-        programId: CANONICAL_PROGRAM_ID,
-      })
-
-      assertRosterContains({
-        roster,
-        studentUserId: context.legacyStudent.userId,
-        studentRecord: context.legacyStudentRecord,
-        label: 'El alumno legacy normalizado',
-      })
-
-      return {
-        summary: `${LEGACY_SUBJECT_ID} -> ${legacyEnrollment.subject_id} / ${legacyEnrollment.program_id}; roster=${roster.length}`,
-        legacyEnrollment,
-        teacherWrites: {
-          classSessionId: teacherWrites.classSession.id,
-          gradeId: teacherWrites.grade.id,
-        },
-      }
-    })
   } catch (error) {
     finalError = error
   } finally {
