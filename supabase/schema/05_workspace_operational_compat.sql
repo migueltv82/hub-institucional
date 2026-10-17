@@ -9,6 +9,8 @@ create or replace function public.storage_object_institution_id(object_name text
 returns uuid
 language plpgsql
 immutable
+-- Advisor 0011: search_path fijo; solo usa funciones de pg_catalog.
+set search_path = ''
 as $$
 declare
   institution_segment text;

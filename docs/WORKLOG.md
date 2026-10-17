@@ -811,3 +811,14 @@ Cómo valida ahora el audit:
 - El Bearer validado en línea (`startsWith('Bearer ')`) solo vale dentro de un handler delegado; para `index.ts` sigue exigiendo `assertBearerAuthorization`.
 
 Pruebas: 6 tests nuevos. El control manual pasa: si el import apunta fuera de la carpeta, el audit falla las tres reglas.
+
+## 2026-10-17 — Advisors de Staging + HARD.1 search_path (Claude)
+
+Revisé los advisors de seguridad de Supabase en Staging (read-only).
+
+Resultado:
+- Único hallazgo accionable en el repo: `storage_object_institution_id` no tenía `search_path` fijo. Se corrigió y se agregó un test que lo exige para todo el baseline. Storage harness PASS.
+- `rls_auto_enable` (de la plataforma): se recomienda revocar EXECUTE en Staging y Prod, con OK humano.
+- El resto es por diseño.
+
+Detalle en `supabase/security/STAGING_ADVISORS_RESULT.md`.

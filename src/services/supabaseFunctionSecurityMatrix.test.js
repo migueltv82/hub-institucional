@@ -186,6 +186,20 @@ const academicTransitionConfigJsFields = [
 ]
 
 describe('Supabase function security matrix', () => {
+  it('fija search_path en toda funcion del baseline y del gateway (advisor 0011)', () => {
+    const files = [
+      ...walkFiles(join(SUPABASE_DIR, 'schema'), (filePath) => filePath.endsWith('.sql')),
+      join(SUPABASE_DIR, 'security/source_file_storage_gateway.sql'),
+    ]
+    const missing = files.flatMap((filePath) => {
+      const sql = readText(filePath)
+      return [...sql.matchAll(/create or replace function\s+([\w.]+)\s*\(/gi)]
+        .filter((match) => !/\bset\s+search_path\b/i.test(sql.slice(match.index, sql.indexOf('$$', match.index))))
+        .map((match) => match[1])
+    })
+    expect(missing).toEqual([])
+  })
+
   it('mantiene inventariadas todas las RPC invocadas por codigo local', () => {
     expect([...extractInvokedRpcContracts()].sort()).toEqual([...invokedRpcContracts].sort())
   }, 15000)
