@@ -230,11 +230,47 @@ Procedimiento R4:
      · `--data-only` aborta por el orden de las FK (`auth.identities` antes que `auth.users`);
      · `--disable-triggers` exige ser dueño de las tablas de `auth`.
      Además, el trigger `handle_new_user` recrearía los perfiles con rol `alumno`.
-   - El archive sirve para: verificar el restore gestionado (conteos y catálogo) y reparar puntualmente filas de `public`, con el Verificador y aprobación de Miguel.
+   - El archive sirve para dos cosas: verificar el restore gestionado (conteos y catálogo) y la reparación puntual de filas de `public` (**R4b**, abajo), con el Verificador y aprobación de Miguel.
    - Si el restore gestionado no está disponible: abrir un ticket a soporte de Supabase con el archive. No improvisar un restore manual sobre Producción.
 3. Restaurar los bytes de Storage desde `BACKUP_DIR` y verificar los SHA256 contra los registrados en el paso 3.2.
 4. Verificar: conteos de filas iguales a los del backup; logins de una cuenta por rol; catálogo (funciones y policies) igual al snapshot del paso 3.3.
 5. Volver a R1 con el frontend anterior.
+
+Procedimiento R4b — reparación puntual de filas de `public` desde el archive del §3.1 (ensayado en RB.2, `supabase/security/PUBLIC_REPAIR_LOCAL_RESULT.md`).
+
+Cuándo usarlo: el daño está acotado a pocas tablas de `public` de una institución (filas borradas o pisadas) y no hace falta tocar Auth. Antes: mantenimiento (R4 paso 1) y escrituras congeladas.
+
+1. En `BACKUP_DIR`, extraer del archive solo los datos de cada tabla dañada y apuntar el `COPY` a la tabla temporal:
+
+   ```powershell
+   foreach ($t in 'student_grades','subject_enrollments','profiles') {
+     pg_restore --data-only --schema=public --table=$t --file "repair_$t.sql" "<archivo>.dump"
+     (Get-Content "repair_$t.sql") -replace "^COPY public\.$t ", "COPY pg_temp.repair_$t " | Set-Content "repair_$t.sql"
+   }
+   ```
+
+2. Copiar `supabase/security/public_repair_template.sql` a `BACKUP_DIR` y dejar solo las tablas dañadas. Para otra tabla, repetir el patrón con su clave primaria y su filtro de institución.
+3. Correr el template como `postgres`, en una sola transacción:
+
+   ```powershell
+   psql -X -v inst=<institution_id> -f public_repair_template.sql $env:PROD_DB_URL
+   ```
+
+   El template:
+   - carga el archive en tablas temporales (`on commit drop`);
+   - hace `INSERT … ON CONFLICT (pk) DO UPDATE` solo de las filas de esa institución que difieren del archive;
+   - no desactiva triggers, no toca `auth.*` y no pasa por `handle_new_user`.
+4. Verificar con el Verificador:
+   - conteos y contenido de las tablas reparadas;
+   - las otras instituciones intactas;
+   - logins de una cuenta por rol.
+
+Límites de R4b:
+- Filas creadas después del backup: no se borran.
+- Las columnas que mantiene un trigger (`updated_at` de `student_grades` y `subject_enrollments`) quedan con la hora de la reparación.
+- Si el upsert de una tabla con unique parcial choca con una fila nueva de la misma clave natural (por ejemplo, una nota recargada después del backup), la transacción aborta y no cambia nada: resolver a mano con el Verificador.
+- `postgres` tiene `BYPASSRLS`: la reparación no pasa por RLS, por eso se filtra por institución en el propio SQL.
+- No sirve para `auth.*` ni para los bytes de Storage.
 
 Límites conocidos (de tq01D3Bz / to6OoXZC): los ensayos fueron con fixtures sintéticos chicos y snapshot congelado. No hay SLA medido para el volumen real; el restore local tardó ~25 s con datos mínimos. No se ensayó rollback con escritores concurrentes ni sobre Supabase gestionado. Por eso el paso 2.1 (congelar escrituras) es obligatorio.
 

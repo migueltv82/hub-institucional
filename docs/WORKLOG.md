@@ -822,3 +822,13 @@ Resultado:
 - El resto es por diseño.
 
 Detalle en `supabase/security/STAGING_ADVISORS_RESULT.md`.
+
+## 2026-10-17 — RB.2 reparación puntual de `public` desde el archive (Claude; audita Codex)
+
+Se ensayó en local, como `postgres` (no superusuario, `BYPASSRLS`), la reparación de filas dañadas de una institución desde el archive del §3.1. Las tablas: notas, cursadas y perfil. El método: tablas temporales + upsert filtrado.
+
+Resultado:
+- PASS: hashes iguales a los previos al daño; B, `auth.*` y RLS intactos.
+- El control sin upsert da FAIL.
+
+Runbook: R4b nuevo, con comandos copiables y límites. Template versionado en `supabase/security/public_repair_template.sql`.

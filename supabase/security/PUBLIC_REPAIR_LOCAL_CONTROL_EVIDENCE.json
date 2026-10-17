@@ -1,0 +1,132 @@
+{
+  "task": "RB.2",
+  "mode": "control_no_upsert",
+  "staging": "NONE",
+  "production": "NONE",
+  "role": "postgres",
+  "disableTriggers": false,
+  "run": "da0770965cecd5c0",
+  "postgresRole": {
+    "rolsuper": false,
+    "rolbypassrls": true
+  },
+  "before": {
+    "a": {
+      "student_grades": {
+        "count": 4,
+        "md5": "67422c5ab2471f33fd4fcf9966dccad6"
+      },
+      "subject_enrollments": {
+        "count": 4,
+        "md5": "f1d516345a05b233d306bb4870282996"
+      },
+      "profiles": {
+        "count": 3,
+        "md5": "94997c3702f1c8345707e8e62ae5aa2e"
+      }
+    },
+    "b": {
+      "student_grades": {
+        "count": 2,
+        "md5": "a2e28f8c1fb190e9939c50daa7edbbc2"
+      },
+      "subject_enrollments": {
+        "count": 2,
+        "md5": "07991dda51e7dc96021b51361d65d70a"
+      },
+      "profiles": {
+        "count": 1,
+        "md5": "f3d1599c7f6d690ab0937992d62a0813"
+      }
+    },
+    "auth": {
+      "users": "0cf17fefde2bd52e1eef6c6ea12a4e14",
+      "identities": "e0ee2d62766dffaa5ec1304e305a2b90"
+    },
+    "rls_on": 40
+  },
+  "damaged": {
+    "a": {
+      "student_grades": {
+        "count": 2,
+        "md5": "f8139730390182d586d78b56ec4373f5"
+      },
+      "subject_enrollments": {
+        "count": 4,
+        "md5": "26f5e27da1920e1cb8320269bea859fb"
+      },
+      "profiles": {
+        "count": 3,
+        "md5": "67af3f918e77c9c82c9e7e65eca994e7"
+      }
+    },
+    "b": {
+      "student_grades": {
+        "count": 2,
+        "md5": "a2e28f8c1fb190e9939c50daa7edbbc2"
+      },
+      "subject_enrollments": {
+        "count": 2,
+        "md5": "07991dda51e7dc96021b51361d65d70a"
+      },
+      "profiles": {
+        "count": 1,
+        "md5": "f3d1599c7f6d690ab0937992d62a0813"
+      }
+    },
+    "auth": {
+      "users": "0cf17fefde2bd52e1eef6c6ea12a4e14",
+      "identities": "e0ee2d62766dffaa5ec1304e305a2b90"
+    },
+    "rls_on": 40
+  },
+  "repairMs": 102,
+  "after": {
+    "a": {
+      "student_grades": {
+        "count": 2,
+        "md5": "f8139730390182d586d78b56ec4373f5"
+      },
+      "subject_enrollments": {
+        "count": 4,
+        "md5": "26f5e27da1920e1cb8320269bea859fb"
+      },
+      "profiles": {
+        "count": 3,
+        "md5": "67af3f918e77c9c82c9e7e65eca994e7"
+      }
+    },
+    "b": {
+      "student_grades": {
+        "count": 2,
+        "md5": "a2e28f8c1fb190e9939c50daa7edbbc2"
+      },
+      "subject_enrollments": {
+        "count": 2,
+        "md5": "07991dda51e7dc96021b51361d65d70a"
+      },
+      "profiles": {
+        "count": 1,
+        "md5": "f3d1599c7f6d690ab0937992d62a0813"
+      }
+    },
+    "auth": {
+      "users": "0cf17fefde2bd52e1eef6c6ea12a4e14",
+      "identities": "e0ee2d62766dffaa5ec1304e305a2b90"
+    },
+    "rls_on": 40
+  },
+  "failures": [
+    "A.student_grades not restored",
+    "A.subject_enrollments not restored",
+    "A.profiles not restored"
+  ],
+  "result": "FAIL",
+  "error": "Failed at repair as postgres: Repair verification failed | + actual - expected | + [",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}
