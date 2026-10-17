@@ -145,7 +145,8 @@ values ('academic_relational_transition',
         '{"stage":"dual_write","write_mode":"dual_write","read_mode":"snapshot_only","dual_write_enabled":true}'::jsonb,
         false)
 on conflict (key) do update set value = excluded.value, updated_at = timezone('utc', now());
-select public.get_academic_transition_config();  -- debe devolver write_mode = dual_write
+select value->>'write_mode' as write_mode from public.app_settings where key = 'academic_relational_transition';  -- debe dar dual_write
+-- (get_academic_transition_config() exige sesión de usuario: en el SQL Editor responde AUTH_REQUIRED, y es lo correcto)
 ```
 
 Rollback (R3): reponer el `value` leído antes, o borrar la fila para volver al default `snapshot_only`. El modo queda acreditado por QA.1, que ensaya los dos modos.
@@ -156,10 +157,10 @@ Desde el hash candidato, con la CLI autenticada y **apuntando explícitamente** 
 
 ```powershell
 supabase functions deploy admin-users --project-ref $env:PROD_REF --no-verify-jwt
-supabase functions deploy source-file-storage --project-ref $env:PROD_REF
+supabase functions deploy source-file-storage --project-ref $env:PROD_REF --no-verify-jwt
 ```
 
-- `admin-users` va con `--no-verify-jwt` porque valida el Bearer internamente y la verificación de la plataforma rompe el preflight CORS (`supabase/config.toml`, `[functions.admin-users]`).
+- `admin-users` y `source-file-storage` van con `--no-verify-jwt`: las dos validan el Bearer internamente (`handler.js` usa `auth.getUser()`) y la verificación de la plataforma rompe el preflight CORS. Staging ya las tiene así (STG0). `config.toml` solo declara `admin-users`; ver tarjeta SEC.1.
 - Los secrets (sección 7) tienen que estar cargados **antes** del deploy.
 
 Verificación:

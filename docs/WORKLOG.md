@@ -768,3 +768,14 @@ Hallazgo: el runbook de Producción no incluye `source_file_storage_gateway.sql`
 PROD0 quedó pendiente: la base de Producción rechaza la conexión directa (ECONNREFUSED); probablemente tiene restricciones de red. Miguel lo corre desde el SQL Editor.
 
 Detalle en `supabase/security/STAGING_DRIFT_RESULT.md`.
+
+## 2026-10-17 — STG1 promoción a Staging, parte de base de datos (Claude, aprobada por Miguel)
+
+En Staging:
+- se aplicó 03.5b (función con el mismo hash que release/v1);
+- se activó `dual_write`;
+- la verificación §4 dio OK.
+
+La base de Staging queda sin diferencias contra release/v1. Edge pendiente de deploy por CLI (Miguel).
+
+Correcciones al runbook: `--no-verify-jwt` también para `source-file-storage`, y la verificación del §4.1 ahora no depende de una RPC que exige sesión.
