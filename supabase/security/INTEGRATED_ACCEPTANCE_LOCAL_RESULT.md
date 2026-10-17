@@ -4,7 +4,7 @@ Fecha: 2026-10-17. Ejecutado por Claude, que retomó el WIP 2e0931c de Codex por
 
 ## Resultado: **FAIL**, por un solo hallazgo de producto fuera de alcance (PB.2). Todos los flujos de la tarjeta pasan.
 
-Run `3fdbb7cea996e9e2` (`INTEGRATED_ACCEPTANCE_LOCAL_EVIDENCE.json`). Corre sobre servicios reales locales: PostgreSQL, GoTrue, PostgREST, nginx, Edge Runtime con `admin-users`, Vite y Chrome aislado. Los digests de las imágenes son los aprobados. Cleanup: 0 bases, 0 contenedores, 0 archivos temporales. Requests externos: 0. Errores de página: 0.
+Run `cb1c2eb23e53cf1e` (el anterior fue `3fdbb7cea996e9e2`, antes de PB.3) (`INTEGRATED_ACCEPTANCE_LOCAL_EVIDENCE.json`). Corre sobre servicios reales locales: PostgreSQL, GoTrue, PostgREST, nginx, Edge Runtime con `admin-users`, Vite y Chrome aislado. Los digests de las imágenes son los aprobados. Cleanup: 0 bases, 0 contenedores, 0 archivos temporales. Requests externos: 0. Errores de página: 0.
 
 | Flujo (desde la UI) | Resultado |
 | --- | --- |
@@ -12,6 +12,7 @@ Run `3fdbb7cea996e9e2` (`INTEGRATED_ACCEPTANCE_LOCAL_EVIDENCE.json`). Corre sobr
 | Alumno: materias y mesa en **3 ciclos** de transición (abajo) | PASS |
 | Docente: asistencia y notas (parciales y final) | PASS |
 | Alumno relee asistencia y notas | PASS |
+| Alumno da de baja una cursada ("Desistir"); la fila relacional queda `dropped` | PASS desde PB.3 (antes, 404: `INTEGRATED_ACCEPTANCE_PB3_BEFORE_FIX_EVIDENCE.json`) |
 | Admin: alta de alumno vía Edge, con auditoría `bulk_create_students` | PASS |
 | Autosave del panel admin durante el alta | **FAIL**: `DELETE /rest/v1/teacher_records` → 409 (PB.2). Ocurre en la fase del alta: el reporte marca `failedAt = alumno/b logout` porque los asserts de HTTP corren al final. Parte del disparo viene del fixture, que crea `teacher_records` que no están en el snapshot del admin |
 
@@ -30,6 +31,7 @@ Los negativos de Edge y RPC corren dentro de la página, con la sesión real del
 ## Hallazgos de producto
 
 - **PB.1, corregido** (commit propio). En `dual_write` el alumno no podía cancelar una inscripción a mesa: daba 404, y después de arreglar eso, la relacional quedaba igual en `registered`. Evidencia del "antes": `INTEGRATED_ACCEPTANCE_PB1_BEFORE_FIX_EVIDENCE.json`.
+- **PB.3, corregido** (commit propio). El alumno no podía desistir de una materia: la lectura segura lista la cursada relacional (uuid) y la Edge la buscaba en el snapshot (404). Las cursadas cargadas por el admin no tienen fila en el snapshot.
 - **PB.2, abierto, pide decisión.** El autosave del admin (`saveWorkspaceSnapshot` → `syncRosterRecords`) sincroniza docentes con `deleteMissing: true`: borra los `teacher_records` que no están en la planilla del admin. Para alumnos ya es `false`.
   - Acá el borrado choca con la FK de las asignaciones (409). El error corta el autosave antes de `syncTeacherAcademicRecords`.
   - Si el docente no tuviera asignaciones, el legajo docente se borraría en silencio.

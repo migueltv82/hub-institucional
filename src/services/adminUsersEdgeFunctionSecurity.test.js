@@ -188,4 +188,14 @@ describe('admin-users edge function security posture', () => {
     const registerBranch = extractSqlBlock(edgeFunction, /\} else if \(mutationType === 'register_exam'\) \{/, /\} else if \(mutationType === 'cancel_exam'\)/)
     expect(registerBranch).toContain('result = asRecordArray(snapshot.examEnrollments).find(isSameExamEnrollment) ?? nextExamEnrollment')
   })
+
+  it('da de baja cursadas con id relacional, solo propias, y devuelve la fila guardada al inscribir (PB.3)', () => {
+    const withdrawBranch = extractSqlBlock(edgeFunction, /\} else if \(mutationType === 'withdraw_subject'\) \{/, /\} else if \(mutationType === 'register_exam'\)/)
+    expect(withdrawBranch).toContain(".from('subject_enrollments')")
+    expect(withdrawBranch).toContain(".eq('student_id', callerId)")
+    expect(withdrawBranch).toContain(".eq('institution_id', institutionId)")
+    expect(withdrawBranch).toContain('legacy_snapshot_id')
+    const enrollBranch = extractSqlBlock(edgeFunction, /if \(mutationType === 'enroll_subject'\) \{/, /\} else if \(mutationType === 'withdraw_subject'\)/)
+    expect(enrollBranch).toContain('result = asRecordArray(snapshot.enrollments).find(isSameSubjectEnrollment) ?? nextEnrollment')
+  })
 })

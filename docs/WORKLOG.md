@@ -889,3 +889,14 @@ Además:
 Pruebas:
 - harness PASS; el control FAIL confirma la fuga;
 - regresiones de round trip, identidad, paridad y suspensión: PASS.
+
+## 2026-10-17 — PB.3 desistir de una materia desde el portal (Claude)
+
+La auditoría independiente de PB.1 sospechó el mismo problema de ids en `withdraw_subject`, y QA.1 lo confirmó con un 404 real: un alumno no podía desistir de ninguna cursada que viera en el portal.
+
+Fix en `admin-users`:
+- la baja resuelve el uuid relacional (solo si la cursada es propia) a su fila del snapshot;
+- si no hay fila en el snapshot (cursada cargada por el admin), da de baja directo en la tabla;
+- `enroll_subject` devuelve la fila guardada.
+
+QA.1 cubre ahora "Desistir" desde la UI y pasa. Lo único pendiente sigue siendo PB.2.

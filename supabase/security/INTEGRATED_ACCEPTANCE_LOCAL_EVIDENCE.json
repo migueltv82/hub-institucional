@@ -97,7 +97,7 @@
     "nginx:1.27-alpine": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
     "supabase/edge-runtime:v1.77.4": "supabase/edge-runtime@sha256:ad45164b7548bf5820ed7be714789c17ac2865edce79a09cfb4c3756c3d365a8"
   },
-  "run": "3fdbb7cea996e9e2",
+  "run": "cb1c2eb23e53cf1e",
   "lastFixtureAuthStatus": 200,
   "fixtureAccounts": {
     "sharedFixtureUsers": 10,
@@ -219,6 +219,8 @@
     "grade": true
   },
   "studentReread": true,
+  "subjectWithdrawStatus": 200,
+  "subjectWithdrawRelational": "dropped",
   "adminCreatedThroughEdge": true,
   "expectedAdversarialFailures": 6,
   "result": "FAIL",

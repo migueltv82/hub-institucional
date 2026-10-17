@@ -2771,16 +2771,39 @@ async function handleStudentPortalMutation(
       updated_at: now,
     }
 
+    const isSameSubjectEnrollment = (row: Record<string, unknown>) => sameOwner(row, callerId) && row.subject_id === subjectId && row.program_id === programId
     snapshot.enrollments = upsertRecord(
       asRecordArray(snapshot.enrollments),
       nextEnrollment,
-      (row) => sameOwner(row, callerId) && row.subject_id === subjectId && row.program_id === programId,
+      isSameSubjectEnrollment,
     )
-    result = nextEnrollment
+    // PB.3: igual que register_exam, se devuelve la fila guardada (upsertRecord conserva el id previo).
+    result = asRecordArray(snapshot.enrollments).find(isSameSubjectEnrollment) ?? nextEnrollment
   } else if (mutationType === 'withdraw_subject') {
-    const enrollmentId = requireString(payload.enrollment_id, 'La inscripcion')
+    const requestedEnrollmentId = requireString(payload.enrollment_id, 'La inscripcion')
     const rows = asRecordArray(snapshot.enrollments)
+    let enrollmentId = requestedEnrollmentId
+    let relationalEnrollment: Record<string, unknown> | null = null
     let found = false
+
+    // PB.3: la lectura segura del portal lista las cursadas relacionales, con su uuid. Se resuelve a la fila del
+    // snapshot por legacy_snapshot_id, solo si es propia; una cursada cargada solo en la tabla (p. ej. por el admin)
+    // no tiene fila de snapshot y se da de baja directo en la tabla.
+    if (!rows.some((row) => row.id === requestedEnrollmentId && sameOwner(row, callerId)) && isUuid(requestedEnrollmentId)) {
+      const { data, error: relationalLookupError } = await adminClient
+        .from('subject_enrollments')
+        .select('id, legacy_snapshot_id, subject_id, program_id, student_record_id')
+        .eq('id', requestedEnrollmentId)
+        .eq('institution_id', institutionId)
+        .eq('workspace_key', workspaceKey)
+        .eq('student_id', callerId)
+        .is('deleted_at', null)
+        .maybeSingle()
+
+      if (relationalLookupError) throw relationalLookupError
+      relationalEnrollment = isRecord(data) ? data : null
+      enrollmentId = getOptionalString(relationalEnrollment?.legacy_snapshot_id) || requestedEnrollmentId
+    }
 
     snapshot.enrollments = rows.map((row) => {
       if (row.id !== enrollmentId || !sameOwner(row, callerId)) return row
@@ -2793,6 +2816,22 @@ async function handleStudentPortalMutation(
       }
       return result
     })
+
+    if (!found && relationalEnrollment) {
+      found = true
+      result = {
+        id: getOptionalString(relationalEnrollment.legacy_snapshot_id) || requestedEnrollmentId,
+        profile_id: callerId,
+        student_id: callerId,
+        institution_id: institutionId,
+        subject_id: relationalEnrollment.subject_id,
+        program_id: relationalEnrollment.program_id,
+        student_record_id: relationalEnrollment.student_record_id ?? undefined,
+        status: 'dropped',
+        dropped_at: now,
+        updated_at: now,
+      }
+    }
 
     if (!found) {
       throw new HttpError('No se encontro una inscripcion propia para dar de baja.', 404)

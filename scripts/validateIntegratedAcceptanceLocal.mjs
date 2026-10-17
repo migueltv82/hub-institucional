@@ -265,6 +265,15 @@ export async function main() {
       await card.getByText(/100\s*%/).first().waitFor();
       await card.getByText('1 presentes de 1 clases', { exact: true }).waitFor();
       report.studentReread = true;
+      // PB.3: la cursada que lista la lectura segura (id relacional) se puede dar de baja desde la UI.
+      phase = 'student withdraws subject through UI';
+      await page.goto(`${origin}/app/materias`, { waitUntil: 'networkidle' });
+      const subjectCard = page.locator('article.student-subject-card').filter({ hasText: 'FIX-A-01' });
+      const [withdrawn] = await Promise.all([page.waitForResponse(isEdgePost), subjectCard.getByRole('button', { name: 'Desistir', exact: true }).click()]);
+      report.subjectWithdrawStatus = withdrawn.status();
+      assert.equal(withdrawn.status(), 200, 'Subject withdraw failed');
+      report.subjectWithdrawRelational = stack.sql(`select status from public.subject_enrollments where institution_id='${tenant('a')}' and student_id='${user('a', 3)}' and subject_id='FIX-A-01';`);
+      assert.equal(report.subjectWithdrawRelational, 'dropped', 'Relational enrollment must be dropped');
     });
     await withActor(actors[2], async page => {
       phase = 'admin creates account through Edge and UI';
