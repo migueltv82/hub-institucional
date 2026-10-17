@@ -92,7 +92,7 @@
     "nginx:1.27-alpine": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
     "supabase/edge-runtime:v1.77.4": "supabase/edge-runtime@sha256:ad45164b7548bf5820ed7be714789c17ac2865edce79a09cfb4c3756c3d365a8"
   },
-  "run": "68a29c62b5ed0518",
+  "run": "561f3da25010e09d",
   "lastFixtureAuthStatus": 200,
   "fixtureAccounts": {
     "sharedFixtureUsers": 10,

@@ -45,3 +45,14 @@ El fixture garantiza que cada tabla con datos personales tenga filas de otro alu
 ## Riesgo residual (v1.1)
 
 El docente sigue leyendo toda su institución, porque el portal docente necesita hoy el snapshot completo y el padrón entero. Queda documentado en `docs/SECURITY.md`. En v1.1 el portal docente pasa a una RPC segura y la policy se acota a las materias asignadas.
+
+## Auditoría independiente y ajustes (SEC.3b)
+
+Auditoría independiente (agente, contexto separado): **PASS**. Sin fugas P1. Se descartó una escalada a personal: `profiles` y `memberships` no se pueden escribir desde la cuenta del alumno. La suspensión y el bloqueo se respetan.
+
+Ajustes aplicados:
+- **P2.** El portal alumno se suscribía por Realtime a `workspace_snapshots`, que ya no puede leer, y mostraba "Sincronizacion en vivo activa" sin recibir eventos. Ahora las mesas se refrescan con la RPC segura cada minuto, mientras la pestaña está visible.
+- **P3.** La rama propia de `subject_class_sessions` exige una cursada activa (`deleted_at is null`, estado `active`/`enrolled`).
+- **P3.** Se documentó en `docs/SECURITY.md` que el rol docente es global, no por institución (v1.1).
+
+Re-ejecución: matriz `a02b733dbdebc0f2` PASS; QA.1 `561f3da25010e09d` PASS; `quality:full` OK (2513).

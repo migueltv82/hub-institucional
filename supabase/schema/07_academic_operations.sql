@@ -1592,7 +1592,7 @@ begin
     -- SEC.3: el personal de la institucion lee todo; un alumno solo lo propio.
     own_rows := case target_table
       when 'student_financial_status' then 'public.current_user_owns_student_record(student_record_id)'
-      when 'subject_class_sessions' then 'exists (select 1 from public.subject_enrollments enrollment where enrollment.institution_id = subject_class_sessions.institution_id and enrollment.workspace_key = subject_class_sessions.workspace_key and enrollment.subject_id = subject_class_sessions.subject_id and enrollment.program_id = subject_class_sessions.program_id and enrollment.student_id = (select auth.uid())) or exists (select 1 from public.subject_attendance_records attendance where attendance.session_id = subject_class_sessions.id and attendance.student_id = (select auth.uid()))'
+      when 'subject_class_sessions' then 'exists (select 1 from public.subject_enrollments enrollment where enrollment.institution_id = subject_class_sessions.institution_id and enrollment.workspace_key = subject_class_sessions.workspace_key and enrollment.subject_id = subject_class_sessions.subject_id and enrollment.program_id = subject_class_sessions.program_id and enrollment.student_id = (select auth.uid()) and enrollment.deleted_at is null and enrollment.status in (''active'', ''enrolled'')) or exists (select 1 from public.subject_attendance_records attendance where attendance.session_id = subject_class_sessions.id and attendance.student_id = (select auth.uid()))'
       else 'student_id = (select auth.uid())'
     end;
     execute format('alter table public.%I enable row level security', target_table);

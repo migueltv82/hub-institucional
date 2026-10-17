@@ -916,3 +916,12 @@ Pruebas:
 - QA.1 completo PASS, matriz A/B 75 PASS y 10 regresiones PASS.
 
 Riesgo residual: el docente todavía lee toda la institución (pasa a v1.1, con una RPC segura).
+
+## 2026-10-17 — SEC.3b ajustes de la auditoría independiente (Claude)
+
+Auditoría de SEC.3: PASS. Ajustes:
+- el portal alumno refresca las mesas cada minuto, en lugar del Realtime de `workspace_snapshots`, que ya no puede leer;
+- las sesiones de clase solo se ven con una cursada activa;
+- se documentó el rol docente global como riesgo v1.1.
+
+Matriz y QA.1: PASS.
