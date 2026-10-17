@@ -707,3 +707,16 @@ Se abrió el PR draft #1 release/v1 → main ("no mergear"). Job `Quality gate (
 ## 2026-10-17 — ENG.1 retiro del stub generateSpecialExams (Claude, cubriendo a Codex)
 
 Se borró `src/utils/examEngine/planning/generateSpecial.js` y su export del barrel `src/utils/examEngine/index.js`. No tenía llamadores en `src/` ni en `scripts/`, ni siquiera dinámicos. Los períodos especiales se generan con `generateRegularExamPlan` (`tipoPeriodo: 'ESPECIAL'`), cubierto por los invariantes de 04.3. Sin cambios en el motor.
+
+## 2026-10-17 — RB.1 comandos del runbook de Producción ensayados en local (Claude, cubriendo a Codex)
+
+`scripts/validateRunbookCommandsLocal.mjs` corre como `postgres` los comandos de `docs/RUNBOOK_PRODUCCION_V1.md`.
+
+- OK: `pg_dump` del §3.1 (833 entradas), snapshot §3.3 y verificación §4 (`handle_new_user_ok=t`, `firmas=1`, 0 tablas sin RLS de 40).
+- **FALLA**: el restore R4 con `pg_restore`, en 4 variantes (schemas existentes, orden de FK, triggers que exigen owner).
+
+Consecuencias en el runbook:
+- §9-R4 reescrito: el restore completo es el gestionado por Supabase (backups/PITR) y el archive queda para verificación y reparaciones puntuales;
+- P10 (backups/PITR activos) pasa a obligatorio.
+
+Evidencia en `supabase/security/RUNBOOK_COMMANDS_LOCAL_RESULT.md`. Sin remoto.

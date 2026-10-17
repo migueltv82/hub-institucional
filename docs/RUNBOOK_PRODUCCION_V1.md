@@ -33,7 +33,7 @@ Ventana sugerida: horario de baja actividad institucional, con al menos 3 horas 
 | P7 | **PROD0: drift read-only de Producción** contra el candidato. Sin esto no se sabe qué SQL hay que aplicar | `PRODUCTION_DRIFT_RESULT.md` | Codex (con aprobación) |
 | P8 | Saber si Producción tiene datos reales (Auth, `public`, Storage) y cuántos. Define la severidad del rollback | Conteos read-only de PROD0 | Codex / Miguel |
 | P9 | Config externa de Producción cargada y verificada (sección 7) | Checklist sección 7 completo | Miguel |
-| P10 | Plan de Supabase de Producción confirmado: si tiene backups diarios / PITR o no | Captura del dashboard sin datos | Miguel |
+| P10 | Plan de Supabase de Producción con **backups diarios o PITR activos** y la hora del último backup visible. Es **obligatorio**: RB.1 demostró que el archive propio no se puede restaurar completo como `postgres` (ver §9) | Captura del dashboard sin datos | Miguel |
 | P11 | Branch protection de `main` activa con el check requerido | Captura de Settings → Branches | Miguel |
 | P12 | PR `release/v1` → `main` aprobado y mergeado; el hash de `main` coincide con el candidato | Link al PR | Miguel |
 
@@ -195,12 +195,17 @@ Decide Miguel. El Verificador propone el nivel según qué falló. Se revierte *
 | R3 SQL de funciones | Falla de una RPC sin cambio de tablas ni datos | Re-aplicar el archivo SQL correspondiente **del commit anterior** (son idempotentes). Revisar con el Verificador antes | Ninguna |
 | R4 Restore completo | Daño de datos, migración a medias que cambió tablas, o fallo de seguridad (RLS) que no se corrige en minutos | Ver abajo | Todo lo escrito después del backup del paso 3 |
 
-Procedimiento R4, el ensayado en local:
+Procedimiento R4:
 
 1. Poner la app en mantenimiento: R1 a un deployment estático de mantenimiento, o pausar el dominio.
-2. **No** usar `pg_restore --clean` sobre la base viva: falló en el ensayo. Restaurar sobre una base vacía:
-   - Si el plan lo permite: restaurar el backup automático o PITR del dashboard al punto previo al deploy y después comparar contra el archive propio.
-   - Si no: pedir a soporte de Supabase el restore, o crear un proyecto nuevo, restaurar el archive con `pg_restore` en una transacción (`--single-transaction`) y reapuntar Vercel y las Edge al proyecto nuevo. Esto implica cargar de nuevo todos los secrets de la sección 7.
+2. Restaurar con el **restore gestionado de Supabase** (Database → Backups, o PITR al minuto previo al deploy). Es el único camino de restore completo (Auth + datos) acreditado como viable para v1; por eso P10 es obligatorio.
+   - **El archive propio del §3 NO sirve para un restore completo.** RB.1 (`supabase/security/RUNBOOK_COMMANDS_LOCAL_RESULT.md`) lo ensayó como `postgres`, el rol que tiene el operador en un proyecto Supabase:
+     · `pg_restore --single-transaction` aborta porque los schemas ya existen (`public`, `auth`);
+     · `--data-only` aborta por el orden de las FK (`auth.identities` antes que `auth.users`);
+     · `--disable-triggers` exige ser dueño de las tablas de `auth`.
+     Además, el trigger `handle_new_user` recrearía los perfiles con rol `alumno`.
+   - El archive sirve para: verificar el restore gestionado (conteos y catálogo) y reparar puntualmente filas de `public`, con el Verificador y aprobación de Miguel.
+   - Si el restore gestionado no está disponible: abrir un ticket a soporte de Supabase con el archive. No improvisar un restore manual sobre Producción.
 3. Restaurar los bytes de Storage desde `BACKUP_DIR` y verificar los SHA256 contra los registrados en el paso 3.2.
 4. Verificar: conteos de filas iguales a los del backup; logins de una cuenta por rol; catálogo (funciones y policies) igual al snapshot del paso 3.3.
 5. Volver a R1 con el frontend anterior.
@@ -218,5 +223,5 @@ Comentario en la tarjeta del deploy con: hash, hora de inicio y fin, archivos SQ
 | No hay drift read-only de Producción posterior al 2026-09-25 (P7, P8) | [CODEX] PROD0 |
 | `SOURCE_FILE_STORAGE_ALLOWED_ORIGINS` no está documentado en `docs/SECURITY.md` ni en el checklist de Staging | Incluido en PROD0 como verificación; doc a cargo de Codex |
 | Plan de Supabase de Producción y existencia de backups automáticos/PITR sin confirmar (P10) | [HUMANO] |
-| R4 sobre Supabase gestionado nunca ensayado; solo hay ensayo local | Riesgo aceptado o ensayo en Staging: decide [HUMANO] |
+| R4 sobre Supabase gestionado nunca ensayado; RB.1 descartó el restore manual del archive | Ensayar un restore gestionado en Staging, o aceptar el riesgo por escrito: decide [HUMANO] |
 | Smoke automático | Resuelto: `scripts/smokeCheck.mjs` (07.1) |

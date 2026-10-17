@@ -1,0 +1,69 @@
+{
+  "staging": "NONE",
+  "production": "NONE",
+  "runbook": "docs/RUNBOOK_PRODUCCION_V1.md",
+  "steps": {
+    "3.3_catalog_snapshot_as_postgres": {
+      "ok": true,
+      "ms": 114
+    },
+    "4_post_sql_verification_as_postgres": {
+      "ok": true,
+      "ms": 113,
+      "expected": true
+    },
+    "3.1_pg_dump_as_postgres": {
+      "ok": true,
+      "ms": 241
+    },
+    "3.1_pg_restore_list": {
+      "ok": true,
+      "ms": 100
+    },
+    "R4_restore_empty": {
+      "ok": false,
+      "ms": 124,
+      "error": "pg_restore: error: could not execute query: ERROR:  schema \"public\" already exists | Command was: CREATE SCHEMA public;"
+    },
+    "R4_restore_fresh_project": {
+      "ok": false,
+      "ms": 105,
+      "error": "pg_restore: error: could not execute query: ERROR:  schema \"auth\" already exists | Command was: CREATE SCHEMA auth;"
+    },
+    "R4_restore_fresh_baseline_data_only": {
+      "ok": false,
+      "ms": 129,
+      "error": "pg_restore: error: COPY failed for table \"identities\": ERROR:  insert or update on table \"identities\" violates foreign key constraint \"identities_user_id_fkey\" | DETAIL:  Key (user_id)=(1565b4c5-fe13-4d89-8315-083d78a3faf8) is not present in table \"users\"."
+    },
+    "R4_restore_fresh_baseline_data_only_disable_triggers": {
+      "ok": false,
+      "ms": 107,
+      "error": "pg_restore: error: could not execute query: ERROR:  must be owner of table audit_log_entries | Command was: ALTER TABLE auth.audit_log_entries DISABLE TRIGGER ALL;"
+    }
+  },
+  "run": "de7f11f6421a18f6",
+  "sourceCounts": {
+    "auth.users": 2,
+    "auth.identities": 2,
+    "public.profiles": 2,
+    "public.institutions": 2,
+    "public.memberships": 2,
+    "public.student_records": 1,
+    "public.admin_audit_logs": 1,
+    "storage.buckets": 1,
+    "storage.objects": 1
+  },
+  "postSql": {
+    "handle_new_user_ok": "t",
+    "firmas": "1",
+    "tablas_sin_rls": "0|40"
+  },
+  "archiveEntries": 833,
+  "result": "COMPLETED",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}
