@@ -1579,6 +1579,7 @@ grant execute on function public.teacher_remove_student_subject_records(uuid, te
 do $$
 declare
   target_table text;
+  own_rows text;
 begin
   foreach target_table in array array[
     'subject_enrollments',
@@ -1588,6 +1589,12 @@ begin
     'student_financial_status'
   ]
   loop
+    -- SEC.3: el personal de la institucion lee todo; un alumno solo lo propio.
+    own_rows := case target_table
+      when 'student_financial_status' then 'public.current_user_owns_student_record(student_record_id)'
+      when 'subject_class_sessions' then 'exists (select 1 from public.subject_enrollments enrollment where enrollment.institution_id = subject_class_sessions.institution_id and enrollment.workspace_key = subject_class_sessions.workspace_key and enrollment.subject_id = subject_class_sessions.subject_id and enrollment.program_id = subject_class_sessions.program_id and enrollment.student_id = (select auth.uid())) or exists (select 1 from public.subject_attendance_records attendance where attendance.session_id = subject_class_sessions.id and attendance.student_id = (select auth.uid()))'
+      else 'student_id = (select auth.uid())'
+    end;
     execute format('alter table public.%I enable row level security', target_table);
     execute format('drop policy if exists %I on public.%I', target_table || ' members read', target_table);
     execute format('drop policy if exists %I on public.%I', target_table || ' editors insert', target_table);
@@ -1595,9 +1602,10 @@ begin
     execute format('drop policy if exists %I on public.%I', target_table || ' editors delete', target_table);
 
     execute format(
-      'create policy %I on public.%I for select to authenticated using (public.is_super_admin() or public.is_member_of_institution(institution_id))',
+      'create policy %I on public.%I for select to authenticated using (public.is_super_admin() or public.is_staff_of_institution(institution_id) or (public.is_member_of_institution(institution_id) and (%s)))',
       target_table || ' members read',
-      target_table
+      target_table,
+      own_rows
     );
 
     execute format(

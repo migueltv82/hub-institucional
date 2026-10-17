@@ -308,6 +308,30 @@ revoke execute on function public.is_member_of_institution(uuid, text[]) from pu
 grant execute on function public.is_super_admin() to authenticated;
 grant execute on function public.is_member_of_institution(uuid, text[]) to authenticated;
 
+-- SEC.3: personal de la institucion = panel admin (owner/admin/editor) o docente. Los alumnos (membership viewer
+-- con account_role alumno) solo leen sus propias filas de las tablas con datos personales.
+create or replace function public.is_staff_of_institution(target_institution_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
+    or (
+      public.is_member_of_institution(target_institution_id)
+      and exists (
+        select 1
+        from public.profiles profile
+        where profile.user_id = (select auth.uid())
+          and profile.account_role in ('docente', 'teacher', 'profesor')
+      )
+    );
+$$;
+
+revoke execute on function public.is_staff_of_institution(uuid) from public, anon;
+grant execute on function public.is_staff_of_institution(uuid) to authenticated;
+
 -- ============================================================
 -- Login publico: institucion activa + estado de mantenimiento
 -- ============================================================
@@ -984,7 +1008,8 @@ using (
   public.is_super_admin()
   or (
     institution_id is not null
-    and public.is_member_of_institution(institution_id)
+    -- SEC.3: guarda datos personales de bajas; solo el personal de la institucion.
+    and public.is_staff_of_institution(institution_id)
   )
 );
 

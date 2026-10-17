@@ -906,3 +906,13 @@ QA.1 cubre ahora "Desistir" desde la UI y pasa. Lo único pendiente sigue siendo
 `syncRosterRecords` sincroniza docentes con `deleteMissing: false`, igual que alumnos. La baja de un docente queda como acción explícita del admin. Hay un test de control que falla sin el cambio.
 
 QA.1 da PASS completo (run 0acadb124b4da21e): 4 roles, mesa en 3 ciclos con negativos UI/Edge/RPC, desistir materia, docente, relectura del alumno y alta admin vía Edge.
+
+## 2026-10-17 — SEC.3 RLS de lectura: el alumno lee solo lo propio (Claude; DECISIÓN MIGUEL: antes del GO)
+
+Nuevo helper `is_staff_of_institution`. Las tablas con datos personales (16, Storage incluido) pasan a: personal de la institución o fila propia. El catálogo sigue visible para cualquier miembro.
+
+Pruebas:
+- matriz 3 roles × 19 tablas PASS; el control con las policies viejas da FAIL en 16;
+- QA.1 completo PASS, matriz A/B 75 PASS y 10 regresiones PASS.
+
+Riesgo residual: el docente todavía lee toda la institución (pasa a v1.1, con una RPC segura).

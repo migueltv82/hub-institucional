@@ -1,0 +1,157 @@
+{
+  "task": "SEC.3",
+  "run": "6a9ab51c61ac7b9a",
+  "mode": "release_v1",
+  "staging": "NONE",
+  "production": "NONE",
+  "fixture": "supabase/baseline/local_ab_rls_rpc_validation.sql",
+  "totals": {
+    "student_records": {
+      "all": 2,
+      "own": 1
+    },
+    "teacher_records": {
+      "all": 2,
+      "own": 0
+    },
+    "student_career_plans": {
+      "all": 2,
+      "own": 1
+    },
+    "student_academic_statuses": {
+      "all": 2,
+      "own": 1
+    },
+    "subject_enrollments": {
+      "all": 3,
+      "own": 1
+    },
+    "student_grades": {
+      "all": 2,
+      "own": 1
+    },
+    "subject_class_sessions": {
+      "all": 2,
+      "own": 1
+    },
+    "subject_attendance_records": {
+      "all": 3,
+      "own": 1
+    },
+    "student_financial_status": {
+      "all": 2,
+      "own": 1
+    },
+    "workspace_snapshots": {
+      "all": 1,
+      "own": 0
+    },
+    "exam_engine_v21_states": {
+      "all": 1,
+      "own": 0
+    },
+    "deleted_person_records": {
+      "all": 1,
+      "own": 0
+    },
+    "workspace_source_files": {
+      "all": 1,
+      "own": 0
+    },
+    "teacher_availability_records": {
+      "all": 1,
+      "own": 0
+    },
+    "teacher_workload_records": {
+      "all": 1,
+      "own": 0
+    },
+    "teacher_exam_date_exclusions": {
+      "all": 1,
+      "own": 0
+    },
+    "careers": {
+      "all": 1,
+      "own": 1
+    },
+    "subjects": {
+      "all": 1,
+      "own": 1
+    },
+    "study_plans": {
+      "all": 1,
+      "own": 1
+    }
+  },
+  "results": {
+    "adminA": {
+      "student_records": 2,
+      "teacher_records": 2,
+      "student_career_plans": 2,
+      "student_academic_statuses": 2,
+      "subject_enrollments": 3,
+      "student_grades": 2,
+      "subject_class_sessions": 2,
+      "subject_attendance_records": 3,
+      "student_financial_status": 2,
+      "workspace_snapshots": 1,
+      "exam_engine_v21_states": 1,
+      "deleted_person_records": 1,
+      "workspace_source_files": 1,
+      "teacher_availability_records": 1,
+      "teacher_workload_records": 1,
+      "teacher_exam_date_exclusions": 1,
+      "careers": 1,
+      "subjects": 1,
+      "study_plans": 1
+    },
+    "teacherA": {
+      "student_records": 2,
+      "teacher_records": 2,
+      "student_career_plans": 2,
+      "student_academic_statuses": 2,
+      "subject_enrollments": 3,
+      "student_grades": 2,
+      "subject_class_sessions": 2,
+      "subject_attendance_records": 3,
+      "student_financial_status": 2,
+      "workspace_snapshots": 1,
+      "exam_engine_v21_states": 1,
+      "deleted_person_records": 1,
+      "workspace_source_files": 1,
+      "teacher_availability_records": 1,
+      "teacher_workload_records": 1,
+      "teacher_exam_date_exclusions": 1,
+      "careers": 1,
+      "subjects": 1,
+      "study_plans": 1
+    },
+    "studentA": {
+      "student_records": 1,
+      "teacher_records": 0,
+      "student_career_plans": 1,
+      "student_academic_statuses": 1,
+      "subject_enrollments": 1,
+      "student_grades": 1,
+      "subject_class_sessions": 1,
+      "subject_attendance_records": 1,
+      "student_financial_status": 1,
+      "workspace_snapshots": 0,
+      "exam_engine_v21_states": 0,
+      "deleted_person_records": 0,
+      "workspace_source_files": 0,
+      "teacher_availability_records": 0,
+      "teacher_workload_records": 0,
+      "teacher_exam_date_exclusions": 0,
+      "careers": 1,
+      "subjects": 1,
+      "study_plans": 1
+    }
+  },
+  "failures": [],
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "errors": []
+  }
+}

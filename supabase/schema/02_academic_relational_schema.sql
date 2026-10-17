@@ -663,6 +663,7 @@ begin
   end loop;
 end $$;
 
+-- SEC.3: el catalogo academico (sin datos personales) lo lee cualquier miembro.
 do $$
 declare
   table_name text;
@@ -674,17 +675,86 @@ begin
     'study_plan_subjects',
     'subject_prerequisites',
     'plan_equivalences',
-    'teacher_records',
     'teacher_subject_assignments',
-    'course_schedules',
-    'student_records',
-    'student_career_plans',
-    'student_academic_statuses'
+    'course_schedules'
   ] loop
     execute format('drop policy if exists %I on public.%I', table_name || ' members read', table_name);
     execute format('create policy %I on public.%I for select to authenticated using (public.is_super_admin() or public.is_member_of_institution(institution_id))', table_name || ' members read', table_name);
   end loop;
 end $$;
+
+-- SEC.3: legajos y situacion academica tienen datos personales. Los lee el personal de la institucion
+-- (panel admin y docentes); un alumno solo lee lo propio.
+create or replace function public.current_user_owns_student_record(target_student_record_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.student_records student_record
+    where student_record.id = target_student_record_id
+      and student_record.profile_id = (select auth.uid())
+  );
+$$;
+
+revoke execute on function public.current_user_owns_student_record(uuid) from public, anon;
+grant execute on function public.current_user_owns_student_record(uuid) to authenticated;
+
+drop policy if exists "teacher_records members read" on public.teacher_records;
+create policy "teacher_records members read"
+on public.teacher_records
+for select
+to authenticated
+using (
+  public.is_super_admin()
+  or public.is_staff_of_institution(institution_id)
+  or (profile_id = (select auth.uid()) and public.is_member_of_institution(institution_id))
+);
+
+drop policy if exists "student_records members read" on public.student_records;
+create policy "student_records members read"
+on public.student_records
+for select
+to authenticated
+using (
+  public.is_super_admin()
+  or public.is_staff_of_institution(institution_id)
+  or (profile_id = (select auth.uid()) and public.is_member_of_institution(institution_id))
+);
+
+drop policy if exists "student_career_plans members read" on public.student_career_plans;
+create policy "student_career_plans members read"
+on public.student_career_plans
+for select
+to authenticated
+using (
+  public.is_super_admin()
+  or public.is_staff_of_institution(institution_id)
+  or (public.current_user_owns_student_record(student_id) and public.is_member_of_institution(institution_id))
+);
+
+drop policy if exists "student_academic_statuses members read" on public.student_academic_statuses;
+create policy "student_academic_statuses members read"
+on public.student_academic_statuses
+for select
+to authenticated
+using (
+  public.is_super_admin()
+  or public.is_staff_of_institution(institution_id)
+  or (
+    public.is_member_of_institution(institution_id)
+    and exists (
+      select 1
+      from public.student_career_plans career_plan
+      where career_plan.institution_id = student_academic_statuses.institution_id
+        and career_plan.id = student_academic_statuses.student_career_plan_id
+        and public.current_user_owns_student_record(career_plan.student_id)
+    )
+  )
+);
 
 drop policy if exists "teacher_records editors manage" on public.teacher_records;
 drop policy if exists "student_records editors manage" on public.student_records;

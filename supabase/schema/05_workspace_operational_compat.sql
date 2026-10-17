@@ -238,10 +238,15 @@ begin
     execute format('drop policy if exists %I on public.%I', target_table || ' editors update', target_table);
     execute format('drop policy if exists %I on public.%I', target_table || ' editors delete', target_table);
 
+    -- SEC.3: archivos fuente y datos de docentes solo para el personal; los catalogos legacy, cualquier miembro.
     execute format(
-      'create policy %I on public.%I for select to authenticated using (public.is_super_admin() or public.is_member_of_institution(institution_id))',
+      'create policy %I on public.%I for select to authenticated using (public.is_super_admin() or %s(institution_id))',
       target_table || ' members read',
-      target_table
+      target_table,
+      case when target_table in ('workspace_source_files', 'teacher_availability_records', 'teacher_workload_records')
+        then 'public.is_staff_of_institution'
+        else 'public.is_member_of_institution'
+      end
     );
 
     execute format(
@@ -306,7 +311,8 @@ using (
   bucket_id = 'workspace-source-files'
   and (
     public.is_super_admin()
-    or public.is_member_of_institution(public.storage_object_institution_id(name))
+    -- SEC.3: las planillas subidas tienen datos personales; solo el personal de la institucion.
+    or public.is_staff_of_institution(public.storage_object_institution_id(name))
   )
 );
 
