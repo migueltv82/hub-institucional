@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { isAllowedBrowserRequest, separateFixtureAuth } from './validateIntegratedAcceptanceLocal.mjs';
+import { DUAL_WRITE_TRANSITION, EXAM_MODES, expectedFailurePhase, isAllowedBrowserRequest, separateFixtureAuth, transitionSql } from './validateIntegratedAcceptanceLocal.mjs';
 import { fixtureSql } from './validateExamEligibilityParityLocal.mjs';
 import { assertOwnedStackDatabase } from './localSupabaseStack.mjs';
 
@@ -30,5 +30,17 @@ describe('integrated acceptance harness boundaries', () => {
     expect(() => assertOwnedStackDatabase(owned)).not.toThrow();
     expect(() => assertOwnedStackDatabase({ ...owned, marker: null })).not.toThrow();
     for (const change of [{ database: 'postgres' }, { run: 'different' }, { owner: 'postgres' }, { marker: 'another-owner' }, { marker: undefined }]) expect(() => assertOwnedStackDatabase({ ...owned, ...change })).toThrow();
+  });
+  it('cubre los dos modos de transicion de la mesa y la reinscripcion en dual_write (QA.1 / PB.1)', () => {
+    expect(EXAM_MODES).toEqual(['dual_write', 'default', 'dual_write']);
+    expect(DUAL_WRITE_TRANSITION).toEqual({ stage: 'dual_write', write_mode: 'dual_write', read_mode: 'snapshot_only', dual_write_enabled: true });
+    expect(transitionSql('dual_write')).toContain("'academic_relational_transition'");
+    expect(transitionSql('default')).toBe("delete from public.app_settings where key = 'academic_relational_transition';");
+    expect(() => transitionSql('relational_primary')).toThrow();
+  });
+  it('solo tolera errores HTTP en las fases adversariales declaradas', () => {
+    expect(expectedFailurePhase('adversarial dual_write: Edge replay')).toBe(true);
+    expect(expectedFailurePhase('student exam dual_write: cancel through UI')).toBe(false);
+    expect(expectedFailurePhase('admin_instituto/a logout')).toBe(false);
   });
 });

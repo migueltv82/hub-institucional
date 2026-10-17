@@ -27,6 +27,17 @@ export function separateFixtureAuth(source) {
   assert.equal(users.length, 10, 'Shared fixture Auth contract changed');
   return { users, sql: source.replace(block[0], '') };
 }
+// Modos de transicion del fixture (RUNBOOK §4.1). El principal es dual_write; default = sin fila (snapshot_only).
+// El tercer ciclo (dual_write de nuevo) reinscribe sobre la fila del snapshot que ya existe: es el caso de PB.1.
+export const EXAM_MODES = Object.freeze(['dual_write', 'default', 'dual_write']);
+export const DUAL_WRITE_TRANSITION = Object.freeze({ stage: 'dual_write', write_mode: 'dual_write', read_mode: 'snapshot_only', dual_write_enabled: true });
+export function transitionSql(mode) {
+  if (mode === 'dual_write') return `insert into public.app_settings(key, value, is_public) values ('academic_relational_transition', '${JSON.stringify(DUAL_WRITE_TRANSITION)}'::jsonb, false) on conflict (key) do update set value = excluded.value;`;
+  assert.equal(mode, 'default', `Modo de transicion desconocido: ${mode}`);
+  return "delete from public.app_settings where key = 'academic_relational_transition';";
+}
+// Los negativos adversariales esperan 4xx a proposito: no son fallas del frontend.
+export const expectedFailurePhase = phase => phase.startsWith('adversarial ');
 const tenant = key => `${key}1000000-0000-4000-8000-000000000001`;
 const user = (key, number) => `${key}2000000-0000-4000-8000-00000000000${number}`;
 const actors = [
@@ -132,7 +143,8 @@ export async function main() {
         phase = `${actor.role}/${actor.key} own login`;
         await login(page, actor, tenant(actor.key));
         await page.waitForURL(url => url.pathname.startsWith('/app'), { timeout: 30000 });
-        const logout = page.getByRole('button', { name: 'Cerrar sesion', exact: true }).first();
+        // El panel admin rotula el logout "Cambiar sesion"; los portales, "Cerrar sesion".
+        const logout = page.getByRole('button', { name: /^(Cerrar sesion|Cambiar sesion)$/ }).first();
         await logout.waitFor({ timeout: 30000 });
         assert.equal(await page.evaluate(() => localStorage.getItem('mesaflow.activeInstitutionId')), tenant(actor.key));
         if (actor.role === 'docente') await page.getByText('Portal docente', { exact: true }).first().waitFor();
@@ -147,26 +159,79 @@ export async function main() {
         report.checks.push({ role: actor.role, institution: actor.key, login: true, correctRole: true, foreignInstitutionRejected: true, logout: true, protectedRouteAfterLogout: true });
       } finally { await context.close(); }
     };
+    const isEdgePost = response => new URL(response.url()).pathname === '/functions/v1/admin-users' && response.request().method() === 'POST';
+    const examCounts = () => JSON.parse(stack.sql(`select json_build_object(
+      'relational', (select count(*) from public.exam_enrollments where student_id='${user('a', 3)}' and status='registered'),
+      'snapshot', (select count(*) from public.workspace_snapshots s, jsonb_array_elements(coalesce(s.payload->'examEnrollments','[]'::jsonb)) e where s.institution_id='${tenant('a')}' and e->>'student_id'='${user('a', 3)}' and e->>'status'='registered'));`));
+    const gradeFilter = `student_id='${user('a', 3)}' and subject_id='FIX-A-01' and program_id='Fixture Career A' and deleted_at is null`;
+    const examScenario = async (page, mode) => {
+      const result = { mode };
+      stack.sql(transitionSql(mode));
+      const originalStatuses = stack.sql(`select json_agg(json_build_array(id, academic_status)) from public.student_grades where ${gradeFilter};`);
+      phase = `student exam ${mode}: positive through UI`;
+      await page.goto(`${origin}/app/mesas-examen`, { waitUntil: 'networkidle' });
+      const [registered] = await Promise.all([page.waitForResponse(isEdgePost), page.getByRole('button', { name: 'Inscribirme', exact: true }).first().click()]);
+      assert.equal(registered.status(), 200, 'Exam mutation failed');
+      const registeredData = await registered.json();
+      result.sources = { snapshot: registeredData.sources?.snapshot === true, relational: registeredData.sources?.relational === true };
+      result.writeMode = registeredData.transition?.write_mode ?? 'unclassified';
+      result.readMode = registeredData.transition?.read_mode ?? 'unclassified';
+      const replayBody = registered.request().postDataJSON();
+      await page.getByRole('button', { name: 'Cancelar inscripcion', exact: true }).first().waitFor();
+      result.afterRegister = examCounts();
+      assert.deepEqual(result.afterRegister, { relational: mode === 'dual_write' ? 1 : 0, snapshot: 1 }, `Registration persistence (${mode})`);
+      phase = `student exam ${mode}: cancel through UI`;
+      const [cancelled] = await Promise.all([page.waitForResponse(isEdgePost), page.getByRole('button', { name: 'Cancelar inscripcion', exact: true }).first().click()]);
+      assert.equal(cancelled.status(), 200, 'Exam cancel failed');
+      const cancelledData = await cancelled.json();
+      result.cancelSources = { snapshot: cancelledData.sources?.snapshot === true, relational: cancelledData.sources?.relational === true, relationalError: typeof cancelledData.sources?.relational_error === 'string' ? cancelledData.sources.relational_error.slice(0, 200) : null };
+      await page.getByRole('button', { name: 'Inscribirme', exact: true }).first().waitFor();
+      result.afterCancel = examCounts();
+      assert.deepEqual(result.afterCancel, { relational: 0, snapshot: 0 }, `Cancel persistence (${mode}) ${JSON.stringify(result.cancelSources)}`);
+      result.positive = true;
+      phase = `student exam ${mode}: not regular, UI`;
+      stack.sql(`update public.student_grades set academic_status='libre' where ${gradeFilter} and academic_status <> 'pending';`);
+      await page.reload({ waitUntil: 'networkidle' });
+      const blockedButton = page.getByRole('button', { name: 'Inscribirme', exact: true }).first();
+      await blockedButton.waitFor();
+      result.uiBlocked = await blockedButton.isDisabled() && await page.locator('p.border-amber-200').count() > 0;
+      assert.ok(result.uiBlocked, `UI must block a non-regular student (${mode})`);
+      // Negativos adversariales desde la pagina: el token se usa dentro del navegador y nunca vuelve al harness.
+      phase = `adversarial ${mode}: Edge replay`;
+      result.edge = await page.evaluate(async ({ body, anon }) => {
+        const key = Object.keys(localStorage).find(name => name.startsWith('institutionalhub.supabase.auth.session'));
+        const token = JSON.parse(localStorage.getItem(key) ?? '{}').access_token;
+        const response = await fetch('/functions/v1/admin-users', { method: 'POST', headers: { Authorization: `Bearer ${token}`, apikey: anon, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        return { status: response.status };
+      }, { body: replayBody, anon: stack.anonKey });
+      assert.equal(result.edge.status, 403, `Edge must reject a non-regular student (${mode})`);
+      phase = `adversarial ${mode}: direct RPC`;
+      result.rpc = await page.evaluate(async ({ anon, args }) => {
+        const key = Object.keys(localStorage).find(name => name.startsWith('institutionalhub.supabase.auth.session'));
+        const token = JSON.parse(localStorage.getItem(key) ?? '{}').access_token;
+        const response = await fetch('/rest/v1/rpc/upsert_exam_enrollment_from_portal', { method: 'POST', headers: { Authorization: `Bearer ${token}`, apikey: anon, 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+        const payload = await response.json().catch(() => null);
+        return { status: response.status, message: typeof payload?.message === 'string' ? payload.message : null };
+      }, { anon: stack.anonKey, args: {
+        target_institution_id: tenant('a'), target_workspace_key: 'main', actor_user_id: user('a', 3), target_student_id: user('a', 3),
+        target_student_record_id: 'a8000000-0000-4000-8000-000000000001', target_exam_table_id: 'aa000000-0000-4000-8000-000000000001',
+        target_subject_id: 'FIX-A-01', target_program_id: 'Fixture Career A',
+      } });
+      assert.equal(result.rpc.message, 'EXAM_REGULARITY_REQUIRED', `RPC must reject a non-regular student (${mode})`);
+      result.afterNegatives = examCounts();
+      assert.deepEqual(result.afterNegatives, { relational: 0, snapshot: 0 }, `Negatives must not write (${mode})`);
+      result.negatives = true;
+      for (const [id, status] of JSON.parse(originalStatuses)) stack.sql(`update public.student_grades set academic_status=${quote(status)} where id='${id}';`);
+      return result;
+    };
     await withActor(actors[0], async page => {
       phase = 'student subjects';
       await page.goto(`${origin}/app/materias`, { waitUntil: 'networkidle' });
       await page.getByText('FIX-A-01', { exact: false }).first().waitFor();
-      phase = 'student exam registration through UI';
-      await page.goto(`${origin}/app/mesas-examen`, { waitUntil: 'networkidle' });
-      report.examUi = { registerButtons: await page.getByRole('button', { name: 'Inscribirme', exact: true }).count(), cards: await page.locator('article').count() };
-      const register = page.getByRole('button', { name: 'Inscribirme', exact: true }).first();
-      const mutation = page.waitForResponse(response => new URL(response.url()).pathname === '/functions/v1/admin-users' && response.request().method() === 'POST');
-      const [response] = await Promise.all([mutation, register.click()]);
-      report.examMutationStatus = response.status();
-      assert.equal(response.status(), 200, 'Exam mutation failed');
-      const responseData = await response.json();
-      report.examSources = { snapshot: responseData.sources?.snapshot === true, relational: responseData.sources?.relational === true };
-      report.examReadMode = ['snapshot', 'snapshot_only', 'hybrid_read', 'relational_primary'].includes(responseData.transition?.read_mode) ? responseData.transition.read_mode : 'unclassified';
-      phase = 'student exam registration persisted';
-      await page.getByRole('button', { name: 'Cancelar inscripcion', exact: true }).first().waitFor();
-      report.examRelationalRows = Number(stack.sql(`select count(*) from public.exam_enrollments where student_id='${user('a', 3)}' and deleted_at is null;`));
-      assert.equal(report.examRelationalRows, 1);
-      report.examRegistered = true;
+      // QA.1 (17/10): mesa en los dos modos de transicion, con negativos UI / Edge / RPC por modo.
+      report.examModes = [];
+      for (const mode of EXAM_MODES) report.examModes.push(await examScenario(page, mode));
+      report.examRegistered = report.examModes.every(entry => entry.positive && entry.negatives);
     });
     await withActor(actors[1], async page => {
       phase = 'teacher attendance through UI';
@@ -212,11 +277,16 @@ export async function main() {
     });
     await withActor(actors[3], async () => {});
     assert.equal(report.externalRequests, 0, 'External requests attempted');
-    assert.deepEqual(report.httpFailures, [], 'Unexpected browser HTTP error');
+    report.expectedAdversarialFailures = report.httpFailures.filter(failure => expectedFailurePhase(failure.phase)).length;
+    assert.deepEqual(report.httpFailures.filter(failure => !expectedFailurePhase(failure.phase)), [], 'Unexpected browser HTTP error');
     assert.deepEqual(report.pageErrors, [], 'Browser exception');
     assert.equal(serverErrors, 0, 'Vite server error');
     report.result = 'PASS';
-  } catch (error) { report.result = 'FAIL'; report.failedAt = phase; report.errorType = error.name; }
+  } catch (error) {
+    report.result = 'FAIL'; report.failedAt = phase; report.errorType = error.name;
+    // Solo los mensajes de assert propios: no llevan tokens ni datos de cuentas.
+    if (['AssertionError', 'TimeoutError'].includes(error.name)) report.errorMessage = String(error.message).split('\n').slice(0, 8).join(' | ').slice(0, 600);
+  }
   finally {
     const errors = [];
     for (const resource of [browser, server]) if (resource) try { await resource.close(); } catch { errors.push('Browser/server close failed'); }

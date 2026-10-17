@@ -1,41 +1,42 @@
-# QA.1 — Aceptación integrada local: bloqueo de configuración
+# QA.1 — Aceptación integrada local (navegador real + Edge en un solo run)
 
-Fecha: 2026-10-17. Base: release/v1 03bf2ab. **QUALITY GATE: FAIL** para la aceptación: falta resolver la configuración que debe acreditar la RPC. No se declara fallo del producto por este modo de operación ni aceptación E2E PASS.
+Fecha: 2026-10-17. Ejecutado por Claude, que retomó el WIP 2e0931c de Codex por decisión de Miguel. Staging, Production, SQL remoto y deploy: NONE.
 
-## Evidencia real
+## Resultado: **FAIL**, por un solo hallazgo de producto fuera de alcance (PB.2). Todos los flujos de la tarjeta pasan.
 
-Run final `2b63fb0c651fc86a`, servicios reales locales: PostgreSQL, GoTrue, PostgREST, nginx, Edge Runtime admin-users, Vite y Chrome aislado. Las imágenes nginx1.27-alpine y Edge1.77.4 tienen los digests exactos aprobados por Claude, registrados en EVIDENCE.json. El stack se comprobó antes con run eb4ffe9b0995c507, arranque/teardown PASS.
+Run `3fdbb7cea996e9e2` (`INTEGRATED_ACCEPTANCE_LOCAL_EVIDENCE.json`). Corre sobre servicios reales locales: PostgreSQL, GoTrue, PostgREST, nginx, Edge Runtime con `admin-users`, Vite y Chrome aislado. Los digests de las imágenes son los aprobados. Cleanup: 0 bases, 0 contenedores, 0 archivos temporales. Requests externos: 0. Errores de página: 0.
 
-El fixture compartido A/B crea diez usuarios por la API real GoTrue; cuatro son las cuentas de navegador previstas (alumnos A/B, docente A y admin A), seis son auxiliares del fixture SQL y no se autentican. Contraseñas aleatorias y claves efímeras solo en memoria/entorno; sin storageState, trazas, capturas ni tokens persistidos. El navegador bloquea orígenes externos.
+| Flujo (desde la UI) | Resultado |
+| --- | --- |
+| Login por formulario, rol correcto, rechazo visible de la otra institución, logout y ruta protegida después del logout. Lo hacen 4 cuentas: alumno A, docente A, admin A y alumno B | PASS (5 recorridos) |
+| Alumno: materias y mesa en **3 ciclos** de transición (abajo) | PASS |
+| Docente: asistencia y notas (parciales y final) | PASS |
+| Alumno relee asistencia y notas | PASS |
+| Admin: alta de alumno vía Edge, con auditoría `bulk_create_students` | PASS |
+| Cierre de la sesión admin | **FAIL**: `DELETE /rest/v1/teacher_records` → 409 (PB.2) |
 
-Alcanzado con alumno A:
-- formulario de login real y rechazo visible de institución B;
-- login en A, rol alumno, institución activa correcta y materia FIX-A-01 visible;
-- mesa futura publicada visible y botón Inscribirme;
-- petición real a admin-users: HTTP200; aparece Cancelar inscripción;
-- respuesta Edge: sources.snapshot=true, sources.relational=false, read_mode=snapshot_only;
-- consulta real: exam_enrollments del alumno A contiene **0 filas**. La assertion exige1 y falla.
+### Mesa de examen por modo
 
-No ejecutados por el corte: logout, restantes actores, carga docente, relectura del alumno y alta administrativa. La existencia de esos pasos en el harness no acredita ejecución.
+El flag de transición se fija solo en el fixture, en `app_settings.academic_relational_transition`.
 
-## Contradicción que debe resolver Claude
+| Ciclo | Inscribir (UI) | Cancelar (UI) | No regular: UI | No regular: Edge (replay) | No regular: RPC directa | Escrituras de los negativos |
+| --- | --- | --- | --- | --- | --- | --- |
+| `dual_write` (Producción, runbook §4.1) | 200 · relacional 1 · snapshot 1 | 200 · 0 / 0 | botón deshabilitado con motivo | 403 | 400 `EXAM_REGULARITY_REQUIRED` | 0 / 0 |
+| default (sin fila = `snapshot_only`) | 200 · relacional 0 · snapshot 1 (**la RPC no participa**) | 200 · 0 / 0 | ídem | 403 | 400 `EXAM_REGULARITY_REQUIRED` | 0 / 0 |
+| `dual_write`, reinscripción sobre la misma fila del snapshot | 200 · 1 / 1 | 200 · 0 / 0 | ídem | 403 | 400 `EXAM_REGULARITY_REQUIRED` | 0 / 0 |
 
-HACER2 pide inscripción por RPC del portal. `admin-users/index.ts` exige relacional para enroll_subject/withdraw_subject; register_exam depende del modo de transición. `studentPortalMutations.js` exige confirmación relacional en hybrid_read/relational_primary. El fixture compartido y el baseline arrancan en snapshot_only.
+Los negativos de Edge y RPC corren dentro de la página, con la sesión real del alumno. El token se usa en el navegador y nunca vuelve al harness. Esos 4xx esperados se cuentan aparte (`expectedAdversarialFailures = 6`); cualquier otro error HTTP falla el run.
 
-Pregunta enviada en la tarjeta: A) definir flags de transición solo para el fixture y acreditar el camino relacional, o B) correctivo separado si el comportamiento por defecto debe ser diferente. Recomendación A si la aceptación representa el modo relacional; registrar explícitamente sus límites. **No se cambian flags por suposición, defaults de la app, schema, RPC ni grants.**
+## Hallazgos de producto
 
-## Preparación corregida y límites
+- **PB.1, corregido** (commit propio). En `dual_write` el alumno no podía cancelar una inscripción a mesa: daba 404, y después de arreglar eso, la relacional quedaba igual en `registered`. Evidencia del "antes": `INTEGRATED_ACCEPTANCE_PB1_BEFORE_FIX_EVIDENCE.json`.
+- **PB.2, abierto, pide decisión.** El autosave del admin (`saveWorkspaceSnapshot` → `syncRosterRecords`) sincroniza docentes con `deleteMissing: true`: borra los `teacher_records` que no están en la planilla del admin. Para alumnos ya es `false`.
+  - Acá el borrado choca con la FK de las asignaciones (409). El error corta el autosave antes de `syncTeacherAcademicRecords`.
+  - Si el docente no tuviera asignaciones, el legajo docente se borraría en silencio.
 
-Ensayos anteriores e50b2c9f43e25ba4,46708ed011f18d46,96f5bd9e8e22fc6f y eb902742907ccff1 quedaron FAIL y limpiados. Se corrigió el fixture: usuarios SQL incompletos se reemplazaron por altas Auth API; se confirmó el docente y se completó fecha futura/publicación del snapshot, precondiciones ya exigidas por la aplicación. [GoTrue2.196.0 acepta IDs sintéticos para Admin API](https://github.com/supabase/auth/blob/v2.196.0/internal/api/admin.go).
+## Cambios al harness
 
-El nuevo harness verifica IDs de Auth, digests antes de crear recursos, errores HTTP sanitizados, red local y datos docentes exactos por alumno/materia/carrera. El stack compartido permite recuperar CREATE parcial con marcador null únicamente para nombre generado previamente ausente y owner estándar; verifica ausencia final. Revisión independiente cerró los dos P2 de cleanup y correlación de datos. Code/Adversarial Review PASS, sin P0/P1/P2 abiertos en el diff; los pasos UI no alcanzados siguen sin certificar.
-
-Cleanup del último ensayo: 0 bases,0 contenedores,0 temporales,0 errores. Logs locales ignorados y entregables se conservan. Imágenes descargadas son dependencias autorizadas, no residuos de fixtures. Sin cambios en contenedores supabase_* preexistentes. Staging/Production/SQL remoto/deploy NONE.
-
-## Verificación reproducible
-
-`node scripts/validateIntegratedAcceptanceLocal.mjs` reproduce el FAIL explícito en el modo actual; no usarlo como smoke remoto.
-
-Tests focales y consumidores del stack:10PASS. Lint focal PASS. quality:full PASS exit0:2470tests/312archivos,lint,auditoría repo,build1,66s,auditoría producción114archivos,dependencias0high/critical y7moderate. Typecheck NO DISPONIBLE(JS). Browser/E2E FAIL(incompleto por configuración); Database PASS para el conteo0 observado y cleanup; RLS NO APLICA como certificación completa; Security/CodeReview/Adversarial PASS para el harness. Performance WARNING: fixture pequeño, sin benchmark de producción. Auditoría final reservada a Claude.
-
-RESPUESTA CLAUDE posterior exige acreditar ambos modos en un run. Se pidió precisar la clave: el código lee academic_relational_transition, mientras la respuesta decía academic_transition_config. Además se requiere aclarar cómo acreditar rechazo RPC del no regular cuando UI y Edge impiden llegar a la RPC. Propuesta: negativoUI más llamada adversarial autenticada desde el navegador, sin persistir token. Ambos puntos están pendientes; esta entrega WIP conserva el ensayo snapshot_only y no implementa silenciosamente un sustituto.
+- Flag de transición por ciclo, solo en el fixture.
+- Ciclo completo inscribir → cancelar → no regular, con negativos UI / Edge / RPC.
+- El rótulo del logout del panel admin es "Cambiar sesion".
+- La evidencia incluye el texto de los asserts propios. No incluye tokens ni datos de cuentas.

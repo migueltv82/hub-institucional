@@ -857,3 +857,13 @@ Fix en `admin-users`:
 - `register_exam` devuelve la fila guardada.
 
 Evidencia: el harness integrado pasa en 3 ciclos (dual_write, default, dual_write); con el Edge anterior da 404.
+
+## 2026-10-17 — QA.1 aceptación integrada local (Claude, retoma el WIP de Codex)
+
+Navegador real + Edge en un run. Pasan login/logout/cross-tenant de 4 roles, la mesa en 3 ciclos (dual_write / default / reinscripción) con negativos UI/Edge/RPC, docente asistencia+notas, relectura del alumno y alta admin vía Edge.
+
+Hallazgos:
+- PB.1, corregido.
+- PB.2, autosave admin que borra `teacher_records` → 409. Abierto, pide decisión de Miguel.
+
+Resultado: FAIL solo por PB.2.
