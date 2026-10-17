@@ -900,3 +900,9 @@ Fix en `admin-users`:
 - `enroll_subject` devuelve la fila guardada.
 
 QA.1 cubre ahora "Desistir" desde la UI y pasa. Lo único pendiente sigue siendo PB.2.
+
+## 2026-10-17 — PB.2 el autosave del admin no borra legajos docentes (Claude; DECISIÓN MIGUEL: sí)
+
+`syncRosterRecords` sincroniza docentes con `deleteMissing: false`, igual que alumnos. La baja de un docente queda como acción explícita del admin. Hay un test de control que falla sin el cambio.
+
+QA.1 da PASS completo (run 0acadb124b4da21e): 4 roles, mesa en 3 ciclos con negativos UI/Edge/RPC, desistir materia, docente, relectura del alumno y alta admin vía Edge.

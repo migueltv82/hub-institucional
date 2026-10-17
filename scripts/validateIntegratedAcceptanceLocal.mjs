@@ -283,6 +283,11 @@ export async function main() {
       assert.equal(stack.sql(`select count(*) from auth.users where email=${quote(newEmail)};`), '1');
       assert.equal(stack.sql("select count(*) from public.admin_audit_logs where action='bulk_create_students' and status='success';"), '1');
       report.adminCreatedThroughEdge = true;
+      // "Accesos listos" abre un aviso importante que queda visible hasta que el admin lo cierra (como en la UI real).
+      const notice = page.locator('[aria-labelledby="important-notice-title"]');
+      await notice.waitFor({ timeout: 15000 });
+      while (await notice.count()) await notice.locator('button.btn-primary').click();
+      report.adminNoticeClosed = true;
     });
     await withActor(actors[3], async () => {});
     assert.equal(report.externalRequests, 0, 'External requests attempted');
@@ -294,7 +299,7 @@ export async function main() {
   } catch (error) {
     report.result = 'FAIL'; report.failedAt = phase; report.errorType = error.name;
     // Solo los mensajes de assert propios: no llevan tokens ni datos de cuentas.
-    if (['AssertionError', 'TimeoutError'].includes(error.name)) report.errorMessage = String(error.message).split('\n').slice(0, 8).join(' | ').slice(0, 600);
+    if (['AssertionError', 'TimeoutError'].includes(error.name)) report.errorMessage = String(error.message).split('\n').slice(0, 16).join(' | ').slice(0, 1200);
   }
   finally {
     const errors = [];

@@ -329,6 +329,9 @@ export async function syncRosterRecords({ institutionId, workspaceKey = 'main', 
       keyForRow: getTeacherRecordKey,
       institutionId,
       workspaceKey,
+      // PB.2: igual que alumnos, el autosave nunca borra legajos docentes. Un docente que falta en la planilla
+      // puede tener acceso, asignaciones o haber sido creado por otra via; la baja es una accion explicita.
+      deleteMissing: false,
     }),
   ])
 
