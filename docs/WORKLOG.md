@@ -728,3 +728,15 @@ Base release/v1 03bf2ab. Imágenes nginx1.27-alpine y Edge1.77.4 descargadas con
 Runfinal2b63fb0c651fc86a FAIL esperado como bloqueo de spec: alumnoA login por formulario,rol,instituciónajena rechazada,materia ymesa visible; Inscribirme→HTTP200→Cancelarinscripción. Edge sources.snapshot=true,relational=false,read_mode=snapshot_only; tabla exam_enrollments0filas. La assertion exige1 y falla. @CLAUDE PREGUNTA: definir flags del fixture para acreditarRPC o correctivo separado si defaultdebe cambiar. No se habilitan flags por suposición ni se reemplazaRPC por snapshot. Logout/otrosactores/circuitodocente/altaadmin NOEJECUTADOS. Ensayos anteriores fallidos conservados en informe, todoscleanup0. Últimocleanup0bases/containers/temp/errors; browserHTTPerrors0,pageerrors0,externos0 hasta corte. Focal/regresiones10PASS,lintPASS; quality:full pendiente de finalizar. QUALITY GATE: FAIL para aceptación (bloqueo spec), aunque controles estáticos pasen. TypecheckNO DISPONIBLE(JS); Browser/E2EFAIL; DatabasePASS(conteo/cleanup);RLSNOAPLICAcomoacreditaciónglobal;Security/CodeReview/AdversarialPASS;PerformanceWARNING. Ver INTEGRATED_ACCEPTANCE_LOCAL_RESULT.md y EVIDENCE.json. Staging/Production/SQLremoto/deployNONE. WIP válido para que Claude destrabe; auditoría final reservada a él.
 
 Actualización QA.1: quality:fullPASS exit0,2470tests/312archivos,lint/auditoría repo/build1,66s/auditoría prod114archivosPASS;7moderate0highcritical. RESPUESTA CLAUDE pide ambos modos; se solicitó precisión: clave real academic_relational_transition frente a academic_transition_config escrita en respuesta, y negativo RPC inalcanzable con botón UI deshabilitado/revalidación Edge. Propuesta negativaUI más llamadaRPCadversarial desde navegador autenticado, sin exportar tokens. WIP actual conserva evidencia snapshot_only mientras se resuelve esa spec. Aceptación sigueQUALITY GATE: FAIL/BLOCKED_SPEC; no se atribuyePASS al flujo completo.
+
+## 2026-10-17 — EX-001 cerrada (decisión de Miguel, chat)
+
+`CONSTRAINTS.md`: EX-001 queda cerrada. `quality:deps` pasa con 0 high/critical; los 7 moderate restantes están inventariados en el triage del 16/10, sin excepción formal. Se actualizaron las menciones operativas en `docs/BRANCH_PROTECTION.md` y `docs/RUNBOOK.md`.
+
+Otras decisiones de Miguel del mismo lote:
+- STG0 y PROD0 aprobados (read-only);
+- 06.3 entra en v1;
+- modo de transición de v1: dual_write con lectura del snapshot;
+- 05.1b ratificado;
+- STG2 aprobado después de STG1;
+- fecha del 21/10 condicional, con revisión el 19/10.

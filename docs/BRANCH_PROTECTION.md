@@ -38,7 +38,7 @@ Configuración recomendada para esta política:
 
 - Exigir PR antes de integrar. Si el repo sigue con un único mantenedor, no imponer una cantidad de reviews imposible de cumplir; usar el PR como trazabilidad y hacer obligatoria la revisión humana adicional cuando haya otro colaborador disponible. Si se suma un colaborador estable, exigir al menos una aprobación externa e invalidarla cuando haya nuevos cambios revisables.
 - Exigir status checks y seleccionar `Quality gate (Node 22.13)`, emitido por GitHub Actions, **solo después de confirmarlo en una ejecución real**. No seleccionar un check inexistente ni uno de otro workflow.
-- Mantener `Dependency Audit` como auditoría manual mientras `EX-001` esté vigente; no agregarla como check obligatorio de PR/main sin completar antes el triage de dependencias.
+- `EX-001` se cerró el 2026-10-17 y `quality:deps` pasa. `Dependency Audit` puede pasar a check obligatorio cuando Miguel lo decida. Hasta entonces, mantenerlo como auditoría manual; no agregarla como check obligatorio de PR/main sin completar antes el triage de dependencias.
 - Exigir que la rama esté actualizada respecto de `main` antes del merge. Costo: puede requerir actualizar/re-ejecutar CI si `main` avanza. Beneficio: evita integrar código validado contra una base vieja; para este repo se prioriza seguridad sobre comodidad.
 - Exigir que las conversaciones estén resueltas antes del merge.
 - Mantener deshabilitados force push sobre `main`.
