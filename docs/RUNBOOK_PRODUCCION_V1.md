@@ -125,6 +125,29 @@ rollback;
 
 Esperado: `handle_new_user_ok = true`, `firmas = 1`, `tablas_sin_rls = 0`. Las pruebas negativas de RLS con usuarios y tenants sintéticos **no** se corren en Producción: ya se acreditaron en local (03.2) y en Staging (P5). En Producción alcanza con estas verificaciones de catálogo más el smoke de la sección 8. Si cualquier verificación falla: sección 9.
 
+### 4.1 Modo de transición académica: dual_write (decisión de Miguel, 17/10)
+
+Con el modo por defecto (`snapshot_only`), la inscripción a mesa del portal se guarda solo en `workspace_snapshots` y la RPC autoritativa `upsert_exam_enrollment_from_portal` no se ejecuta. v1 sale en `dual_write`: escribe también en las tablas relacionales a través de la RPC y sigue leyendo del snapshot.
+
+Es una **escritura de datos**: pedir OK puntual a Miguel en el momento. Antes, leer el valor actual (lo informa PROD0):
+
+```sql
+select value from public.app_settings where key = 'academic_relational_transition';
+```
+
+Aplicar:
+
+```sql
+insert into public.app_settings (key, value, is_public)
+values ('academic_relational_transition',
+        '{"stage":"dual_write","write_mode":"dual_write","read_mode":"snapshot_only","dual_write_enabled":true}'::jsonb,
+        false)
+on conflict (key) do update set value = excluded.value, updated_at = timezone('utc', now());
+select public.get_academic_transition_config();  -- debe devolver write_mode = dual_write
+```
+
+Rollback (R3): reponer el `value` leído antes, o borrar la fila para volver al default `snapshot_only`. El modo queda acreditado por QA.1, que ensaya los dos modos.
+
 ## 5. Deploy de Edge Functions
 
 Desde el hash candidato, con la CLI autenticada y **apuntando explícitamente** a `PROD_REF`:
