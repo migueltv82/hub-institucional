@@ -27,3 +27,20 @@ Después: Claude verifica las versiones nuevas y corre `scripts/smokeCheck.mjs` 
 
 - `source-file-storage` también va con `--no-verify-jwt`: valida el Bearer en `handler.js` y atiende el preflight CORS. Así está en Staging. Sin el flag, el preflight se rompería. No se agregó a `supabase/config.toml`: el audit de seguridad del repo exige ver la validación en `index.ts` y acá vive en `handler.js` (tarjeta SEC.1).
 - La verificación del §4.1 usaba `get_academic_transition_config()`, que exige sesión de usuario (`AUTH_REQUIRED`) y fallaría en el SQL Editor. Ahora se lee `app_settings` directamente.
+
+## STG1b — 06.3 + HARD.1 + `rls_auto_enable` (2026-10-17)
+
+Aprobación: Miguel (chat 17/10, "ok STG1b, aplicalo"). Ejecutado por Claude con el conector Supabase sobre `Hub-Institucional-Staging` (`lzjp…aeco`).
+
+| Paso | Cómo | Resultado |
+| --- | --- | --- |
+| Migration `stg1b_063_hard1_part1` | `create or replace` literal de release/v1 (con su revoke/grant) de `is_member_of_institution` (01), `storage_object_institution_id` (05) y `upsert_subject_enrollment_from_portal` (07), más `revoke execute on function public.rls_auto_enable() from public, anon, authenticated` | OK |
+| Migration `stg1b_063_part2_exam_enrollment` | `create or replace` literal de `upsert_exam_enrollment_from_portal` (08), con su revoke/grant | OK |
+| Hash de cuerpo de las 4 funciones, Staging vs. base local con el baseline de release/v1 | `md5(pg_get_functiondef)` sin CR, `search_path`, EXECUTE de anon y authenticated | **Iguales**: `2f76618c`, `f81e5258`, `6d005d56` y `c02e5398`. anon = false, authenticated = true |
+| `rls_auto_enable()` | `has_function_privilege` | anon = false, authenticated = false |
+| Advisors de seguridad | `get_advisors` | Sin 0011 y sin `rls_auto_enable`. Lo que queda está triado como "por diseño" en `STAGING_ADVISORS_RESULT.md` |
+| Verificación §4 del runbook | read-only | `handle_new_user_ok = t`, `firmas = 1`, `tablas_sin_rls = 0` de 44, `write_mode = dual_write` |
+
+Staging no tiene datos: no hubo que migrar nada. La base de Staging vuelve a estar **sin diferencias** contra release/v1 en `434509b`; las únicas diferencias esperadas son el gateway y el `rls_auto_enable` de la plataforma.
+
+**Edge: sigue PENDIENTE (Miguel, CLI).** Staging tiene `admin-users` v3 (10/10) y `source-file-storage` v1 (05/10). Sin el redeploy, la parte de 06.3 que vive en la Edge todavía no corre en Staging.

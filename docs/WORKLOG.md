@@ -832,3 +832,14 @@ Resultado:
 - El control sin upsert da FAIL.
 
 Runbook: R4b nuevo, con comandos copiables y límites. Template versionado en `supabase/security/public_repair_template.sql`.
+
+## 2026-10-17 — STG1b aplicado en Staging (Claude, aprobado por Miguel)
+
+Se aplicaron 06.3 (helper RLS + 2 RPC del alumno) y HARD.1 en Staging, más el revoke de `rls_auto_enable`.
+
+Verificación:
+- los hashes de las 4 funciones coinciden con release/v1;
+- los advisors quedan limpios de 0011 y `rls_auto_enable`;
+- §4 OK.
+
+Pendiente: redeploy de las Edge (Miguel, CLI). Detalle en `supabase/security/STAGING_PROMOTION_RESULT.md`.
