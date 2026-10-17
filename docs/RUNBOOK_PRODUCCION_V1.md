@@ -98,6 +98,8 @@ Fuente de verdad: `supabase/schema/` del hash candidato. Los archivos son autoco
 05_student_portal_secure_read.sql   ← va al final: depende de 07 y 08
 ```
 
+Después del baseline: **`supabase/security/source_file_storage_gateway.sql`**, el enforcement del gateway de Storage. En Staging se aplicó el 05/10 como migration `storage_source_file_gateway_enforcement` (ver `supabase/baseline/STAGING_SECURITY_2_RESULT.md`), y el código de release/v1 (Edge `source-file-storage`) depende de sus RPC. El script **no es idempotente** (`create table` sin `if not exists`): aplicarlo una sola vez, solo si PROD0 muestra que falta (`source_file_storage_*` ausentes). Si ya está, no reaplicarlo.
+
 Reglas:
 
 1. Aplicar **solo** los archivos que PROD0 marcó con drift, en ese orden relativo. Si PROD0 marcó todos, aplicar los nueve.
