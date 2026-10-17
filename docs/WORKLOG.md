@@ -751,3 +751,20 @@ Controles:
 - base con el 07 previo a 03.5b → 1 diferencia (solo `07_academic_operations.sql`).
 
 Test focal 4/4. Instrucciones en `supabase/security/DRIFT_KIT_README.md`.
+
+## 2026-10-17 — STG0 drift read-only de Staging (Claude, con el conector Supabase)
+
+Staging coincide con release/v1 en tablas, RLS, policies, triggers y 36 de 37 funciones. Falta 03.5b (`academic_teacher_upsert_student_grade`).
+
+- Gateway de Storage aplicado, como se esperaba.
+- Base vacía.
+- Modo de transición en default `snapshot_only`.
+- Las dos Edge Functions son anteriores a `1e47d92`: hay que redesplegarlas.
+
+El kit ahora normaliza CRLF: Staging tiene los cuerpos de las funciones con `\r`, lo que generaba 30 falsos positivos.
+
+Hallazgo: el runbook de Producción no incluye `source_file_storage_gateway.sql`.
+
+PROD0 quedó pendiente: la base de Producción rechaza la conexión directa (ECONNREFUSED); probablemente tiene restricciones de red. Miguel lo corre desde el SQL Editor.
+
+Detalle en `supabase/security/STAGING_DRIFT_RESULT.md`.

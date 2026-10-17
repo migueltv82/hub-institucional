@@ -9,7 +9,7 @@ select json_build_object(
   'functions', (
     select coalesce(json_agg(json_build_object(
       'sig', p.oid::regprocedure::text,
-      'body_md5', md5(pg_get_functiondef(p.oid)),
+      'body_md5', md5(replace(pg_get_functiondef(p.oid), chr(13), '')),  -- sin CR: el SQL Editor de Windows guarda CRLF
       'secdef', p.prosecdef,
       'config', coalesce(array_to_string(p.proconfig, ','), ''),
       'anon_exec', has_function_privilege('anon', p.oid, 'execute'),
