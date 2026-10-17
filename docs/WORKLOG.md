@@ -800,3 +800,14 @@ Ahora suspender una institución corta de verdad, en tres lugares:
 Los dos últimos caminos no estaban en la tarjeta: los encontró el harness. El superadmin no cambia.
 
 El harness local con control pasa: con 06.3, A suspendida queda en 0 lecturas y todas las escrituras rechazadas; B no se ve afectada; al reactivar vuelve el acceso. Sin 06.3, falla. Regresiones PASS; `quality:full` OK. Aplicación remota pendiente en STG1/PROD1. Detalle en `supabase/security/INSTITUTION_SUSPENSION_LOCAL_RESULT.md`.
+
+## 2026-10-17 — SEC.1 audit:repo reconoce la validación delegada de source-file-storage (Claude; audita Codex)
+
+`supabase/config.toml` ahora declara `verify_jwt = false` para `source-file-storage`, igual que como se despliega. La regla del audit pasó a `scripts/edgeFunctionAuthAudit.mjs`.
+
+Cómo valida ahora el audit:
+- busca Bearer, `getUser` y rol/membership en `index.ts`;
+- si `index.ts` delega, también los busca en sus imports locales directos (`./archivo.js`). No acepta rutas `../` ni subcarpetas.
+- El Bearer validado en línea (`startsWith('Bearer ')`) solo vale dentro de un handler delegado; para `index.ts` sigue exigiendo `assertBearerAuthorization`.
+
+Pruebas: 6 tests nuevos. El control manual pasa: si el import apunta fuera de la carpeta, el audit falla las tres reglas.

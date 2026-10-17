@@ -392,6 +392,11 @@ deno_version = 2
 # Mantener este valor alineado con el deploy usando --no-verify-jwt para no romper CORS preflight.
 verify_jwt = false
 
+[functions.source-file-storage]
+# handler.js valida Bearer, getUser, perfil, membership e institucion activa antes de tocar Storage.
+# Mantener este valor alineado con el deploy usando --no-verify-jwt para no romper CORS preflight.
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
