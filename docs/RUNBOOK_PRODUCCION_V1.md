@@ -236,40 +236,50 @@ Procedimiento R4:
 4. Verificar: conteos de filas iguales a los del backup; logins de una cuenta por rol; catálogo (funciones y policies) igual al snapshot del paso 3.3.
 5. Volver a R1 con el frontend anterior.
 
-Procedimiento R4b — reparación puntual de filas de `public` desde el archive del §3.1 (ensayado en RB.2, `supabase/security/PUBLIC_REPAIR_LOCAL_RESULT.md`).
+Procedimiento R4b — reparación puntual de filas de `public` de UNA institución desde el archive del §3.1. Ensayado en RB.2b: `supabase/security/PUBLIC_REPAIR_LOCAL_RESULT.md`, con auditoría independiente.
 
-Cuándo usarlo: el daño está acotado a pocas tablas de `public` de una institución (filas borradas o pisadas) y no hace falta tocar Auth. Antes: mantenimiento (R4 paso 1) y escrituras congeladas.
+Cuándo se usa: el daño está acotado a filas de tablas de institución (legajos, cursadas, notas) y no hace falta tocar Auth.
 
-1. En `BACKUP_DIR`, extraer del archive solo los datos de cada tabla dañada y apuntar el `COPY` a la tabla temporal:
+Antes de empezar:
+- poner la app en mantenimiento (R4 paso 1) y congelar las escrituras;
+- confirmar que el esquema no cambió desde el backup, comparando con el snapshot de catálogo del §3.3. Si cambió, R4b no aplica.
+
+1. Abrir PowerShell en `BACKUP_DIR` y extraer del archive los datos de cada tabla dañada. El script del repo cambia solo el encabezado `COPY`, trabajando sobre bytes. No usar `Get-Content`/`Set-Content`: en PowerShell 5.1 re-codifican el UTF-8 y los saltos de línea.
 
    ```powershell
-   foreach ($t in 'student_grades','subject_enrollments','profiles') {
+   foreach ($t in 'student_records','subject_enrollments','student_grades') {
      pg_restore --data-only --schema=public --table=$t --file "repair_$t.sql" "<archivo>.dump"
-     (Get-Content "repair_$t.sql") -replace "^COPY public\.$t ", "COPY pg_temp.repair_$t " | Set-Content "repair_$t.sql"
+     node "<repo>\scripts\retargetRepairCopy.mjs" "repair_$t.sql" $t
    }
    ```
 
-2. Copiar `supabase/security/public_repair_template.sql` a `BACKUP_DIR` y dejar solo las tablas dañadas. Para otra tabla, repetir el patrón con su clave primaria y su filtro de institución.
-3. Correr el template como `postgres`, en una sola transacción:
+2. Copiar `supabase/security/public_repair_template.sql` a `BACKUP_DIR`.
+   - Dejar solo las tablas dañadas, **siempre en orden de FK**: legajos → cursadas → notas.
+   - Para otra tabla de institución, repetir el patrón con su PK y su filtro, ubicándola según sus FK.
+3. Correr el template como `postgres` desde `BACKUP_DIR`, en una sola transacción:
 
    ```powershell
    psql -X -v inst=<institution_id> -f public_repair_template.sql $env:PROD_DB_URL
    ```
 
    El template:
-   - carga el archive en tablas temporales (`on commit drop`);
-   - hace `INSERT … ON CONFLICT (pk) DO UPDATE` solo de las filas de esa institución que difieren del archive;
-   - no desactiva triggers, no toca `auth.*` y no pasa por `handle_new_user`.
+   - carga los datos del archive en tablas temporales (`on commit drop`);
+   - hace un `INSERT … ON CONFLICT (pk) DO UPDATE` solo de las filas de esa institución que difieren del archive. La comparación ignora `updated_at`, que lo pisan los triggers de touch;
+   - no desactiva triggers, no toca `auth.*` ni `profiles` y no pasa por `handle_new_user`.
+
+   Si algo falla, aborta entero sin aplicar cambios.
 4. Verificar con el Verificador:
    - conteos y contenido de las tablas reparadas;
-   - las otras instituciones intactas;
-   - logins de una cuenta por rol.
+   - que las otras instituciones queden intactas;
+   - un login por rol.
 
 Límites de R4b:
-- Filas creadas después del backup: no se borran.
-- Las columnas que mantiene un trigger (`updated_at` de `student_grades` y `subject_enrollments`) quedan con la hora de la reparación.
-- Si el upsert de una tabla con unique parcial choca con una fila nueva de la misma clave natural (por ejemplo, una nota recargada después del backup), la transacción aborta y no cambia nada: resolver a mano con el Verificador.
-- `postgres` tiene `BYPASSRLS`: la reparación no pasa por RLS, por eso se filtra por institución en el propio SQL.
+- **`profiles` no se repara con R4b.** Es global, no de una institución: un upsert desde el backup pisaría `is_blocked` y `account_role` con valores viejos, y podría desbloquear a alguien o cambiarle el rol en otras instituciones. Los perfiles se corrigen a mano, campo por campo, con el Verificador.
+- Las filas creadas después del backup no se borran.
+- En las filas reparadas, `updated_at` queda con la hora de la reparación. Las filas no dañadas no se tocan.
+- Hijos borrados en cascada (asistencia, `exam_*`, memberships de un perfil borrado): se recuperan solo si se agrega su tabla al template, en orden de FK. Si su padre está fuera de R4b (por ejemplo, un perfil), no se pueden recuperar con R4b.
+- Si el upsert de una tabla con unique parcial choca con una fila nueva de la misma clave natural (por ejemplo, una nota recargada después del backup), la transacción aborta. Se resuelve a mano.
+- `postgres` tiene `BYPASSRLS`: la reparación no pasa por RLS, y por eso el filtro de institución va en el propio SQL.
 - No sirve para `auth.*` ni para los bytes de Storage.
 
 Límites conocidos (de tq01D3Bz / to6OoXZC): los ensayos fueron con fixtures sintéticos chicos y snapshot congelado. No hay SLA medido para el volumen real; el restore local tardó ~25 s con datos mínimos. No se ensayó rollback con escritores concurrentes ni sobre Supabase gestionado. Por eso el paso 2.1 (congelar escrituras) es obligatorio.

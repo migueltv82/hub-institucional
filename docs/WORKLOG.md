@@ -867,3 +867,17 @@ Hallazgos:
 - PB.2, autosave admin que borra `teacher_records` → 409. Abierto, pide decisión de Miguel.
 
 Resultado: FAIL solo por PB.2.
+
+## 2026-10-17 — RB.2b correctivo de la reparación R4b + auditorías independientes (Claude)
+
+Auditorías independientes (agente, contexto separado):
+- 06.3: PASS;
+- SEC.1: PASS;
+- HARD.1: PASS, con un P2 en el triage → SEC.2;
+- RB.2: FAIL.
+
+RB.2b corrige RB.2: orden de FK, sin `profiles`, comparación sin `updated_at` (solo se tocan las filas dañadas), retarget del COPY por bytes con `scripts/retargetRepairCopy.mjs` en lugar de PowerShell, y `\ir`. PASS con datos UTF-8; el control da FAIL.
+
+Además:
+- se sincronizó la copia vieja de `is_member_of_institution` en el SQL de bajo riesgo, con un test que las mantiene iguales;
+- se corrigió el triage de advisors.
