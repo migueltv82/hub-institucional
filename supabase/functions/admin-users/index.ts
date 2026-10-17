@@ -358,6 +358,20 @@ async function getAuthenticatedContext(req: Request) {
   return { userClient, adminClient, caller: userData.user, profile }
 }
 
+// 06.3: la Edge consulta memberships con service role (sin RLS), asi que la suspension se valida aca.
+async function assertInstitutionActive(adminClient: ReturnType<typeof getClients>['adminClient'], institutionId: string) {
+  const { data: institution, error } = await adminClient
+    .from('institutions')
+    .select('status')
+    .eq('id', institutionId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (institution?.status !== 'active') {
+    throw new HttpError('Acceso denegado: la institucion esta suspendida.', 403)
+  }
+}
+
 async function requireStudentPortalMember(req: Request, institutionId: string) {
   if (!institutionId) {
     throw badRequest('La institucion es obligatoria para guardar cambios del alumno.')
@@ -383,6 +397,7 @@ async function requireStudentPortalMember(req: Request, institutionId: string) {
     throw new HttpError('Acceso denegado: el alumno no pertenece a esta institucion.', 403)
   }
 
+  await assertInstitutionActive(context.adminClient, institutionId)
   return context
 }
 
@@ -410,6 +425,7 @@ async function requireTeacherPortalMember(req: Request, institutionId: string) {
     throw new HttpError('Acceso denegado: el docente no pertenece a esta institucion.', 403)
   }
 
+  await assertInstitutionActive(context.adminClient, institutionId)
   return context
 }
 
@@ -437,6 +453,7 @@ async function requireInstitutionAdmin(req: Request, institutionId: string) {
     throw new HttpError('Acceso denegado: se requieren permisos de administrador institucional.', 403)
   }
 
+  await assertInstitutionActive(context.adminClient, institutionId)
   return context
 }
 

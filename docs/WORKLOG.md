@@ -789,3 +789,14 @@ Producción tiene 434 usuarios reales, 1 institución y un esquema viejo:
 - ya está en `dual_write`.
 
 El deploy del 21/10 pasa a ser una migración sobre datos reales: hace falta un ensayo sobre el esquema de Producción (PROD1). Detalle en `supabase/security/PRODUCTION_DRIFT_RESULT.md`.
+
+## 2026-10-17 — 06.3 suspensión de institución efectiva en servidor (Claude; audita Codex)
+
+Ahora suspender una institución corta de verdad, en tres lugares:
+- RLS: `is_member_of_institution` exige institución activa;
+- las dos RPC de autogestión del alumno (cursada y mesa);
+- la Edge `admin-users`, que valida con service role.
+
+Los dos últimos caminos no estaban en la tarjeta: los encontró el harness. El superadmin no cambia.
+
+El harness local con control pasa: con 06.3, A suspendida queda en 0 lecturas y todas las escrituras rechazadas; B no se ve afectada; al reactivar vuelve el acceso. Sin 06.3, falla. Regresiones PASS; `quality:full` OK. Aplicación remota pendiente en STG1/PROD1. Detalle en `supabase/security/INSTITUTION_SUSPENSION_LOCAL_RESULT.md`.

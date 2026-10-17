@@ -152,4 +152,29 @@ describe('admin-users edge function security posture', () => {
     expect(persistStudentRecordBody).toContain("onConflict: 'institution_id,workspace_key,email,career'")
     expect(persistStudentRecordBody).not.toContain("onConflict: 'institution_id,external_code'")
   })
+
+  it('corta en la Edge a miembros de una institucion suspendida (06.3)', () => {
+    const helper = extractSqlBlock(edgeFunction, /async function assertInstitutionActive\(/, /\nasync function requireStudentPortalMember\(/)
+    expect(helper).toContain(".from('institutions')")
+    expect(helper).toContain("institution?.status !== 'active'")
+    for (const name of ['requireStudentPortalMember', 'requireTeacherPortalMember', 'requireInstitutionAdmin']) {
+      const body = extractSqlBlock(edgeFunction, new RegExp(`async function ${name}\\(`), /\n}\n/)
+      expect(body, name).toContain('await assertInstitutionActive(context.adminClient, institutionId)')
+    }
+    const superAdminBody = extractSqlBlock(edgeFunction, /async function requireSuperAdmin\(/, /\n}\n/)
+    expect(superAdminBody).not.toContain('assertInstitutionActive')
+  })
+
+  it('exige institucion activa en el helper RLS y en las RPC de autogestion del alumno (06.3)', () => {
+    const helperBody = extractSqlBlock(foundationSchema, /create or replace function public\.is_member_of_institution\(/i, /\$\$;/)
+    expect(helperBody).toContain('join public.institutions institution on institution.id = membership.institution_id')
+    expect(helperBody).toContain("and institution.status = 'active'")
+    const superAdminBody = extractSqlBlock(foundationSchema, /create or replace function public\.is_super_admin\(/i, /\$\$;/)
+    expect(superAdminBody).not.toContain('institutions')
+    const subjectRpc = extractSqlBlock(academicOperationsSchema, /create or replace function public\.upsert_subject_enrollment_from_portal\(/i, /\$\$;/)
+    const examRpc = extractSqlBlock(readFileSync(join(process.cwd(), 'supabase/schema/08_exam_tables.sql'), 'utf8'), /create or replace function public\.upsert_exam_enrollment_from_portal\(/i, /\$\$;/)
+    for (const body of [subjectRpc, examRpc]) {
+      expect(body).toMatch(/join public\.institutions institution\s+on institution\.id = membership\.institution_id\s+and institution\.status = 'active'/)
+    }
+  })
 })

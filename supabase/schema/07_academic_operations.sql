@@ -657,6 +657,10 @@ begin
     join public.memberships membership
       on membership.user_id = profile.user_id
      and membership.institution_id = target_institution_id
+    -- 06.3: una institucion suspendida no acepta autogestion del alumno.
+    join public.institutions institution
+      on institution.id = membership.institution_id
+     and institution.status = 'active'
     where profile.user_id = target_student_id
       and profile.account_role = 'alumno'
       and profile.is_blocked = false

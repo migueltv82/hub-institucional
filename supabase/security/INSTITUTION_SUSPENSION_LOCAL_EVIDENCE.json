@@ -1,0 +1,258 @@
+{
+  "run": "d780e395706016c2",
+  "mode": "release_v1",
+  "staging": "NONE",
+  "production": "NONE",
+  "fixture": "supabase/baseline/local_ab_rls_rpc_validation.sql",
+  "function": {
+    "secdef": true,
+    "config": [
+      "search_path=public, pg_temp"
+    ],
+    "anon": false,
+    "authenticated": true,
+    "checks_status": true
+  },
+  "phases": {
+    "active": {
+      "superAdmin": null,
+      "results": {
+        "adminA": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 1,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 1
+          },
+          "write": "saved"
+        },
+        "teacherA": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 1,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 1
+          },
+          "write": "saved"
+        },
+        "studentA": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 1,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 1
+          },
+          "write": "saved"
+        },
+        "studentCursadaA": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 1,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 1
+          },
+          "write": "saved"
+        },
+        "adminB": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 0,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 0
+          },
+          "write": "saved"
+        }
+      },
+      "failures": []
+    },
+    "suspended": {
+      "superAdmin": {
+        "updated": "suspended",
+        "seen": "suspended"
+      },
+      "results": {
+        "adminA": {
+          "reads": {
+            "institutions": 0,
+            "careers": 0,
+            "subjects": 0,
+            "student_records": 0,
+            "teacher_records": 0,
+            "subject_enrollments": 0,
+            "student_grades": 0,
+            "exam_tables": 0,
+            "workspace_snapshots": 0
+          },
+          "write": "new row violates row-level security policy for table \"workspace_snapshots\"|42501"
+        },
+        "teacherA": {
+          "reads": {
+            "institutions": 0,
+            "careers": 0,
+            "subjects": 0,
+            "student_records": 0,
+            "teacher_records": 0,
+            "subject_enrollments": 0,
+            "student_grades": 0,
+            "exam_tables": 0,
+            "workspace_snapshots": 0
+          },
+          "write": "ACADEMIC_COMMAND_FORBIDDEN|P0001"
+        },
+        "studentA": {
+          "reads": {
+            "institutions": 0,
+            "careers": 0,
+            "subjects": 0,
+            "student_records": 0,
+            "teacher_records": 0,
+            "subject_enrollments": 0,
+            "student_grades": 0,
+            "exam_tables": 0,
+            "workspace_snapshots": 0
+          },
+          "write": "ACADEMIC_COMMAND_FORBIDDEN|P0001"
+        },
+        "studentCursadaA": {
+          "reads": {
+            "institutions": 0,
+            "careers": 0,
+            "subjects": 0,
+            "student_records": 0,
+            "teacher_records": 0,
+            "subject_enrollments": 0,
+            "student_grades": 0,
+            "exam_tables": 0,
+            "workspace_snapshots": 0
+          },
+          "write": "ACADEMIC_COMMAND_FORBIDDEN|P0001"
+        },
+        "adminB": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 0,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 0
+          },
+          "write": "saved"
+        }
+      },
+      "failures": []
+    },
+    "reactivated": {
+      "superAdmin": {
+        "updated": "active",
+        "seen": "active"
+      },
+      "results": {
+        "adminA": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 1,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 1
+          },
+          "write": "saved"
+        },
+        "teacherA": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 1,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 1
+          },
+          "write": "saved"
+        },
+        "studentA": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 1,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 1
+          },
+          "write": "saved"
+        },
+        "studentCursadaA": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 1,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 1
+          },
+          "write": "saved"
+        },
+        "adminB": {
+          "reads": {
+            "institutions": 1,
+            "careers": 1,
+            "subjects": 1,
+            "student_records": 1,
+            "teacher_records": 2,
+            "subject_enrollments": 0,
+            "student_grades": 1,
+            "exam_tables": 0,
+            "workspace_snapshots": 0
+          },
+          "write": "saved"
+        }
+      },
+      "failures": []
+    }
+  },
+  "failed": [],
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "errors": []
+  }
+}
