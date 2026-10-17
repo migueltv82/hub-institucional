@@ -13,6 +13,13 @@ import { edgeGatewayConfig, EDGE_GATEWAY_IMAGE } from './validateRecoveredEdge.m
 export const STACK_SOURCE = 'supabase_db_codex-baseline-local-7725bdda';
 export const STACK_NETWORK = 'supabase_network_codex-baseline-local-7725bdda';
 
+export function assertOwnedStackDatabase({ database, run, owner, marker }) {
+  assert.match(run, /^[a-f0-9]{16}$/);
+  assert.equal(database, `gotrue_harness_${run}`);
+  assert.equal(owner, 'supabase_admin');
+  assert.ok(marker === run || marker === null, 'Foreign database marker');
+}
+
 export function roleToken(jwtSecret, role) {
   assert.match(jwtSecret, /^[a-f0-9]{96}$/); assert.ok(role === 'anon' || role === 'service_role');
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -52,7 +59,9 @@ export async function createLocalStack({ label, report }) {
   const teardown = async () => {
     const errors = [];
     for (const name of containers) try { if (docker(['ps', '-a', '--filter', `name=^/${name}$`, '--format', '{{.Names}}']).trim()) { assert.equal(JSON.parse(docker(['inspect', name]))[0].Config.Labels[label], run); docker(['rm', '-f', name]); } } catch { errors.push('Container cleanup failed'); }
-    if (state.created) try { if (sql(`select count(*) from pg_database where datname='${database}';`, 'postgres') === '1') { const owner = JSON.parse(sql(`select json_build_object('owner',pg_get_userbyid(datdba),'marker',shobj_description(oid,'pg_database')) from pg_database where datname='${database}';`, 'postgres')); assert.equal(owner.owner, 'supabase_admin'); assert.equal(owner.marker, run); sql(`drop database ${database} with (force);`, 'postgres'); } } catch { errors.push('Database cleanup failed'); }
+    // state.created records CREATE intent only after the random name was proven absent.
+    // A null marker recovers a CREATE that succeeded before COMMENT failed.
+    if (state.created) try { if (sql(`select count(*) from pg_database where datname='${database}';`, 'postgres') === '1') { const owner = JSON.parse(sql(`select json_build_object('owner',pg_get_userbyid(datdba),'marker',shobj_description(oid,'pg_database')) from pg_database where datname='${database}';`, 'postgres')); assertOwnedStackDatabase({ database, run, ...owner }); sql(`drop database ${database} with (force);`, 'postgres'); } } catch { errors.push('Database cleanup failed'); }
     if (state.directory) try { assert.equal(dirname(resolve(state.directory)), resolve(tmpdir())); assert.ok(basename(state.directory).startsWith('hub-recovery-edge-')); await rm(state.directory, { recursive: true, force: true }); } catch { errors.push('Temporary directory cleanup failed'); }
     try { assert.equal(sql(`select count(*) from pg_database where datname='${database}';`, 'postgres'), '0'); assert.equal(docker(['ps', '-a', '--filter', `label=${label}=${run}`, '--format', '{{.Names}}']).trim(), ''); } catch { errors.push('Cleanup verification failed'); }
     return { databases: errors.length ? 'unverified' : 0, containers: errors.length ? 'unverified' : 0, temporaryFiles: errors.length ? 'unverified' : 0, errors };

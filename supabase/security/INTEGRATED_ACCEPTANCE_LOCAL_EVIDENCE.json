@@ -1,1 +1,43 @@
-{"task":"QA.1","date":"2026-10-16","result":"BLOCKED_ENVIRONMENT","base":"a42037d","branch":"release/v1","missingImages":["nginx:1.27-alpine","supabase/edge-runtime:v1.77.4"],"browser":"NOT_RUN","edge":"NOT_RUN","cleanup":{"databases":0,"containers":0,"temporaryFiles":0},"staging":"NONE","production":"NONE","remoteSql":"NONE","deploy":"NONE"}
+{
+  "task": "QA.1",
+  "staging": "NONE",
+  "production": "NONE",
+  "remoteSql": "NONE",
+  "deploy": "NONE",
+  "checks": [],
+  "httpFailures": [],
+  "pageErrors": [],
+  "externalRequests": 0,
+  "images": {
+    "nginx:1.27-alpine": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+    "supabase/edge-runtime:v1.77.4": "supabase/edge-runtime@sha256:ad45164b7548bf5820ed7be714789c17ac2865edce79a09cfb4c3756c3d365a8"
+  },
+  "run": "2b63fb0c651fc86a",
+  "lastFixtureAuthStatus": 200,
+  "fixtureAccounts": {
+    "sharedFixtureUsers": 10,
+    "browserAccounts": 4
+  },
+  "examUi": {
+    "registerButtons": 1,
+    "cards": 1
+  },
+  "examMutationStatus": 200,
+  "examSources": {
+    "snapshot": true,
+    "relational": false
+  },
+  "examReadMode": "snapshot_only",
+  "examRelationalRows": 0,
+  "result": "FAIL",
+  "failedAt": "student exam registration persisted",
+  "errorType": "AssertionError",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  },
+  "date": "2026-10-17",
+  "workflowStatus": "BLOCKED_SPEC"
+}
