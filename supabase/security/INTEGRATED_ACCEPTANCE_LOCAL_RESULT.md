@@ -13,7 +13,7 @@ Run `3fdbb7cea996e9e2` (`INTEGRATED_ACCEPTANCE_LOCAL_EVIDENCE.json`). Corre sobr
 | Docente: asistencia y notas (parciales y final) | PASS |
 | Alumno relee asistencia y notas | PASS |
 | Admin: alta de alumno vía Edge, con auditoría `bulk_create_students` | PASS |
-| Cierre de la sesión admin | **FAIL**: `DELETE /rest/v1/teacher_records` → 409 (PB.2) |
+| Autosave del panel admin durante el alta | **FAIL**: `DELETE /rest/v1/teacher_records` → 409 (PB.2). Ocurre en la fase del alta: el reporte marca `failedAt = alumno/b logout` porque los asserts de HTTP corren al final. Parte del disparo viene del fixture, que crea `teacher_records` que no están en el snapshot del admin |
 
 ### Mesa de examen por modo
 

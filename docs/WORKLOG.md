@@ -881,3 +881,11 @@ RB.2b corrige RB.2: orden de FK, sin `profiles`, comparación sin `updated_at` (
 Además:
 - se sincronizó la copia vieja de `is_member_of_institution` en el SQL de bajo riesgo, con un test que las mantiene iguales;
 - se corrigió el triage de advisors.
+
+## 2026-10-17 — SEC.2 lookup de perfiles por email solo para el panel admin (Claude)
+
+`academic_resolve_member_profile_by_email` ahora exige rol owner, admin o editor, salvo para el superadmin. Un alumno o docente ya no puede enumerar perfiles de su institución por email.
+
+Pruebas:
+- harness PASS; el control FAIL confirma la fuga;
+- regresiones de round trip, identidad, paridad y suspensión: PASS.

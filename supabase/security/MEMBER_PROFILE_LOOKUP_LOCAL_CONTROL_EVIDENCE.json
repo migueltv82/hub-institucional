@@ -1,0 +1,64 @@
+{
+  "task": "SEC.2",
+  "run": "b1ab4c0cedc9439e",
+  "mode": "control_without_role_filter",
+  "staging": "NONE",
+  "production": "NONE",
+  "fixture": "supabase/baseline/local_ab_rls_rpc_validation.sql",
+  "function": {
+    "secdef": true,
+    "config": [
+      "search_path=public, pg_temp"
+    ],
+    "anon": false,
+    "authenticated": true
+  },
+  "probes": [
+    {
+      "name": "admin A busca docente A",
+      "expect": 1,
+      "rows": 1
+    },
+    {
+      "name": "admin A busca alumno A",
+      "expect": 1,
+      "rows": 1
+    },
+    {
+      "name": "superadmin busca alumno A",
+      "expect": 1,
+      "rows": 1
+    },
+    {
+      "name": "alumno A busca docente A",
+      "expect": 0,
+      "rows": 1
+    },
+    {
+      "name": "alumno A busca admin A sin rol",
+      "expect": 0,
+      "rows": 1
+    },
+    {
+      "name": "docente A busca alumno A",
+      "expect": 0,
+      "rows": 1
+    },
+    {
+      "name": "admin B busca alumno A (cross-tenant)",
+      "expect": 0,
+      "rows": 0
+    }
+  ],
+  "failed": [
+    "alumno A busca docente A",
+    "alumno A busca admin A sin rol",
+    "docente A busca alumno A"
+  ],
+  "result": "FAIL",
+  "error": "Failed at assertions: Member profile lookup probes failed",
+  "cleanup": {
+    "databases": 0,
+    "errors": []
+  }
+}
