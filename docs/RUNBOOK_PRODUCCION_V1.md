@@ -253,8 +253,11 @@ Antes de empezar:
    }
    ```
 
+   Los clientes `pg_restore` y `psql` tienen que ser **17.6 o posteriores**: el archive de un `pg_dump` 17.6 trae `\restrict`/`\unrestrict`, que un `psql` más viejo rechaza y la transacción aborta.
+
 2. Copiar `supabase/security/public_repair_template.sql` a `BACKUP_DIR`.
    - Dejar solo las tablas dañadas, **siempre en orden de FK**: legajos → cursadas → notas.
+   - Si se borró una cursada, incluir también `student_grades`, aunque las notas parezcan sanas: la FK `set null` les dejó `subject_enrollment_id` vacío.
    - Para otra tabla de institución, repetir el patrón con su PK y su filtro, ubicándola según sus FK.
 3. Correr el template como `postgres` desde `BACKUP_DIR`, en una sola transacción:
 
