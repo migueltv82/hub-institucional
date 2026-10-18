@@ -1968,7 +1968,9 @@ function TeacherSubjectAssignmentsPanel({
   const [leaveDraft, setLeaveDraft] = useState(null)
 
   const institutionId = activeInstitution?.id ?? null
-  const teacherEmail = getTeacherEmail(teacher) || buildTeacherLoginEmail({ dni: teacher?.dni, institutionId }) || ''
+  // PB.7: la cuenta se crea con el email tecnico del DNI; el de la planilla es solo de contacto.
+  const teacherEmails = [buildTeacherLoginEmail({ dni: teacher?.dni, institutionId }), getTeacherEmail(teacher)].filter(Boolean)
+  const teacherEmail = teacherEmails.join(',')
   const planOptions = useMemo(() => buildPlanOptions(planesEstudio), [planesEstudio])
   const displayRows = useMemo(
     () => buildAssignmentDisplayRows(assignments, scheduleSubjects, planOptions),
@@ -1987,7 +1989,7 @@ function TeacherSubjectAssignmentsPanel({
 
       setIsLoading(true)
       try {
-        const resolved = await resolveTeacherProfile({ institutionId, workspaceKey, email: teacherEmail })
+        const resolved = await resolveTeacherProfile({ institutionId, workspaceKey, emails: teacherEmail.split(',') })
         if (cancelled) return
 
         if (!resolved.success) {
@@ -2131,12 +2133,10 @@ function TeacherSubjectAssignmentsPanel({
       return
     }
 
-    const replacementEmail = getTeacherEmail(replacement)
-      || buildTeacherLoginEmail({ dni: replacement?.dni, institutionId })
-      || ''
+    const replacementEmails = [buildTeacherLoginEmail({ dni: replacement?.dni, institutionId }), getTeacherEmail(replacement)].filter(Boolean)
     setIsSaving(true)
     try {
-      const resolved = await resolveTeacherProfile({ institutionId, workspaceKey, email: replacementEmail })
+      const resolved = await resolveTeacherProfile({ institutionId, workspaceKey, emails: replacementEmails })
       if (!resolved.success) {
         setError(resolved.error)
         return

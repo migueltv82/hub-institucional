@@ -980,3 +980,7 @@ Ajustes:
 - fechas de Excel, nombre de institución blindado, `standard_conforming_strings` y resumen después del commit.
 
 Harness PASS (run `bfaf07cea9eee403`), 11 tests unitarios. Detalle en `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md`.
+
+## 2026-10-18 — PB.7: el panel de asignaciones no encontraba la cuenta del docente (Claude)
+
+Apareció en el UAT. "Crear accesos" crea la cuenta del docente con el email técnico `DNI@docentes.<institución>.local`. El panel de materias asignadas la buscaba con el email de contacto de la planilla, y si ese email existía, nunca la encontraba: "No se encontro un usuario docente". Ahora `resolveTeacherProfile` prueba primero el email técnico y después el de contacto, y lo mismo vale para elegir un reemplazante. Test nuevo. `npm run check` PASS.

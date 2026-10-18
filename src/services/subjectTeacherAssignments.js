@@ -75,35 +75,36 @@ export async function fetchSubjectTeacherAssignments({ institutionId, workspaceK
   return data ?? []
 }
 
-export async function resolveTeacherProfile({ institutionId, workspaceKey = 'main', email }) {
+// La cuenta del docente puede estar con el email tecnico (DNI@docentes.<institucion>.local, el que crea
+// "Crear accesos") o con el email de contacto de la planilla: se prueba cada candidato en orden.
+export async function resolveTeacherProfile({ institutionId, workspaceKey = 'main', email, emails = [] }) {
   ensureSupabaseReady()
 
-  const cleanedEmail = clean(email)
-  if (!institutionId || !cleanedEmail) {
+  const candidates = [...new Set([...emails, email].map(clean).filter(Boolean).map((value) => value.toLowerCase()))]
+  if (!institutionId || candidates.length === 0) {
     return { success: false, error: 'Falta el email del docente a resolver.' }
   }
 
-  const { data, error } = await supabase.rpc('academic_resolve_member_profile_by_email', {
-    target_institution_id: institutionId,
-    target_workspace_key: workspaceKey,
-    target_email: cleanedEmail,
-    target_account_role: 'docente',
-  })
+  for (const candidate of candidates) {
+    const { data, error } = await supabase.rpc('academic_resolve_member_profile_by_email', {
+      target_institution_id: institutionId,
+      target_workspace_key: workspaceKey,
+      target_email: candidate,
+      target_account_role: 'docente',
+    })
 
-  if (error) {
-    return { success: false, error: `No se pudo resolver el docente. ${error.message}` }
-  }
-
-  const profile = Array.isArray(data) ? data[0] : data
-
-  if (!profile || !profile.user_id) {
-    return {
-      success: false,
-      error: "No se encontro un usuario docente con ese email. Primero hay que darle acceso desde 'Accesos docentes'.",
+    if (error) {
+      return { success: false, error: `No se pudo resolver el docente. ${error.message}` }
     }
+
+    const profile = Array.isArray(data) ? data[0] : data
+    if (profile?.user_id) return { success: true, profile }
   }
 
-  return { success: true, profile }
+  return {
+    success: false,
+    error: "No se encontro un usuario docente con ese email. Primero hay que darle acceso desde 'Accesos docentes'.",
+  }
 }
 
 export const SUBJECT_TEACHER_ROLES = ['titular', 'suplente', 'licencia']

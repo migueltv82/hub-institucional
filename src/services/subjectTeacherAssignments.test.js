@@ -150,6 +150,21 @@ describe('subjectTeacherAssignments service', () => {
     expect(result.error).toMatch(/No se encontro un usuario docente/)
   })
 
+  it('prueba el email tecnico y despues el de contacto hasta encontrar la cuenta (PB.7)', async () => {
+    const { resolveTeacherProfile, rpc } = await loadService()
+    rpc
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [{ user_id: 'u2', account_role: 'docente' }], error: null })
+
+    const result = await resolveTeacherProfile({
+      institutionId: 'inst-1',
+      emails: ['30111222@docentes.inst-1.local', 'Ana@Mail.com', 'ana@mail.com', ''],
+    })
+
+    expect(rpc.mock.calls.map(([, args]) => args.target_email)).toEqual(['30111222@docentes.inst-1.local', 'ana@mail.com'])
+    expect(result).toEqual({ success: true, profile: { user_id: 'u2', account_role: 'docente' } })
+  })
+
   it('crea una titularidad de materia', async () => {
     const created = { id: 'a1', subject_id: 'ING13', program_id: 'Profesorado de Ingles', teacher_id: 'u1' }
     const { createSubjectTeacherAssignment, queryBuilder } = await loadService({
