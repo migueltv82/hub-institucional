@@ -1004,3 +1004,10 @@ Bugs encontrados y corregidos en el camino: PB.5, acentos rotos, CAT.1/CAT.1b, P
 - P11 cumplido: `main` protegida, con PR obligatorio y check `Quality gate (Node 22.13)` requerido; GitHub informa `protected = true`.
 - P10: por decisión de Miguel, Producción sigue en plan Free. Queda como riesgo abierto del GO: no hay restore completo; solo el `pg_dump` propio y la reparación puntual R4b.
 - Miguel borró el proyecto Supabase "Hub-Institucional-1", que no se usaba.
+
+## 2026-10-18 — Alcance: demo para la directiva antes de la implementación real (Miguel)
+
+Hoy el colegio maneja todo con planillas y sus sistemas actuales. Este sistema se presenta a la directiva cuando esté completo, y recién si lo aprueban se implementa con datos reales. Hasta entonces:
+- la base solo tiene datos de prueba;
+- backups y plan Pro (P10) quedan diferidos; se contrata Pro antes de la implementación;
+- la prioridad es que todo funcione de punta a punta.
