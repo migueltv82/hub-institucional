@@ -9,7 +9,7 @@ function sourceFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
     if (entry.isDirectory()) return sourceFiles(path)
-    return /\.(jsx?|css)$/.test(entry.name) ? [path] : []
+    return /\.(jsx?|ts|css)$/.test(entry.name) ? [path] : []
   })
 }
 
@@ -25,7 +25,10 @@ describe('codificacion del codigo fuente', () => {
     expect(MOJIBAKE.test('padrón, tenían, podés, Código')).toBe(false)
   })
 
-  it('src no tiene textos con acentos rotos', () => {
-    expect(findMojibake(sourceFiles('src'))).toEqual([])
+  it('src y supabase/functions no tienen textos con acentos rotos', () => {
+    expect(findMojibake([
+      ...sourceFiles('src'),
+      ...sourceFiles('supabase/functions'),
+    ])).toEqual([])
   })
 })
