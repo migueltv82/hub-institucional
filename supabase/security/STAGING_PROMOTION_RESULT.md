@@ -44,3 +44,30 @@ Aprobación: Miguel (chat 17/10, "ok STG1b, aplicalo"). Ejecutado por Claude con
 Staging no tiene datos: no hubo que migrar nada. La base de Staging vuelve a estar **sin diferencias** contra release/v1 en `434509b`; las únicas diferencias esperadas son el gateway y el `rls_auto_enable` de la plataforma.
 
 **Edge: sigue PENDIENTE (Miguel, CLI).** Staging tiene `admin-users` v3 (10/10) y `source-file-storage` v1 (05/10). Sin el redeploy, la parte de 06.3 que vive en la Edge todavía no corre en Staging.
+
+## PROD1b — SEC.2 + SEC.3 + SEC.3b en la base de Producción (2026-10-18)
+
+La base `lzjp…aeco` es la de Producción (renombrada `Hub-Institucional-Prod`; decisión de Miguel, 17/10). Aprobación: Miguel (chat 17/10, "ok" a aplicar SEC.2 + SEC.3). Ejecutado por Claude con el conector Supabase. Fuente: release/v1 en `709c7bc`. La base todavía no tiene datos reales.
+
+| Migration | Contenido | Resultado |
+| --- | --- | --- |
+| `prod1b_a0_staff_helper` | `is_staff_of_institution` + revoke/grant | OK |
+| `prod1b_a1_owns_helper` | `current_user_owns_student_record` + revoke/grant | OK |
+| `prod1b_a2_deleted_person_policy` | lectura de `deleted_person_records` → personal | OK |
+| `prod1b_a3_records_policies` | `teacher_records`, `student_records`, `student_career_plans`, `student_academic_statuses` → personal o fila propia | OK |
+| `prod1b_a4_workspace_staff_policies` | `workspace_snapshots`, `exam_engine_v21_states`, `teacher_exam_date_exclusions`, `workspace_source_files`, `teacher_availability_records`, `teacher_workload_records` → personal | OK |
+| `prod1b_a5_academic_operations_policies` | las 5 tablas de 07 → personal o fila propia | OK |
+| `prod1b_a6_sec2_member_lookup` | `academic_resolve_member_profile_by_email` con filtro de rol (SEC.2) | OK |
+| `prod1b_a7_storage_policy` | `storage.objects` "workspace source files members read objects" → personal | OK |
+
+**Cómo se aplicó.** Las políticas se cambiaron con `alter policy ... using (...)` y no con `drop policy` + `create policy`. El conector se colgaba hasta su timeout de 60 s en cada `DROP`; en cada corte se verificó que no se había aplicado nada. `ALTER POLICY` conserva nombre, comando, rol y tipo (permissive), así que el resultado en el catálogo es el mismo. El catálogo de 02 y los catálogos legacy de 05 ya estaban en `is_member_of_institution`, y las policies de escritura no cambian: no hizo falta tocarlos.
+
+**Verificación (read-only).**
+
+- Catálogo de funciones y policies (`public` + `storage`): `54260205c6992c14843d3ac3ac158c56`, 152 ítems. Antes: `559c0e88…`, 150.
+- Contra la base local con el baseline de `709c7bc`, con el mismo `search_path` de Producción: **131 de 132 ítems idénticos**. El único faltante, `workspace source files canonical actor paths`, es la política que en Producción reemplazan las del gateway de `source-file-storage`. Es la diferencia esperada y es anterior a PROD1b. Los 21 ítems de más en Producción son el gateway.
+- Nota sobre el hash: el hash depende del `search_path` de la sesión que lo calcula, porque Postgres escribe `auth.uid()` o `uid()` según lo que tenga visible. Por eso el valor `bb50da6b…` que se había calculado antes no sirve como referencia. La comparación válida es ítem por ítem con el mismo `search_path`.
+- §4 del runbook: `handle_new_user` = 1 trigger; `upsert_exam_enrollment_from_portal` = 1 firma de 14 parámetros; 0 de 44 tablas sin RLS; `write_mode = dual_write`.
+- Advisors de seguridad: mismas categorías que en `STAGING_ADVISORS_RESULT.md`. 0029 suma los dos helpers nuevos, que son por diseño: devuelven solo un booleano sobre el propio usuario.
+
+**Sigue pendiente (Miguel, CLI):** redeploy de `admin-users` y `source-file-storage` desde release/v1. Sin ese redeploy, PB.1, PB.3 y la parte de 06.3 que vive en la Edge no corren en Producción.

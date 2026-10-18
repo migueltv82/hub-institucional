@@ -931,3 +931,14 @@ Matriz y QA.1: PASS.
 La auditoría cruzada de RB.1 detectó que `runbookSqlBlocks` no extraía bloques SQL en checkouts CRLF y que el harness terminaba `COMPLETED` aunque §3.3 fallara o §4 no devolviera los valores esperados. El parser ahora acepta LF/CRLF y exige bloques no vacíos; la evaluación solo da PASS cuando los cuatro pasos obligatorios pasan y las cuatro fallas R4 coinciden con las causas documentadas.
 
 Run `26684363bed76de0`: §3.3, §4, backup y listado PASS; cuatro fallas R4 esperadas; focales 6/6; cleanup 0. Staging, Production, SQL remoto y deploy: NONE.
+
+## 2026-10-18 — PROD1b: SEC.2 + SEC.3 + SEC.3b en la base de Producción (Claude; OK de Miguel)
+
+8 migrations chicas desde release/v1 `709c7bc`. Las políticas se cambiaron con `ALTER POLICY`, porque el conector se colgaba en cada `DROP POLICY`.
+
+Verificación:
+- 131 de 132 ítems idénticos al modelo local; la única diferencia es el gateway, ya presente antes;
+- §4 OK;
+- advisors sin hallazgos nuevos fuera de lo triado.
+
+Pendiente: redeploy de las Edge Functions (Miguel, CLI). Evidencia: `supabase/security/STAGING_PROMOTION_RESULT.md`, sección PROD1b.
