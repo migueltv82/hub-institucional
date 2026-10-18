@@ -4,7 +4,7 @@ Esta guia resume el recorrido minimo para mostrar el producto funcionando con Su
 
 ## Precondiciones
 
-- La app local corre en `http://127.0.0.1:5173/`.
+- La app local corre en `http://127.0.0.1:4173/`.
 - Existe un superadmin activo en Supabase Auth.
 - El superadmin tiene `public.profiles.is_global_admin = true`.
 - Existe al menos una institucion activa, por ejemplo `Instituto San Miguel`.
@@ -36,10 +36,15 @@ Esta guia resume el recorrido minimo para mostrar el producto funcionando con Su
 5. Usar estas fechas:
    - Inicio: `2026-07-13`
    - Fin: `2026-07-13`
-6. Generar cronograma.
-7. Confirmar una mesa.
-8. Editar manualmente una mesa.
-9. Probar exportacion.
+6. Seleccionar `Armar mesas`.
+7. Seleccionar `Generar precronograma`.
+8. Abrir `Confirmar el tribunal`.
+9. Seleccionar `Confirmar sin cambios`.
+10. Seleccionar `Publicar cronograma`.
+11. Recordar que la revision docente en el portal figura como `proximamente`.
+12. Iniciar sesion como alumno y abrir `Mesas de examen`.
+13. Seleccionar `Inscribirme` en una mesa disponible.
+14. Probar exportacion.
 
 ## Prueba rol viewer
 

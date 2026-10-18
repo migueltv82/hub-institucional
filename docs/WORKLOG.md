@@ -1047,3 +1047,7 @@ Harness, 4 regresiones y QA.1: PASS. Además, EX.2: la revisión docente en el p
 ## 2026-10-18 — EX.1 aplicado en Producción (Claude)
 
 Con el OK de Miguel se aplicaron en Producción la RPC `publish_exam_tables_from_schedule` y la versión nueva de `get_student_portal_workspace_snapshot`. Verificación de solo lectura: SECURITY DEFINER, sin EXECUTE para anon/public, con EXECUTE para authenticated, y el portal ya filtra con `exam_eligible_subjects`. Advisors sin hallazgos nuevos. Falta la demo de mesas de punta a punta en la app. Evidencia: `supabase/security/EXAM_PUBLICATION_LOCAL_RESULT.md`.
+
+## 2026-10-18 — DOC.1: guía y checklist de demo actualizados (Codex)
+
+La documentación de demo usa el puerto local 4173, concentra la validación en `npm run check` y describe el recorrido vigente de mesas hasta la inscripción del alumno. La revisión docente queda indicada como `proximamente`.

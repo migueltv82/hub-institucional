@@ -4,10 +4,8 @@ Usar esta lista antes de mostrar Institutional Hub a una institucion.
 
 ## Estado tecnico
 
-- Ejecutar `npm run lint`.
-- Ejecutar `npm test`.
-- Ejecutar `npm run build`.
-- Levantar la app en `http://127.0.0.1:5173/`.
+- Ejecutar `npm run check`.
+- Levantar la app en `http://127.0.0.1:4173/`.
 - Confirmar que Supabase responde con al menos una institucion activa.
 - Confirmar que la Edge Function `admin-users` responde.
 
@@ -26,9 +24,14 @@ Usar esta lista antes de mostrar Institutional Hub a una institucion.
 - Login tenant por `Acceso tenant / Institucion`.
 - Cargar archivos de `docs/sample-data`.
 - Usar periodo `2026-07-13` a `2026-07-13`.
-- Generar cronograma.
-- Confirmar una mesa.
-- Editar manualmente una mesa.
+- Seleccionar `Armar mesas`.
+- Seleccionar `Generar precronograma`.
+- Abrir `Confirmar el tribunal`.
+- Seleccionar `Confirmar sin cambios`.
+- Seleccionar `Publicar cronograma`.
+- Mostrar `Revision docente en el portal (proximamente)`.
+- Iniciar sesion como alumno y abrir `Mesas de examen`.
+- Seleccionar `Inscribirme` en una mesa disponible.
 - Exportar XLSX completo.
 - Exportar confirmadas por carrera.
 - Mostrar popup de descarga/instalacion de app.
