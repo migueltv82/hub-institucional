@@ -54,3 +54,11 @@ Había además una inconsistencia: el portal elegía qué mesas mostrar según `
 | P3: si la RPC fallaba, la pantalla decía "Cronograma publicado en portales" | La publicación devuelve falso y avisa que el cronograma quedó guardado; volver a publicar reintenta solo la apertura | — |
 | P3: QA.1 contaba botones sin esperar a que cargue la página | Espera el título "Mesas de examen" y `networkidle` antes de contar | QA.1 PASS |
 | P3: si cambia la materia de una mesa ya publicada, queda la fila vieja de `exam_table_subjects` | Sin cambio: la materia es parte del id de la mesa, así que no ocurre con el motor | — |
+
+## Re-auditoría de EX.1b: PASS con observaciones
+
+Verificados la clave por turno, los duplicados, la paridad de carrera, las fechas inválidas, el filtro de estado en 05, el front, la espera de QA.1 y EX.2. Observaciones P3:
+
+- **Republicar una mesa a menos de 48 h la cancelaba** si no tenía inscriptos. Corregido: la mesa queda en el cronograma y no se cancela.
+- **El cruce por clave recortada en 05 sigue por compatibilidad.** Ningún flujo genera hoy esas filas: la base de Producción no tiene filas en `exam_tables`. Hay que quitarlo antes de la implementación real.
+- **No hay tope de tamaño del payload.** Queda para v1.1.

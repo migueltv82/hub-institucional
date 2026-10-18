@@ -1389,6 +1389,8 @@ begin
     closes_at := starts_at - make_interval(hours => close_hours);
     if closes_at <= opens_at then
       skipped := skipped || jsonb_build_object('id', published_id, 'motivo', format('Faltan menos de %s horas para la mesa: no se abre inscripcion.', close_hours));
+      -- Sigue en el cronograma: si ya estaba publicada, no se cancela por quedar fuera de la ventana.
+      published_ids := published_ids || legacy_key;
       continue;
     end if;
 
