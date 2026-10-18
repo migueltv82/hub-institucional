@@ -134,6 +134,23 @@ insert into public.student_grades (institution_id, workspace_key, student_id, st
     report.emptyPublish = publish(ADMIN, [])
     report.statusesAfterEmpty = JSON.parse(sql(`select json_object_agg(legacy_exam_table_id, status) from public.exam_tables;`))
 
+    step = 'audit cases'
+    // P1: el turno siguiente reusa el id del motor; con otra fecha es otra mesa y no toca la de diciembre.
+    sql(`update public.exam_tables set status = 'completed' where legacy_exam_table_id = lower('${m1.id}');`)
+    const nextDate = futureMonday(42)
+    const m1Next = mesa('UAT01', 'm1', nextDate)
+    report.nextTermPublish = publish(ADMIN, [m1, m1Next])
+    report.afterNextTerm = JSON.parse(sql(`select json_agg(json_build_object('id', legacy_snapshot_id, 'status', status, 'inscriptos', (select count(*) from public.exam_enrollments e where e.exam_table_id = t.id and e.status = 'registered')) order by scheduled_starts_at) from public.exam_tables t where legacy_exam_table_id like '%-m1-%';`))
+    // P2: mesa repetida, fecha invalida y mesa a menos de 48 h se omiten sin abortar la publicacion.
+    const soon = new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 10)
+    report.oddPublish = publish(ADMIN, [m1Next, m1Next, mesa('UAT02', 'm4', '2026-02-30'), mesa('UAT02', 'm5', nextDate, { inicio: '25:00' }), mesa('UAT02', 'm6', soon)])
+    // P2: una nota guardada con el codigo de carrera no habilita la mesa en el portal (la RPC exige el nombre).
+    setSnapshot([m1Next, m2])
+    sql(`update public.exam_tables set status = 'open' where legacy_exam_table_id = lower('${m2.id}');
+update public.student_grades set program_id = 'UAT' where student_id = '${REGULAR}' and subject_id = 'UAT02';`)
+    report.regularSeesWithCodeGrade = visible(REGULAR)
+    report.enrollWithCodeGrade = enroll(REGULAR, regularRecord, m2.id, 'UAT02')
+
     step = 'assertions'
     assert.equal(report.teacherPublish, 'Acceso denegado: solo el personal de gestion de la institucion publica mesas.')
     assert.equal(report.studentPublish, report.teacherPublish)
@@ -142,8 +159,8 @@ insert into public.student_grades (institution_id, workspace_key, student_id, st
     assert.equal(report.firstPublish.omitidas.length, 1)
     assert.match(report.firstPublish.omitidas[0].motivo, /ZZZ99 no esta en el catalogo/)
     assert.deepEqual(report.tables, [
-      { legacy: 'm1', snapshot: m1.id, status: 'open', subjects: 1, window_ok: true },
-      { legacy: 'm2', snapshot: m2.id, status: 'open', subjects: 1, window_ok: true },
+      { legacy: m1.id.toLowerCase(), snapshot: m1.id, status: 'open', subjects: 1, window_ok: true },
+      { legacy: m2.id.toLowerCase(), snapshot: m2.id, status: 'open', subjects: 1, window_ok: true },
     ])
     assert.deepEqual(report.regularSees, [m1.id, m2.id], 'el regular ve las mesas de sus materias regulares (la nota pending posterior no cuenta)')
     assert.deepEqual(report.libreSees, [], 'el que quedo libre no ve la mesa: mismo criterio que la RPC')
@@ -152,7 +169,17 @@ insert into public.student_grades (institution_id, workspace_key, student_id, st
     assert.deepEqual([report.secondPublish.nuevas, report.secondPublish.actualizadas, report.tableCountAfterSecond], [0, 2, 2], 'republicar actualiza sin duplicar')
     assert.equal(report.emptyPublish.canceladas, 1)
     assert.equal(report.emptyPublish.conservadas_con_inscriptos.length, 1)
-    assert.deepEqual(report.statusesAfterEmpty, { m1: 'open', m2: 'cancelled' }, 'la mesa con inscriptos se conserva; la otra se cancela')
+    assert.deepEqual(report.statusesAfterEmpty, { [m1.id.toLowerCase()]: 'open', [m2.id.toLowerCase()]: 'cancelled' }, 'la mesa con inscriptos se conserva; la otra se cancela')
+    assert.deepEqual(report.afterNextTerm, [
+      { id: m1.id, status: 'completed', inscriptos: 1 },
+      { id: m1Next.id, status: 'open', inscriptos: 0 },
+    ], 'el turno nuevo es otra mesa; la cerrada no se reabre ni pierde inscriptos')
+    assert.equal(report.nextTermPublish.nuevas, 1)
+    assert.match(JSON.stringify(report.nextTermPublish.omitidas), /ya fue cerrada/)
+    assert.deepEqual(report.oddPublish.omitidas.map((item) => item.motivo.split(':')[0].split(' ').slice(0, 3).join(' ')), ['La mesa esta', 'Fecha u hora', 'Fecha u hora', 'Faltan menos de'])
+    assert.equal(report.oddPublish.actualizadas, 1, 'lo valido se publica igual')
+    assert.deepEqual(report.regularSeesWithCodeGrade, [m1Next.id], 'nota con codigo de carrera: el portal no la muestra, igual que la RPC')
+    assert.equal(report.enrollWithCodeGrade, 'EXAM_REGULARITY_REQUIRED')
     report.result = 'PASS'
   } catch (error) {
     report.result = 'FAIL'

@@ -75,6 +75,11 @@ async function runDraftWorkflowInBackground(payload) {
   }
 }
 
+// EX.2: la confirmacion/objecion docente desde el portal esta diferida post-v1 (RUNBOOK.md): sus RPC
+// no estan en el schema canonico y exam_teacher_assignments exige un exam_table_id real. Mientras tanto
+// el admin confirma el tribunal y publica; el boton queda visible como "proximamente".
+const TEACHER_PORTAL_REVIEW_ENABLED = false
+
 function resolveCurrentStepId(uiState) {
   if (uiState === FIELD_TEST_UI_STATES.CONFIGURING_CALL) return 'config'
   if (uiState === FIELD_TEST_UI_STATES.REVIEWED_IMPORTED) return 'armar'
@@ -1117,10 +1122,10 @@ function ExamEngineV21FieldTestPage({
             rows={tribunalReviewExport?.rows ?? []}
             onExport={() => exportRows(tribunalReviewExport, isPreview ? 'previsualizacion_tribunales.csv' : 'precronograma_completo_para_docentes.csv')}
             onExportPdf={exportCompletePrecronogramaPdf}
-            onPublishForReview={publishForTeacherReview}
+            onPublishForReview={TEACHER_PORTAL_REVIEW_ENABLED ? publishForTeacherReview : undefined}
           />
 
-          {!isPreview && <TeacherConfirmationStatusPanel
+          {!isPreview && TEACHER_PORTAL_REVIEW_ENABLED && <TeacherConfirmationStatusPanel
             counts={teacherReviewStatus?.counts ?? { confirmed: 0, pending: 0, objected: 0, total: 0 }}
             canConfirmAsAdmin={canPublishOfficialSchedule}
             isLoading={isFetchingTeacherReviewStatus || isBusy}
@@ -1131,12 +1136,14 @@ function ExamEngineV21FieldTestPage({
             onRefresh={refreshTeacherReviewStatus}
           />}
 
-          {!isPreview && <details className="soft-card">
+          {!isPreview && <details className="soft-card" open={!TEACHER_PORTAL_REVIEW_ENABLED}>
             <summary className="cursor-pointer text-base font-extrabold text-slate-800">
-              Importar cambios manualmente (docentes sin cuenta de portal)
+              {TEACHER_PORTAL_REVIEW_ENABLED ? 'Importar cambios manualmente (docentes sin cuenta de portal)' : 'Confirmar el tribunal'}
             </summary>
             <p className="mt-2 text-sm text-slate-600">
-              Solo hace falta para docentes que todavia no tienen cuenta en el portal y no pueden confirmar desde ahi.
+              {TEACHER_PORTAL_REVIEW_ENABLED
+                ? 'Solo hace falta para docentes que todavia no tienen cuenta en el portal y no pueden confirmar desde ahi.'
+                : 'Si los docentes no pidieron cambios, confirma sin cambios. Si pidieron cambios, importa la planilla editada.'}
             </p>
             <div className="mt-3">
               <ImportAction

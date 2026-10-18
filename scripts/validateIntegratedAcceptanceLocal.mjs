@@ -194,6 +194,8 @@ export async function main() {
       await page.reload({ waitUntil: 'networkidle' });
       // EX.1: el portal ya no lista la mesa a un alumno no regular (misma regla que la RPC). Si la
       // listara, el boton tiene que estar deshabilitado con su motivo. Ningun boton habilitado.
+      await page.getByText('Mesas de examen', { exact: true }).first().waitFor();
+      await page.waitForLoadState('networkidle');
       const enrollButtons = page.getByRole('button', { name: 'Inscribirme', exact: true });
       const buttonCount = await enrollButtons.count();
       const enabledButtons = [];

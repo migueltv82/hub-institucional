@@ -227,7 +227,7 @@ begin
      and subject.code = latest.subject_id
     join public.careers career
       on career.institution_id = target_institution_id
-     and (career.name = latest.program_id or career.external_code = latest.program_id)
+     and career.name = latest.program_id
     where latest.academic_status = 'regular'
       and career.id = any(career_ids)
   ),
@@ -392,7 +392,13 @@ begin
         from public.exam_tables mapped_table
         where mapped_table.institution_id = target_institution_id
           and mapped_table.workspace_key = normalized_workspace_key
-          and regexp_replace(
+          -- EX.1: solo mesas abiertas o confirmadas; una cancelada o cerrada no se lista.
+          and mapped_table.status in ('confirmed', 'open')
+          and (
+            lower(coalesce(mapped_table.legacy_snapshot_id, '')) = lower(coalesce(schedule_rows.mesa->>'id', ''))
+            or lower(coalesce(mapped_table.legacy_exam_table_id, '')) = lower(coalesce(schedule_rows.mesa->>'id', ''))
+            or (
+          regexp_replace(
             regexp_replace(lower(coalesce(schedule_rows.mesa->>'id', '')), '^exam-engine-v21-', ''),
             '-[0-9]{4}-[0-9]{2}-[0-9]{2}$',
             ''
@@ -407,6 +413,8 @@ begin
               regexp_replace(lower(coalesce(schedule_rows.mesa->>'id', '')), '^exam-engine-v21-', ''),
               '-[0-9]{4}-[0-9]{2}-[0-9]{2}$',
               ''
+            )
+          )
             )
           )
       )

@@ -41,9 +41,15 @@ function TribunalReviewTable({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!previewOnly && <button className="btn-primary" disabled={!rows.length} onClick={onPublishForReview} type="button">
+          {!previewOnly && <button
+            className="btn-primary"
+            disabled={!rows.length || !onPublishForReview}
+            onClick={onPublishForReview}
+            title={onPublishForReview ? undefined : 'Disponible en una proxima version'}
+            type="button"
+          >
             <Send className="h-4 w-4" />
-            Publicar para revision docente
+            {onPublishForReview ? 'Publicar para revision docente' : 'Revision docente en el portal (proximamente)'}
           </button>}
           {!previewOnly && <button className="btn-secondary" disabled={!rows.length} onClick={onExportPdf} type="button">
             <FileText className="h-4 w-4" />
@@ -56,9 +62,9 @@ function TribunalReviewTable({
         </div>
       </div>
       {!previewOnly && <p className="mt-3 rounded-md bg-sky-50 px-3 py-2 text-xs font-bold text-sky-900">
-        &quot;Publicar para revision docente&quot; solo llega a los docentes que ya tienen cuenta de
-        portal creada con el mismo email cargado en la planilla de docentes. Al resto seguí
-        enviándoles el PDF por fuera.
+        {onPublishForReview
+          ? <>&quot;Publicar para revision docente&quot; solo llega a los docentes que ya tienen cuenta de portal creada con el mismo email cargado en la planilla de docentes. Al resto seguí enviándoles el PDF por fuera.</>
+          : <>Enviales el PDF a los docentes por fuera. Cuando el tribunal este acordado, usa &quot;Confirmar sin cambios&quot; para pasar al cronograma final y publicarlo.</>}
       </p>}
 
       {rows.length ? (

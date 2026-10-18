@@ -1027,3 +1027,19 @@ Cambios:
 - la app la llama al publicar y muestra un resumen.
 
 Harness local PASS (`0aa8949b932b5bef`), QA.1 PASS y 6 regresiones PASS. Pendiente: EX.2 (revisión docente) y la aplicación en Producción, con el OK de Miguel. Evidencia: `supabase/security/EXAM_PUBLICATION_LOCAL_RESULT.md`.
+
+## 2026-10-18 — EX.2: la revisión docente en el portal queda como "próximamente" (Claude)
+
+La confirmación y objeción docente de mesas está diferida a después de la v1 (RUNBOOK.md). Sus RPC no están en el schema canónico y `exam_teacher_assignments` exige un `exam_table_id` real, así que "Publicar para revision docente" fallaba. Se reemplaza por un botón deshabilitado "Revision docente en el portal (proximamente)", se oculta el panel de confirmaciones y se abre por defecto la sección "Confirmar el tribunal" ("Confirmar sin cambios" o importar la planilla editada). Flujo de la demo: armar mesas → confirmar el tribunal → publicar el cronograma (EX.1 abre la inscripción).
+
+## 2026-10-18 — EX.1b: ajustes de la auditoría independiente de EX.1 (Claude)
+
+La auditoría dio FAIL por un P1: el id del motor se repite entre turnos, así que publicar febrero se apropiaba de la mesa de diciembre y de sus inscriptos, y además reabría mesas cerradas.
+
+Correcciones:
+- la clave es el id con fecha y las mesas cerradas o completadas no se reabren;
+- las mesas repetidas, con fecha u hora inválida o a menos de 48 h se omiten con su motivo;
+- el portal solo compara contra el nombre de la carrera (igual que la RPC) y solo lista mesas abiertas;
+- si falla la apertura de mesas, la pantalla ya no dice "publicado".
+
+Harness, 4 regresiones y QA.1: PASS. Además, EX.2: la revisión docente en el portal queda como "próximamente" y el admin confirma el tribunal.

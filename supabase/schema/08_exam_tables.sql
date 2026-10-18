@@ -1253,9 +1253,11 @@ USING (
 -- (05 visible_schedule) y la inscripcion (upsert_exam_enrollment_from_portal) exigen ademas una
 -- fila en exam_tables con su exam_table_subjects. Esta RPC las crea o actualiza desde las mesas
 -- publicadas. Solo owner/admin/editor de la institucion activa, o superadmin.
--- Claves: legacy_snapshot_id = id publicado ("exam-engine-v21-<mesa>-<fecha>", el que manda el alumno);
--- legacy_exam_table_id = id sin prefijo ni fecha (el que cruza 05). Una mesa que ya no esta en el
--- cronograma se cancela, salvo que tenga inscriptos: entonces se conserva y se informa.
+-- Clave: el id publicado ("exam-engine-v21-<mesa>-<fecha>", el que manda el alumno). Incluye la fecha:
+-- el id del motor se repite entre turnos y sin la fecha un turno nuevo se apropiaria de la mesa (y de
+-- los inscriptos) del anterior. legacy_snapshot_id = id tal cual; legacy_exam_table_id = id en minusculas
+-- (05 cruza por cualquiera de los dos). Una mesa cerrada o completada no se reabre. Una mesa que ya no
+-- esta en el cronograma se cancela, salvo que tenga inscriptos: entonces se conserva y se informa.
 create or replace function public.publish_exam_tables_from_schedule(
   target_institution_id uuid,
   target_workspace_key text,
@@ -1270,7 +1272,7 @@ set search_path = public, pg_temp
 as $$
 declare
   clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
-  opens_at timestamptz := coalesce(target_enrollment_opens_at, timezone('utc', now()));
+  opens_at timestamptz := coalesce(target_enrollment_opens_at, now());
   close_hours integer := greatest(coalesce(target_close_hours_before, 48), 0);
   mesa jsonb;
   published_id text;
@@ -1287,6 +1289,7 @@ declare
   career_row record;
   subject_row record;
   table_id uuid;
+  table_status text;
   primary_plan_subject record;
   published_ids text[] := array[]::text[];
   created_count integer := 0;
@@ -1319,21 +1322,32 @@ begin
 
   for mesa in select value from jsonb_array_elements(target_mesas) loop
     published_id := btrim(coalesce(mesa ->> 'id', ''));
-    legacy_key := regexp_replace(regexp_replace(lower(published_id), '^exam-engine-v21-', ''), '-[0-9]{4}-[0-9]{2}-[0-9]{2}$', '');
+    legacy_key := lower(published_id);
     subject_code := btrim(coalesce(mesa ->> 'materia', mesa ->> 'codigo', ''));
     career_text := btrim(coalesce(mesa ->> 'carrera', ''));
     exam_date := btrim(coalesce(mesa ->> 'fechaIso', mesa ->> 'fechaSugerida', ''));
     start_time := coalesce(nullif(btrim(coalesce(mesa ->> 'inicio', '')), ''), '08:00');
     end_time := nullif(btrim(coalesce(mesa ->> 'fin', '')), '');
 
-    if published_id = '' or legacy_key = '' or subject_code = '' or career_text = '' then
+    if published_id = '' or subject_code = '' or career_text = '' then
       skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'Faltan id, materia o carrera.');
       continue;
     end if;
-    if exam_date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' or start_time !~ '^[0-9]{1,2}:[0-9]{2}' or (end_time is not null and end_time !~ '^[0-9]{1,2}:[0-9]{2}') then
-      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'Fecha u hora invalida.');
+    if legacy_key = any(published_ids) then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'La mesa esta repetida en el cronograma.');
       continue;
     end if;
+    -- Fecha y hora invalidas (25:00, 30/02) se omiten en lugar de abortar toda la publicacion.
+    begin
+      if exam_date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' or start_time !~ '^[0-9]{1,2}:[0-9]{2}$' or (end_time is not null and end_time !~ '^[0-9]{1,2}:[0-9]{2}$') then
+        raise exception using errcode = '22007';
+      end if;
+      starts_at := (exam_date || ' ' || start_time)::timestamp at time zone 'America/Argentina/Buenos_Aires';
+      ends_at := case when end_time is null then null else (exam_date || ' ' || end_time)::timestamp at time zone 'America/Argentina/Buenos_Aires' end;
+    exception when others then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'Fecha u hora invalida.');
+      continue;
+    end;
 
     select career.id, career.name into career_row
     from public.careers career
@@ -1369,28 +1383,29 @@ begin
       continue;
     end if;
 
-    starts_at := (exam_date || ' ' || start_time)::timestamp at time zone 'America/Argentina/Buenos_Aires';
-    ends_at := case when end_time is null then null else (exam_date || ' ' || end_time)::timestamp at time zone 'America/Argentina/Buenos_Aires' end;
     if ends_at is not null and ends_at <= starts_at then
       ends_at := null;
     end if;
     closes_at := starts_at - make_interval(hours => close_hours);
     if closes_at <= opens_at then
-      closes_at := starts_at;
-    end if;
-    if closes_at <= opens_at then
-      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'La mesa ya paso: no se abre inscripcion.');
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', format('Faltan menos de %s horas para la mesa: no se abre inscripcion.', close_hours));
       continue;
     end if;
 
     call_key := coalesce(nullif(btrim(coalesce(mesa ->> 'exam_call', '')), ''), 'first');
 
-    select exam_table.id into table_id
+    select exam_table.id, exam_table.status into table_id, table_status
     from public.exam_tables exam_table
     where exam_table.institution_id = target_institution_id
       and exam_table.workspace_key = clean_workspace_key
       and exam_table.legacy_exam_table_id = legacy_key
     for update;
+
+    if table_status in ('closed', 'completed') then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'La mesa ya fue cerrada: no se reabre.');
+      published_ids := published_ids || legacy_key;
+      continue;
+    end if;
 
     if table_id is null then
       insert into public.exam_tables (

@@ -515,7 +515,9 @@ function GeneradorCronograma() {
         details: describeExamPublication(publication),
       })
     } catch (error) {
-      toast.error(`El cronograma quedo guardado, pero no se abrio la inscripcion: ${error.message}`)
+      // El cronograma ya quedo guardado: volver a publicar reintenta solo la apertura (la RPC es idempotente).
+      toast.error(`El cronograma quedo guardado, pero no se abrio la inscripcion de alumnos. Volve a publicar para reintentar. ${error.message}`)
+      return false
     }
     return true
   }, [activeInstitutionId, canEditWorkspace, saveSnapshotNow, snapshotPayload, useRemoteWorkspace, workspaceKey])
