@@ -150,7 +150,7 @@ describe('ExamEngineV21FieldTestPage', () => {
     expect(screen.getByText('Seleccion de vocales')).toBeInTheDocument()
     expect(screen.getByText('Ver precronograma detallado')).toBeInTheDocument()
   })
-  it('especial: arma mesas a mano y llegan a "EnvÃƒÆ’Ã‚Â­o a docentes" sin pasar por el generador automÃƒÆ’Ã‚Â¡tico', () => {
+  it('especial: arma mesas a mano y llegan a "Envío a docentes" sin pasar por el generador automático', () => {
     render(
       <ExamEngineV21FieldTestPage
         dataReady

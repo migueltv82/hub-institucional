@@ -952,3 +952,9 @@ Pendiente: redeploy de las Edge Functions (Miguel, CLI). Evidencia: `supabase/se
 Apareció al armar las planillas del UAT. `parseTemplateV2StudentsWorkbook` mezcla la fila del alumno con la fila del plan de estudios, y la fila del plan trae `nombre` (de la materia) y `observaciones`. Resultado: si la materia existía en el plan, todos los alumnos importados quedaban con la materia como nombre de pila, en su cuenta, en el padrón y en el listado del docente. Ahora se conservan `nombre` y `observaciones` del alumno.
 
 Test nuevo: falla sin el arreglo y pasa con él. `npm run check` PASS (2516 tests).
+
+## 2026-10-18 — Acentos rotos en la UI (Claude)
+
+Apareció en el UAT: los avisos de "Crear accesos" mostraban "padrÃ³n" y "tenÃ­an". Había 12 textos doblemente codificados en `GeneradorCronograma.jsx` y `ExamEngineV21FieldTestPage.jsx`, más el título de un test. Se corrigieron.
+
+Nuevo `scripts/sourceEncoding.test.js`: recorre `src/` y falla si vuelve a aparecer un acento roto. Se comprobó que falla sin el arreglo. `npm run check` PASS (2518 tests).

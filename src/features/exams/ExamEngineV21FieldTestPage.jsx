@@ -54,8 +54,8 @@ import { runExamEngineV21DraftWorkflowInWorker } from '../../workers/examEngineV
 const WIZARD_STEPS = [
   { id: 'config', title: 'Configurar llamado', description: 'Fechas, tipo de llamado y alcance del periodo de mesas.' },
   { id: 'armar', title: 'Armar mesas', description: 'Precronograma, combinar y completar tribunales (o cargarlas a mano si es especial).' },
-  { id: 'review', title: 'EnvÃ­o a docentes', description: 'PublicÃ¡ el precronograma completo para que lo confirmen.' },
-  { id: 'final', title: 'Cronograma final', description: 'RevisÃ¡ las confirmaciones y publicÃ¡ la versiÃ³n definitiva.' },
+  { id: 'review', title: 'Envío a docentes', description: 'Publicá el precronograma completo para que lo confirmen.' },
+  { id: 'final', title: 'Cronograma final', description: 'Revisá las confirmaciones y publicá la versión definitiva.' },
 ]
 
 const DRAFT_WORKER_SYNC_FALLBACK_CODES = new Set([
@@ -584,7 +584,7 @@ function ExamEngineV21FieldTestPage({
         dataWarnings: [],
         teacherReviewStatus: null,
       })
-      toast.success('Listo, ahora cargÃ¡ cada mesa especial a mano.')
+      toast.success('Listo, ahora cargá cada mesa especial a mano.')
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -950,7 +950,7 @@ function ExamEngineV21FieldTestPage({
       {viewingPastStep && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-sky-200 bg-sky-50 px-4 py-3">
           <p className="text-sm font-bold text-sky-900">
-            EstÃ¡s revisando &ldquo;{wizardSteps[viewStepIndex]?.title}&rdquo;, un paso ya completado. El proceso sigue donde lo dejaste.
+            Estás revisando &ldquo;{wizardSteps[viewStepIndex]?.title}&rdquo;, un paso ya completado. El proceso sigue donde lo dejaste.
           </p>
           <button className="btn-secondary" type="button" onClick={() => setViewStepId(currentStepId)}>
             Volver al paso actual
@@ -1046,10 +1046,10 @@ function ExamEngineV21FieldTestPage({
                     <thead className="sticky top-0 bg-slate-100 text-slate-800">
                       <tr>
                         <th className="px-3 py-2">Carrera</th>
-                        <th className="px-3 py-2">CÃ³digo</th>
+                        <th className="px-3 py-2">Código</th>
                         <th className="px-3 py-2">Materia</th>
                         <th className="px-3 py-2">Motivo</th>
-                        <th className="px-3 py-2">CÃ³mo resolverlo</th>
+                        <th className="px-3 py-2">Cómo resolverlo</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">

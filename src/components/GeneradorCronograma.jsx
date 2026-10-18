@@ -564,13 +564,13 @@ function GeneradorCronograma() {
       showImportantNotice({
         tone: 'success',
         title: 'Accesos de alumnos listos',
-        message: 'Los usuarios del portal alumno fueron procesados desde el padrÃ³n.',
+        message: 'Los usuarios del portal alumno fueron procesados desde el padrón.',
         details: [
           `${result.created} accesos creados.`,
           `${result.updated} accesos actualizados.`,
-          result.skippedExisting ? `${result.skippedExisting} alumnos omitidos porque ya tenÃ­an acceso vinculado.` : '',
-          result.batches > 1 ? `Procesado en ${result.batches} tandas para evitar lÃ­mites de Supabase.` : '',
-          'Si agregaste alumnos nuevos, ya podÃ©s entregarles email y DNI como credenciales iniciales.',
+          result.skippedExisting ? `${result.skippedExisting} alumnos omitidos porque ya tenían acceso vinculado.` : '',
+          result.batches > 1 ? `Procesado en ${result.batches} tandas para evitar límites de Supabase.` : '',
+          'Si agregaste alumnos nuevos, ya podés entregarles email y DNI como credenciales iniciales.',
         ],
       })
     } catch (error) {
@@ -600,7 +600,7 @@ function GeneradorCronograma() {
       showImportantNotice({
         tone: 'success',
         title: 'Accesos docentes listos',
-        message: 'Los usuarios del portal docente fueron procesados desde el padrÃ³n.',
+        message: 'Los usuarios del portal docente fueron procesados desde el padrón.',
         details: [
           `${result.created} accesos creados.`,
           `${result.updated} accesos actualizados.`,
@@ -1750,7 +1750,7 @@ function GeneradorCronograma() {
                     canEditWorkspace={canEditWorkspace}
                     canManageDataSource={isSuperAdmin}
                     isRelationalWorkspaceSource={isRelationalWorkspaceSource}
-                    description="SubÃ­ la plantilla general de alumnos. La carga agrega registros nuevos y actualiza los existentes."
+                    description="Subí la plantilla general de alumnos. La carga agrega registros nuevos y actualiza los existentes."
                     onUploadStudents={onUploadStudents}
                     scope="students"
                     title="Carga de alumnos"
