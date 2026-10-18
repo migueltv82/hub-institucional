@@ -1043,3 +1043,7 @@ Correcciones:
 - si falla la apertura de mesas, la pantalla ya no dice "publicado".
 
 Harness, 4 regresiones y QA.1: PASS. Además, EX.2: la revisión docente en el portal queda como "próximamente" y el admin confirma el tribunal.
+
+## 2026-10-18 — EX.1 aplicado en Producción (Claude)
+
+Con el OK de Miguel se aplicaron en Producción la RPC `publish_exam_tables_from_schedule` y la versión nueva de `get_student_portal_workspace_snapshot`. Verificación de solo lectura: SECURITY DEFINER, sin EXECUTE para anon/public, con EXECUTE para authenticated, y el portal ya filtra con `exam_eligible_subjects`. Advisors sin hallazgos nuevos. Falta la demo de mesas de punta a punta en la app. Evidencia: `supabase/security/EXAM_PUBLICATION_LOCAL_RESULT.md`.

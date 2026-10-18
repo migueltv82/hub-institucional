@@ -62,3 +62,21 @@ Verificados la clave por turno, los duplicados, la paridad de carrera, las fecha
 - **Republicar una mesa a menos de 48 h la cancelaba** si no tenía inscriptos. Corregido: la mesa queda en el cronograma y no se cancela.
 - **El cruce por clave recortada en 05 sigue por compatibilidad.** Ningún flujo genera hoy esas filas: la base de Producción no tiene filas en `exam_tables`. Hay que quitarlo antes de la implementación real.
 - **No hay tope de tamaño del payload.** Queda para v1.1.
+
+## Aplicación en Producción (`lzjp…aeco`, 2026-10-18, con OK de Miguel)
+
+Aplicado vía MCP `apply_migration` desde el repo en `af29229`:
+
+1. `ex1_publish_exam_tables`: `publish_exam_tables_from_schedule` completa (de `08_exam_tables.sql`, incluye EX.1c), revoke public/anon, grant authenticated.
+2. `ex1_student_portal_exam_visibility`: `get_student_portal_workspace_snapshot` completa (de `05_student_portal_secure_read.sql`), revoke/grant y `notify pgrst, 'reload schema'`.
+
+Verificación de solo lectura:
+
+| Función | SECURITY DEFINER | anon EXECUTE | public EXECUTE | authenticated EXECUTE | Otro |
+| --- | --- | --- | --- | --- | --- |
+| `publish_exam_tables_from_schedule(uuid,text,jsonb,timestamptz,integer)` | sí | no | no | sí | — |
+| `get_student_portal_workspace_snapshot(uuid,text)` | sí | no | no | sí | contiene `exam_eligible_subjects` |
+
+Advisors de seguridad: sin hallazgos nuevos, salvo el aviso esperado "authenticated puede ejecutar SECURITY DEFINER" para la RPC nueva, que valida owner/admin/editor o superadmin por dentro. Siguen los avisos de línea base: tablas con RLS sin policies, a las que se accede solo por RPC; dos RPC anon públicas de login/estado; y la protección de contraseñas filtradas apagada.
+
+Pendiente: la demo de punta a punta en la app (armar mesas → confirmar el tribunal → publicar → el alumno se inscribe).
