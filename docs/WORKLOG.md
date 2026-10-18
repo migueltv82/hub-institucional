@@ -992,3 +992,9 @@ Apareció en el UAT: el resumen decía "2 materias" con una sola asignada. El ho
 ## 2026-10-18 — Decisión: el GO arranca sin correlatividades (Miguel)
 
 Opción (a): el catálogo se carga sin `--con-correlativas`. Las correlatividades se suman cuando esté cargada la historia académica de los alumnos (épica v1.1), para no bloquear a los alumnos de 2.º año en adelante.
+
+## 2026-10-18 — UAT en la base de Producción: PASS (Miguel + Claude)
+
+Circuito completo con usuarios de prueba: superadmin → institución → planillas → accesos → catálogo → inscripción del alumno → asignación del docente → asistencia y notas → lectura del alumno.
+
+Bugs encontrados y corregidos en el camino: PB.5, acentos rotos, CAT.1/CAT.1b, PB.7 y PB.8. Pendientes: PB.6 y la limpieza de los datos de prueba antes de la carga real. Detalle en `supabase/security/UAT_PROD_RESULT.md`.
