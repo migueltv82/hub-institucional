@@ -71,3 +71,27 @@ La base `lzjp…aeco` es la de Producción (renombrada `Hub-Institucional-Prod`;
 - Advisors de seguridad: mismas categorías que en `STAGING_ADVISORS_RESULT.md`. 0029 suma los dos helpers nuevos, que son por diseño: devuelven solo un booleano sobre el propio usuario.
 
 **Sigue pendiente (Miguel, CLI):** redeploy de `admin-users` y `source-file-storage` desde release/v1. Sin ese redeploy, PB.1, PB.3 y la parte de 06.3 que vive en la Edge no corren en Producción.
+
+### PROD1b — Edge Functions y smoke (2026-10-18)
+
+Miguel las publicó con la CLI desde su PC.
+
+- **admin-users v5** (01:42 UTC), desde la última versión de `release/v1`, con `--no-verify-jwt`.
+- **source-file-storage v2** (01:30 UTC). Su código es igual en `main` y en `release/v1`.
+- Hubo una **v4** de `admin-users` publicada por error desde `main`, sin PB.1, PB.3 ni 06.3. La v5 la reemplaza. Causa: `release/v1` estaba ocupada por un worktree de Codex. La solución fue `git checkout --detach origin/release/v1`. La base no tiene datos reales, así que no hubo impacto.
+
+`scripts/smokeCheck.mjs` contra Producción, con la publishable key: **PASS**.
+
+| Check | Resultado |
+| --- | --- |
+| auth | 200 |
+| rest | 200 |
+| storage | 200 |
+| edge: GET `admin-users` | 405 |
+| anon en tablas sensibles | 9 tablas sin filas |
+| JWT inválido | 401 |
+| frontend | SKIPPED: no hay dominio todavía |
+
+Una corrida previa con la clave de ejemplo dio 401 en auth, rest y edge, como se esperaba.
+
+**BLOQUEANTE del GO:** `ADMIN_USERS_ALLOWED_ORIGINS` y `SOURCE_FILE_STORAGE_ALLOWED_ORIGINS` no están cargados. Todavía no hay dominio productivo: hoy se trabaja en local y aplican los orígenes por defecto (localhost y 127.0.0.1, puertos 4173 y 5173). Hay que cargarlos con el dominio exacto antes de publicar el frontend.

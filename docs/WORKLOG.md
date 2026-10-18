@@ -942,3 +942,7 @@ Verificación:
 - advisors sin hallazgos nuevos fuera de lo triado.
 
 Pendiente: redeploy de las Edge Functions (Miguel, CLI). Evidencia: `supabase/security/STAGING_PROMOTION_RESULT.md`, sección PROD1b.
+
+## 2026-10-18 — PROD1b: Edge Functions publicadas y smoke PASS (Miguel + Claude)
+
+`admin-users` v5 y `source-file-storage` v2 en Producción. Hubo una v4 publicada por error desde `main` (`release/v1` estaba ocupada por un worktree de Codex); se resolvió con `checkout --detach origin/release/v1`. smokeCheck PASS. Pendiente para el GO: los secrets de orígenes, cuando haya dominio.
