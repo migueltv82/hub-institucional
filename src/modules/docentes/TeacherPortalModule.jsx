@@ -652,7 +652,7 @@ export function ExamsView({ data, examAssignments = EMPTY_ARRAY }) {
                   <p><strong className="text-slate-900">Vocales:</strong> {[exam.vocal1 || exam.primerVocal, exam.vocal2 || exam.segundoVocal].filter(Boolean).join(' / ') || '-'}</p>
                   <p><strong className="text-slate-900">Aula:</strong> {exam.aula || exam.location || '-'}</p>
                 </div>
-                {exam.id && institutionId && (
+                {exam.id && institutionId && exam.esTitular && (
                   <>
                     <button
                       aria-expanded={openRosterKey === exam.id}

@@ -5,7 +5,7 @@ function clean(value) {
 }
 
 function getRosterErrorMessage(error) {
-  if (error?.code === '42501') return 'Solo el tribunal de la mesa puede ver los inscriptos.'
+  if (error?.code === '42501') return 'Solo el titular de la mesa puede ver los inscriptos.'
   if (error?.code === 'P0002' || clean(error?.message).includes('EXAM_TABLE_NOT_FOUND')) {
     return 'La mesa todavia no esta publicada para inscripcion.'
   }
@@ -14,7 +14,7 @@ function getRosterErrorMessage(error) {
 }
 
 // Inscriptos de una mesa publicada. La RPC get_exam_table_roster decide quien puede verlos:
-// el tribunal publicado, el docente asignado a la materia y el personal de gestion.
+// el titular de la mesa (DNI publicado o asignacion titular de la materia) y el personal de gestion.
 export async function fetchExamTableRoster({ institutionId, workspaceKey = 'main', examKey }) {
   if (!isSupabaseConfigured || !supabase) {
     throw new Error('La lista de inscriptos requiere Supabase configurado.')

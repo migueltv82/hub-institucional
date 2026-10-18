@@ -10,8 +10,9 @@ import { disposableDatabase } from './validateLocalDbAuthRecovery.mjs'
 // EX.1: publish_exam_tables_from_schedule crea las mesas publicadas en exam_tables; el portal alumno
 // muestra solo las mesas de materias donde el alumno es regular segun student_grades (la misma regla
 // que upsert_exam_enrollment_from_portal) y la inscripcion funciona contra la mesa publicada.
-// EX.7: get_exam_table_roster muestra los inscriptos al tribunal publicado (por DNI), al docente asignado a la
-// materia y al personal de gestion; a nadie mas.
+// EX.7/EX.8: get_exam_table_roster muestra los inscriptos solo al titular (DNI publicado o asignacion titular de
+// la materia) y al personal de gestion; los vocales no. Inscripcion hasta 24 h antes; el admin inscribe fuera
+// de plazo con las mismas reglas de elegibilidad; panel admin de mesas y actas.
 // Uso: node scripts/validateExamPublicationLocal.mjs
 
 const SOURCE = 'supabase_db_codex-baseline-local-7725bdda'
@@ -22,6 +23,7 @@ const REGULAR = 'e1000000-0000-4000-8000-0000000000b1'
 const LIBRE = 'e1000000-0000-4000-8000-0000000000b2'
 const VOCAL = 'e1000000-0000-4000-8000-0000000000d2'
 const OUTSIDER = 'e1000000-0000-4000-8000-0000000000d3'
+const ASSIGNED = 'e1000000-0000-4000-8000-0000000000d4'
 const CAREER = 'PROFESORADO DE PRUEBA UAT'
 
 export function futureMonday(daysAhead = 14, now = new Date()) {
@@ -37,7 +39,7 @@ export function mesa(code, draftId, date, extra = {}) {
 export async function main() {
   const run = randomBytes(8).toString('hex')
   const database = disposableDatabase(`gotrue_harness_${run}`)
-  const report = { task: 'EX.1+EX.7', run, staging: 'NONE', production: 'NONE' }
+  const report = { task: 'EX.1+EX.7+EX.8', run, staging: 'NONE', production: 'NONE' }
   let step = 'preflight', created = false
   const docker = (args, input) => {
     try { return execFileSync('docker', args, { input, encoding: 'utf8', windowsHide: true, timeout: 120000, maxBuffer: 64 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }) }
@@ -92,8 +94,10 @@ ${user(REGULAR, 'regular@ex1.invalid', 'alumno', 'viewer')}
 ${user(LIBRE, 'libre@ex1.invalid', 'alumno', 'viewer')}
 ${user(VOCAL, 'vocal@ex1.invalid', 'docente', 'viewer')}
 ${user(OUTSIDER, 'ajeno@ex1.invalid', 'docente', 'viewer')}
+${user(ASSIGNED, 'asignado@ex1.invalid', 'docente', 'viewer')}
 insert into public.teacher_records (institution_id, workspace_key, first_name, last_name, dni, profile_id) values
-  ('${INSTITUTION}', 'main', 'Titular', 'Asignado', '55555555', '${TEACHER}'),
+  ('${INSTITUTION}', 'main', 'Titular', 'Publicado', '55.555.555', '${TEACHER}'),
+  ('${INSTITUTION}', 'main', 'Titular', 'Asignado', '66666666', '${ASSIGNED}'),
   ('${INSTITUTION}', 'main', 'Vocal', 'Tribunal', '33.333.333', '${VOCAL}'),
   ('${INSTITUTION}', 'main', 'Docente', 'Ajeno', '44444444', '${OUTSIDER}');
 insert into public.careers (institution_id, external_code, name) values ('${INSTITUTION}', 'UAT', '${CAREER}');
@@ -117,12 +121,13 @@ insert into public.student_grades (institution_id, workspace_key, student_id, st
                ('${LIBRE}'::uuid, 'UAT01', 'final', 2, 'libre', now() - interval '1 day')) as v(profile, code, kind, grade, status, at)
     on v.profile = student.profile_id;`)
     sql(`insert into public.subject_teacher_assignments (institution_id, workspace_key, subject_id, program_id, teacher_id, role, status)
-values ('${INSTITUTION}', 'main', 'UAT01', '${CAREER}', '${TEACHER}', 'titular', 'active');`)
+values ('${INSTITUTION}', 'main', 'UAT01', '${CAREER}', '${ASSIGNED}', 'titular', 'active'),
+  ('${INSTITUTION}', 'main', 'UAT01', '${CAREER}', '${VOCAL}', 'suplente', 'active');`)
     const recordOf = (profile) => sql(`select id from public.student_records where profile_id = '${profile}';`)
     const regularRecord = recordOf(REGULAR)
     const libreRecord = recordOf(LIBRE)
     const date = futureMonday()
-    const m1 = mesa('UAT01', 'm1', date, { tribunal_dnis: '55555555,33333333' })
+    const m1 = mesa('UAT01', 'm1', date, { tribunal_dnis: '55555555,33333333', titular_dni: '55555555', profesorTitular: 'Publicado Titular', vocal1: 'Tribunal Vocal' })
     const m2 = mesa('UAT02', 'm2', date, { inicio: '19:00' })
     const unknown = mesa('ZZZ99', 'm3', date)
     setSnapshot([m1, m2])
@@ -147,15 +152,16 @@ values ('${INSTITUTION}', 'main', 'UAT01', '${CAREER}', '${TEACHER}', 'titular',
     step = 'roster'
     report.roster = {
       admin: roster(ADMIN, m1.id),
+      titularPublicado: roster(TEACHER, m1.id),
+      titularAsignado: roster(ASSIGNED, m1.id),
       vocalTribunal: roster(VOCAL, m1.id),
-      titularAsignado: roster(TEACHER, m1.id),
       docenteAjeno: roster(OUTSIDER, m1.id),
       alumno: roster(REGULAR, m1.id),
       vocalOtraMesa: roster(VOCAL, m2.id),
       ajenoMesaInexistente: roster(OUTSIDER, 'exam-engine-v21-no-existe'),
       adminMesaInexistente: roster(ADMIN, 'exam-engine-v21-no-existe'),
       anonPuedeEjecutar: sql(`select has_function_privilege('anon', 'public.get_exam_table_roster(uuid,text,text)', 'execute');`),
-      tribunalGuardado: JSON.parse(sql(`select metadata->'tribunal_dnis' from public.exam_tables where legacy_exam_table_id = lower('${m1.id}');`)),
+      tribunalGuardado: JSON.parse(sql(`select jsonb_build_object('dnis', metadata->'tribunal_dnis', 'titular', metadata->'titular_dni', 'nombres', metadata->'tribunal') from public.exam_tables where legacy_exam_table_id = lower('${m1.id}');`)),
     }
 
     step = 'republish'
@@ -172,14 +178,49 @@ values ('${INSTITUTION}', 'main', 'UAT01', '${CAREER}', '${TEACHER}', 'titular',
     report.nextTermPublish = publish(ADMIN, [m1, m1Next])
     report.afterNextTerm = JSON.parse(sql(`select json_agg(json_build_object('id', legacy_snapshot_id, 'status', status, 'inscriptos', (select count(*) from public.exam_enrollments e where e.exam_table_id = t.id and e.status = 'registered')) order by scheduled_starts_at) from public.exam_tables t where legacy_exam_table_id like '%-m1-%';`))
     // P2: mesa repetida, fecha invalida y mesa a menos de 48 h se omiten sin abortar la publicacion.
-    const soon = new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 10)
-    report.oddPublish = publish(ADMIN, [m1Next, m1Next, mesa('UAT02', 'm4', '2026-02-30'), mesa('UAT02', 'm5', nextDate, { inicio: '25:00' }), mesa('UAT02', 'm6', soon)])
+    // A 12 h: dentro de las 24 h previas, no se abre inscripcion.
+    const soonAt = new Date(Date.now() + 12 * 3600 * 1000)
+    const soon = soonAt.toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
+    const soonTime = soonAt.toLocaleTimeString('en-GB', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit' })
+    report.oddPublish = publish(ADMIN, [m1Next, m1Next, mesa('UAT02', 'm4', '2026-02-30'), mesa('UAT02', 'm5', nextDate, { inicio: '25:00' }), mesa('UAT02', 'm6', soon, { inicio: soonTime, fin: '' })])
     // P2: una nota guardada con el codigo de carrera no habilita la mesa en el portal (la RPC exige el nombre).
     setSnapshot([m1Next, m2])
     sql(`update public.exam_tables set status = 'open' where legacy_exam_table_id = lower('${m2.id}');
 update public.student_grades set program_id = 'UAT' where student_id = '${REGULAR}' and subject_id = 'UAT02';`)
     report.regularSeesWithCodeGrade = visible(REGULAR)
     report.enrollWithCodeGrade = enroll(REGULAR, regularRecord, m2.id, 'UAT02')
+
+    step = 'admin overview'
+    report.overview = {
+      admin: JSON.parse(as(ADMIN, `select public.get_exam_tables_admin_overview('${INSTITUTION}', 'main');`)),
+      docente: sqlState(TEACHER, `select public.get_exam_tables_admin_overview('${INSTITUTION}', 'main');`),
+    }
+
+    step = 'admin special enrollment'
+    // Plazo vencido: el portal rechaza; el admin inscribe con motivo y quedan auditados quien y por que.
+    sql(`update public.exam_tables set enrollment_opens_at = now() - interval '3 day', enrollment_closes_at = now() - interval '1 hour' where legacy_exam_table_id = lower('${m1Next.id}');`)
+    const adminEnroll = (actor, examId, recordId, reason) => {
+      try { return JSON.parse(as(actor, `select public.admin_enroll_student_in_exam_table('${INSTITUTION}', 'main', '${examId}', '${recordId}', '${reason}');`, true)) }
+      catch (error) { return (error.stderr ?? '').match(/ERROR:\s+([^\n]+)/)?.[1]?.trim() ?? 'ERROR' }
+    }
+    report.special = {
+      portalFueraDePlazo: enroll(REGULAR, regularRecord, m1Next.id, 'UAT01'),
+      docenteIntenta: adminEnroll(TEACHER, m1Next.id, regularRecord, 'Pedido de la secretaria'),
+      sinMotivo: adminEnroll(ADMIN, m1Next.id, regularRecord, 'ok'),
+      libre: adminEnroll(ADMIN, m1Next.id, libreRecord, 'Pedido de la secretaria'),
+      admin: adminEnroll(ADMIN, m1Next.id, regularRecord, 'Pedido de la secretaria'),
+      repetida: adminEnroll(ADMIN, m1Next.id, regularRecord, 'Pedido de la secretaria'),
+      auditoria: JSON.parse(sql(`select json_build_object('creado_por_admin', e.created_by = '${ADMIN}', 'motivo', e.metadata->>'admin_enrollment_reason', 'evento', (select reason_code from public.exam_enrollment_events ev where ev.exam_enrollment_id = e.id)) from public.exam_enrollments e join public.exam_tables t on t.id = e.exam_table_id where t.legacy_exam_table_id = lower('${m1Next.id}') and e.status = 'registered';`)),
+    }
+    sql(`update public.exam_tables set scheduled_starts_at = now() - interval '2 day', enrollment_opens_at = now() - interval '5 day', enrollment_closes_at = now() - interval '3 day' where legacy_exam_table_id = lower('${m1Next.id}');`)
+    report.special.despuesDelDia = adminEnroll(ADMIN, m1Next.id, libreRecord, 'Pedido de la secretaria')
+
+    step = 'window 24h'
+    const in30h = new Date(Date.now() + 30 * 3600 * 1000)
+    const in20h = new Date(Date.now() + 20 * 3600 * 1000)
+    const hhmm = (d) => d.toLocaleTimeString('en-GB', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit' })
+    const ymd = (d) => d.toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
+    report.window24 = publish(ADMIN, [m1Next, mesa('UAT02', 'w30', ymd(in30h), { inicio: hhmm(in30h), fin: '' }), mesa('UAT02', 'w20', ymd(in20h), { inicio: hhmm(in20h), fin: '' })])
 
     step = 'assertions'
     assert.equal(report.teacherPublish, 'Acceso denegado: solo el personal de gestion de la institucion publica mesas.')
@@ -196,12 +237,25 @@ update public.student_grades set program_id = 'UAT' where student_id = '${REGULA
     assert.deepEqual(report.libreSees, [], 'el que quedo libre no ve la mesa: mismo criterio que la RPC')
     assert.equal(report.regularEnroll, 'registered')
     assert.equal(report.libreEnroll, 'EXAM_REGULARITY_REQUIRED')
-    const denied = 'Acceso denegado: solo el tribunal de la mesa puede ver los inscriptos.'
-    assert.deepEqual(report.roster.tribunalGuardado, ['33333333', '55555555'])
-    assert.deepEqual(report.roster.admin.alumnos.map((alumno) => [alumno.nombre, alumno.dni, alumno.materia, alumno.carrera]), [['Ana Regular', '11111111', 'UAT01', CAREER]], 'solo el inscripto: el libre no aparece')
-    assert.deepEqual(report.roster.vocalTribunal, report.roster.admin, 'el vocal del tribunal ve la lista (DNI con puntos en su legajo)')
-    assert.deepEqual(report.roster.titularAsignado, report.roster.admin, 'el docente asignado a la materia ve la lista')
-    assert.deepEqual([report.roster.docenteAjeno, report.roster.alumno, report.roster.vocalOtraMesa, report.roster.ajenoMesaInexistente], [denied, denied, denied, denied], 'nadie mas, y sin revelar que mesas existen')
+    const denied = 'Acceso denegado: solo el titular de la mesa puede ver los inscriptos.'
+    assert.deepEqual(report.roster.tribunalGuardado, { dnis: ['33333333', '55555555'], titular: '55555555', nombres: { titular: 'Publicado Titular', vocal1: 'Tribunal Vocal' } })
+    assert.deepEqual(report.roster.admin.alumnos.map((alumno) => [alumno.nombre, alumno.apellido, alumno.nombres, alumno.dni, alumno.materia, alumno.carrera]), [['Ana Regular', 'Regular', 'Ana', '11111111', 'UAT01', CAREER]], 'solo el inscripto: el libre no aparece')
+    assert.deepEqual(report.roster.titularPublicado, report.roster.admin, 'el titular publicado ve la lista (DNI con puntos en su legajo)')
+    assert.deepEqual(report.roster.titularAsignado, report.roster.admin, 'el titular asignado a la materia ve la lista')
+    assert.deepEqual([report.roster.vocalTribunal, report.roster.docenteAjeno, report.roster.alumno, report.roster.vocalOtraMesa, report.roster.ajenoMesaInexistente], [denied, denied, denied, denied, denied], 'el vocal (aunque tenga asignacion suplente) y nadie mas, sin revelar que mesas existen')
+    assert.equal(report.overview.docente, 'Acceso denegado: solo el personal de gestion ve las mesas y actas.')
+    const overviewM1 = report.overview.admin.find((row) => row.mesa_id === m1.id)
+    assert.deepEqual([overviewM1.carrera, overviewM1.materia_codigo, overviewM1.anio, overviewM1.plan, overviewM1.inscriptos, overviewM1.tribunal.titular], [CAREER, 'UAT01', 1, 'Plan UAT', 1, 'Publicado Titular'])
+    assert.equal(report.overview.admin.find((row) => row.mesa_id === m2.id).inscriptos, 0)
+    assert.equal(report.special.portalFueraDePlazo, 'EXAM_ENROLLMENT_WINDOW_CLOSED')
+    assert.equal(report.special.docenteIntenta, 'Acceso denegado: solo el personal de gestion hace inscripciones especiales.')
+    assert.equal(report.special.sinMotivo, 'EXAM_ADMIN_ENROLLMENT_REASON_REQUIRED')
+    assert.equal(report.special.libre, 'EXAM_REGULARITY_REQUIRED', 'el admin se saltea solo el plazo, no la regularidad')
+    assert.deepEqual([report.special.admin.estado, report.special.admin.materia], ['registered', 'UAT01'])
+    assert.equal(report.special.repetida, 'EXAM_ENROLLMENT_ALREADY_REGISTERED')
+    assert.deepEqual(report.special.auditoria, { creado_por_admin: true, motivo: 'Pedido de la secretaria', evento: 'admin_special_enrollment' })
+    assert.equal(report.special.despuesDelDia, 'EXAM_ADMIN_ENROLLMENT_AFTER_EXAM_DAY')
+    assert.deepEqual(report.window24.omitidas.map((item) => item.motivo), ['Faltan menos de 24 horas para la mesa: no se abre inscripcion.'], 'cierre por defecto 24 h antes: a 30 h se publica, a 20 h no')
     assert.equal(report.roster.adminMesaInexistente, 'EXAM_TABLE_NOT_FOUND')
     assert.equal(report.roster.anonPuedeEjecutar, 'f')
     assert.deepEqual([report.secondPublish.nuevas, report.secondPublish.actualizadas, report.tableCountAfterSecond], [0, 2, 2], 'republicar actualiza sin duplicar')

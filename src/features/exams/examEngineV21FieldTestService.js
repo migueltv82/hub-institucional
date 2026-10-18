@@ -779,6 +779,7 @@ export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], 
         vocal2: clean(mesa.vocal2),
         vocal2Id: clean(mesa.vocal2Id),
         aula: clean(mesa.aula) || 'A confirmar',
+        titular_dni: dniByTeacherId.get(clean(mesa.titularId)) || '',
         tribunal_dnis: [mesa.titularId, mesa.vocal1Id, mesa.vocal2Id]
           .map((teacherId) => dniByTeacherId.get(clean(teacherId)))
           .filter(Boolean),

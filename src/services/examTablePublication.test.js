@@ -13,9 +13,9 @@ const mesa = {
 describe('examTablePublication', () => {
   beforeEach(() => rpc.mockReset())
 
-  it('manda a la RPC solo los campos de la mesa, sin docentes ni alertas', () => {
+  it('manda a la RPC solo los campos de la mesa y los nombres del tribunal, sin alertas', () => {
     expect(buildExamPublicationPayload([mesa, null, { id: 'x', aula: '  ' }])).toEqual([
-      { id: mesa.id, materia: 'UAT01', codigo: 'UAT01', carrera: 'PROFESORADO DE PRUEBA UAT', fechaIso: '2026-11-02', inicio: '18:00', fin: '20:00', aula: 'A1' },
+      { id: mesa.id, materia: 'UAT01', codigo: 'UAT01', carrera: 'PROFESORADO DE PRUEBA UAT', fechaIso: '2026-11-02', inicio: '18:00', fin: '20:00', aula: 'A1', profesorTitular: 'DOCENTE Uat', vocal1: 'X' },
       { id: 'x' },
     ])
   })

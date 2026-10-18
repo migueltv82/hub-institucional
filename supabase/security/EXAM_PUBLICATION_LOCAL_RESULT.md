@@ -98,3 +98,26 @@ Al publicar, cada mesa guarda en `exam_tables.metadata.tribunal_dnis` los DNI de
 | `anon` | Sin EXECUTE |
 
 Portal docente: botón "Ver inscriptos" en cada mesa, con la tabla de alumnos o el motivo si no puede verlos. Las mesas publicadas antes de EX.7 no tienen `tribunal_dnis`: su titular las ve por la asignación de la materia, y los vocales las ven después de republicar.
+
+## EX.8: actas, titular-only, 24 h e inscripción especial (local, run `5e01b6e37c5a8d7a`: PASS)
+
+| Caso | Resultado |
+| --- | --- |
+| Titular publicado (`metadata.titular_dni`, legajo con DNI con puntos) | Ve los inscriptos |
+| Titular asignado (`subject_teacher_assignments.role = titular`) | Ve los inscriptos |
+| Vocal del tribunal (incluso con asignación `suplente`) | `Acceso denegado` |
+| Docente ajeno, alumno, mesa ajena o inexistente | `Acceso denegado` |
+| `get_exam_tables_admin_overview` como admin | Mesas con carrera, plan, año, tribunal y cantidad de inscriptos |
+| `get_exam_tables_admin_overview` como docente | `Acceso denegado` |
+| Portal fuera de plazo | `EXAM_ENROLLMENT_WINDOW_CLOSED` |
+| Inscripción especial: docente / sin motivo / alumno libre | Rechazada / `REASON_REQUIRED` / `EXAM_REGULARITY_REQUIRED` |
+| Inscripción especial: admin con alumno regular | `registered`, `created_by` = admin, motivo en metadata, evento `admin_special_enrollment` |
+| Inscripción especial repetida / después del día de la mesa | `ALREADY_REGISTERED` / `AFTER_EXAM_DAY` |
+| Publicar sin indicar horas: mesa a 30 h / a 20 h | Se publica / se omite ("Faltan menos de 24 horas") |
+
+Regresiones después de mover las reglas a `exam_enrollment_assert_eligible`:
+- paridad de elegibilidad 03.3: PASS (`6bfbe8160b075341`);
+- suspensión 06.3: PASS (`5c50045c919a952a`);
+- escritura de `academic_status`: PASS (`cef46adb56eb8291`).
+
+Reemplazo sobre el schema anterior (`af29229`, el que está en Producción): sin errores; `upsert_exam_enrollment_from_portal` mantiene una sola firma de 14 parámetros y el default de horas pasa a 24.

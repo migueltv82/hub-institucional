@@ -176,7 +176,7 @@ describe('ExamsView - precronograma en revision', () => {
 describe('ExamsView - inscriptos de la mesa (EX.7)', () => {
   const data = {
     currentInstitution: { id: 'inst-1' },
-    exams: [{ id: 'exam-engine-v21-m1-2026-11-02', nombreMateria: 'MATERIA DE PRUEBA UAT', fechaIso: '2026-11-02' }],
+    exams: [{ id: 'exam-engine-v21-m1-2026-11-02', nombreMateria: 'MATERIA DE PRUEBA UAT', fechaIso: '2026-11-02', esTitular: true }],
   }
 
   it('al hacer click en la mesa muestra la lista de alumnos inscriptos', async () => {
@@ -192,11 +192,18 @@ describe('ExamsView - inscriptos de la mesa (EX.7)', () => {
   })
 
   it('muestra el motivo si el docente no puede ver la lista', async () => {
-    fetchExamTableRoster.mockRejectedValue(new Error('Solo el tribunal de la mesa puede ver los inscriptos.'))
+    fetchExamTableRoster.mockRejectedValue(new Error('Solo el titular de la mesa puede ver los inscriptos.'))
     render(<ExamsView data={data} />)
 
     fireEvent.click(screen.getByRole('button', { name: /ver inscriptos/i }))
 
-    expect(await screen.findByText('Solo el tribunal de la mesa puede ver los inscriptos.')).toBeInTheDocument()
+    expect(await screen.findByText('Solo el titular de la mesa puede ver los inscriptos.')).toBeInTheDocument()
+  })
+
+  it('el vocal ve la mesa pero no el boton de inscriptos', () => {
+    render(<ExamsView data={{ ...data, exams: [{ ...data.exams[0], esTitular: false }] }} />)
+
+    expect(screen.getByText('MATERIA DE PRUEBA UAT')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ver inscriptos/i })).not.toBeInTheDocument()
   })
 })

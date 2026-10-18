@@ -6,7 +6,7 @@ import { useAuth } from '../../../auth/AuthContext.jsx'
 import { useStudentStore } from '../stores/studentStore'
 
 const EXAM_REFRESH_INTERVAL_MS = 60_000
-import { getExamEnrollmentEligibility } from '../lib/examEligibility.js'
+import { getExamEnrollmentDeadline, getExamEnrollmentEligibility } from '../lib/examEligibility.js'
 
 function normalizeStatus(status) {
   return String(status || '').toLowerCase()
@@ -32,6 +32,29 @@ function getExamSubjectId(exam) {
 function getExamProgramId(exam) {
   const subject = getExamSubject(exam)
   return exam?.canonical_program_id || exam?.program_id || subject?.canonical_program_id || subject?.program_id || ''
+}
+
+// Tribunal y cierre de inscripcion (24 h antes, igual que la base) visibles para el alumno.
+function ExamTribunalDetails({ exam }) {
+  const deadline = getExamEnrollmentDeadline(exam)
+  return (
+    <>
+      <div>
+        <dt className="text-xs text-slate-500">Titular</dt>
+        <dd className="font-semibold text-slate-900">{exam.profesorTitular || 'A confirmar'}</dd>
+      </div>
+      <div>
+        <dt className="text-xs text-slate-500">Vocales</dt>
+        <dd className="font-semibold text-slate-900">{exam.vocales?.length ? exam.vocales.join(' / ') : 'A confirmar'}</dd>
+      </div>
+      {deadline > 0 && (
+        <div className="col-span-2">
+          <dt className="text-xs text-slate-500">Inscripcion hasta</dt>
+          <dd className="font-semibold text-slate-900">{formatDateTime(new Date(deadline).toISOString())}</dd>
+        </div>
+      )}
+    </>
+  )
 }
 
 function formatDateTime(dateString) {
@@ -344,6 +367,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
                       <dt className="text-xs text-slate-500">Lugar</dt>
                       <dd className="font-semibold text-slate-900">{exam.location || 'A confirmar'}</dd>
                     </div>
+                    <ExamTribunalDetails exam={exam} />
                   </dl>
 
                   <div className="mt-5">
@@ -423,6 +447,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
                       <dt className="text-xs text-slate-500">Lugar</dt>
                       <dd className="font-semibold text-slate-900">{exam.location || 'A confirmar'}</dd>
                     </div>
+                    <ExamTribunalDetails exam={exam} />
                   </dl>
                 </article>
               )

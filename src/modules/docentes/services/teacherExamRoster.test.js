@@ -24,7 +24,7 @@ describe('fetchExamTableRoster', () => {
   it('traduce el rechazo de permisos sin mostrar el error tecnico', async () => {
     rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'Acceso denegado' } })
     await expect(fetchExamTableRoster({ institutionId: 'inst-1', examKey: 'm1' }))
-      .rejects.toThrow('Solo el tribunal de la mesa puede ver los inscriptos.')
+      .rejects.toThrow('Solo el titular de la mesa puede ver los inscriptos.')
   })
 
   it('explica cuando la mesa no esta publicada', async () => {

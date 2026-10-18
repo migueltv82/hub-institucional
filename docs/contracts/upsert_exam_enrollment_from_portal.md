@@ -9,6 +9,7 @@ Actualización 2026-10-12: schema y RPC canónicos ya existen y están validados
 - Deben validarse el profile del alumno no bloqueado, su membership institucional y el student_record vinculado al alumno dentro del tenant/workspace correspondiente.
 - No existe bypass operativo ni excepción privilegiada mediante `adminClient`/`service_role` para este flujo. Las recomendaciones históricas de grants privilegiados no son instrucciones vigentes.
 - Los positivos propios y los rechazos de identidad ajena/nula ya están acreditados en PostgreSQL local. Los tests focales de contrato verifican estas reglas.
+- Actualización 2026-10-18 (EX.8): las reglas de elegibilidad (regularidad, deuda, sanción por ausencia y correlativas) se movieron sin cambios a `exam_enrollment_assert_eligible`. Es una función interna, sin EXECUTE para ningún rol de la API. La llaman esta RPC y `admin_enroll_student_in_exam_table`, que es la inscripción especial del personal de gestión: se saltea solo el plazo, con motivo obligatorio y evento `admin_special_enrollment`. La firma de esta RPC no cambió (14 parámetros). El plazo del portal sigue saliendo de `exam_tables.enrollment_closes_at`, que la publicación fija 24 h antes de la mesa.
 
 ## HISTÓRICO / OBSOLETO — recuperación de septiembre de 2026
 

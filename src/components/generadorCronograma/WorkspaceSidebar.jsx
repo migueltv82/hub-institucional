@@ -58,6 +58,13 @@ function WorkspaceSidebar({
       icon: Sparkles,
       accent: 'text-amber-300',
     },
+    {
+      key: 'exam-actas',
+      label: 'Mesas y actas',
+      helper: 'Inscriptos e impresion',
+      icon: ClipboardCheck,
+      accent: 'text-emerald-300',
+    },
   ]
 
   return (

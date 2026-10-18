@@ -820,6 +820,10 @@ function getTeacherStats({ schedules, exams, students, subjectStudentGroups = []
   }
 }
 
+function onlyDigits(value) {
+  return clean(value).replace(/\D/g, '')
+}
+
 function getMatchedTeacherRecord(teacherRows, user) {
   const userDni = getUserDniCandidate(user)
 
@@ -854,9 +858,18 @@ export function mapWorkspaceSnapshotToTeacherPortal({
     .filter((row) => matchesTeacherSchedule(row, user, matchedTeacherRecord))
     .map((row) => enrichScheduleRow(row, subjectIndexes))
     .sort((a, b) => clean(a.dia).localeCompare(clean(b.dia)) || clean(a.inicio).localeCompare(clean(b.inicio)))
+  // Solo el titular ve los inscriptos (la RPC get_exam_table_roster decide; esto solo oculta el boton al vocal).
+  const teacherDni = onlyDigits(matchedTeacherRecord?.dni || getUserDniCandidate(user))
+  const titularNameAliases = [selectedTeacherName, ...teacherAliases, ...userAliases]
+  const isExamTitular = (exam) => {
+    const titularDni = onlyDigits(exam.titular_dni)
+    if (titularDni && teacherDni) return titularDni === teacherDni
+    const titularName = clean(exam.profesorTitular || exam.titular)
+    return Boolean(titularName) && titularNameAliases.some((alias) => sameNonEmptyText(titularName, alias))
+  }
   const exams = asArray(snapshot.cronograma)
     .filter((exam) => matchesTeacherIdentity(exam, user, matchedTeacherRecord))
-    .map((exam) => enrichExamRow(exam, subjectIndexes))
+    .map((exam) => ({ ...enrichExamRow(exam, subjectIndexes), esTitular: isExamTitular(exam) }))
     .sort((a, b) => new Date(getExamDate(a) || 0) - new Date(getExamDate(b) || 0))
   const subjectRows = asArray(snapshot.docenteMateria)
     .concat(asArray(snapshot.cargaHorariaDocente))

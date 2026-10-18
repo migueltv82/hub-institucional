@@ -407,6 +407,7 @@ describe('examEngineV21FieldTestService', () => {
       codigo: 'UAT01',
       materiaId: 'subject-profesorado-de-prueba-uat-uat01',
       tribunal_dnis: ['90000001', '90000004'],
+      titular_dni: '90000001',
     })
   })
 

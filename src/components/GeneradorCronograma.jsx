@@ -73,13 +73,14 @@ const academicSnapshotKeys = [
   'academicStatus',
 ]
 const ACTIVE_WORKSPACE_VIEW_KEY = 'mesaflow.active-workspace-view'
-const VALID_WORKSPACE_VIEWS = new Set(['dashboard', 'students', 'teachers', 'exam-engine-v21'])
+const VALID_WORKSPACE_VIEWS = new Set(['dashboard', 'students', 'teachers', 'exam-engine-v21', 'exam-actas'])
 
 const InstitutionAdminOverview = lazy(() => import('./generadorCronograma/InstitutionAdminOverview.jsx'))
 const StudentRosterSection = lazy(() => import('./generadorCronograma/StudentRosterSection.jsx'))
 const TeacherRosterSection = lazy(() => import('./generadorCronograma/TeacherRosterSection.jsx'))
 const UploadsSection = lazy(() => import('./generadorCronograma/UploadsSection.jsx'))
 const ExamEngineV21FieldTestPage = lazy(() => import('../features/exams/ExamEngineV21FieldTestPage.jsx'))
+const ExamActasPage = lazy(() => import('../features/examActas/ExamActasPage.jsx'))
 
 const DevAuditSnapshotExport = import.meta.env.DEV
   ? lazy(() => import('./generadorCronograma/DevAuditSnapshotExport.jsx'))
@@ -1727,6 +1728,14 @@ function GeneradorCronograma() {
                 </Suspense>
               )}
               </>
+            ) : activeWorkspaceView === 'exam-actas' ? (
+              <ExamActasPage
+                canManage={canEditWorkspace}
+                institutionId={activeInstitutionId}
+                institutionName={activeInstitutionName}
+                students={alumnos}
+                workspaceKey={workspaceKey}
+              />
             ) : activeWorkspaceView === 'exam-engine-v21' ? null : (
               <>
               <section className="rise-in admin-module-heading">

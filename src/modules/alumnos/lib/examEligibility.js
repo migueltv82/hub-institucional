@@ -118,6 +118,21 @@ function getMissingPrerequisitesReason(missingSubjects) {
   return `Correlativas pendientes para rendir esta mesa: ${names.join(', ')}. Deben figurar aprobadas.`
 }
 
+// Espejo de publish_exam_tables_from_schedule: la inscripcion cierra 24 h antes del inicio de la mesa.
+// Las fechas del cronograma son hora de Argentina (UTC-3, sin horario de verano), como en la base.
+export const EXAM_ENROLLMENT_CLOSE_HOURS = 24
+const ARGENTINA_OFFSET = '-03:00'
+
+export function getExamEnrollmentDeadline(exam) {
+  const raw = clean(exam?.exam_date || exam?.exam_session?.exam_date || exam?.date)
+  if (!raw) return 0
+  const withZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw) ? `${raw}${ARGENTINA_OFFSET}` : raw
+  const startsAt = Date.parse(withZone)
+  return Number.isFinite(startsAt) ? startsAt - EXAM_ENROLLMENT_CLOSE_HOURS * 3600 * 1000 : 0
+}
+
+const ENROLLMENT_CLOSED_REASON = 'La inscripcion cerro 24 horas antes del examen. Si necesitas inscribirte, consulta en administracion.'
+
 const NON_CANONICAL_CONDITION_REASON = 'La condicion cargada no esta registrada en el formato que valida el sistema para mesas. Pedi a tu docente o a la institucion que la vuelva a cargar.'
 
 const ADEUDA_CUOTA_REASON = 'No podes inscribirte a mesas: el registro indica que adeudas el pago de la cuota.'
@@ -130,6 +145,7 @@ export function getExamEnrollmentEligibility({
   prerequisites = [],
   subjects = [],
   adeudaCuota = false,
+  now = Date.now(),
 }) {
   const subjectId = getSubjectId(exam)
   const programId = getProgramId(exam)
@@ -148,8 +164,13 @@ export function getExamEnrollmentEligibility({
     : null
   const missingPrerequisiteSubjects = (prerequisiteCheck?.missing ?? []).map((entry) => entry.subject)
 
+  const enrollmentDeadline = getExamEnrollmentDeadline(exam)
+  const enrollmentClosed = Boolean(enrollmentDeadline && now > enrollmentDeadline)
+
   let reason = ''
-  if (!hasRegularCondition) {
+  if (enrollmentClosed) {
+    reason = ENROLLMENT_CLOSED_REASON
+  } else if (!hasRegularCondition) {
     reason = academicStatus === 'regular' ? NON_CANONICAL_CONDITION_REASON : getBlockedReason(academicStatus)
   } else if (missingPrerequisiteSubjects.length > 0) {
     reason = getMissingPrerequisitesReason(missingPrerequisiteSubjects)
@@ -160,6 +181,7 @@ export function getExamEnrollmentEligibility({
   }
 
   const canRegister = Boolean(
+    !enrollmentClosed &&
     hasRegularCondition &&
     missingPrerequisiteSubjects.length === 0 &&
     !absencePenalty.blocked &&
@@ -176,6 +198,8 @@ export function getExamEnrollmentEligibility({
     absencePenalty,
     missingPrerequisites: missingPrerequisiteSubjects,
     adeudaCuota: Boolean(adeudaCuota),
+    enrollmentDeadline,
+    enrollmentClosed,
     reason,
   }
 }

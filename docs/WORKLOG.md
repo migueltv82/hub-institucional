@@ -1094,3 +1094,25 @@ Pedido de Miguel: al hacer click en una mesa del portal docente, ver los alumnos
 - Botón "Ver inscriptos" en cada mesa.
 
 Harness local PASS (`f63eaf9a97c7beec`) con 9 casos de permisos; tests de servicio y de pantalla; matriz de funciones actualizada. `npm run check` PASS (2554 tests). Pendiente: aplicar en Producción con el OK de Miguel.
+
+## 2026-10-18 — EX.8: Mesas y actas, inscriptos solo para el titular, 24 h e inscripción especial (Claude)
+
+Pedido de Miguel:
+- **Panel admin "Mesas y actas":** mesas publicadas por carrera y año, con filtro por fecha (por defecto hoy). El acta volante sigue el modelo institucional que mandó Miguel: encabezado, Nº, DNI, apellido, nombre, escrito, oral, promedio, totales y firmas. Se genera en PDF solo para mesas con inscriptos, para ahorrar papel; también se imprimen todas las del día juntas.
+- **Portal docente:** solo el titular ve la lista de inscriptos; los vocales ven la mesa.
+- **Portal alumno:** muestra titular, vocales y "Inscripción hasta"; la inscripción cierra 24 h antes del examen (espejo del cierre de la base).
+- **Inscripción especial del admin:** fuera de plazo, hasta el día de la mesa, con motivo y auditada. El alumno tiene que ser regular (decisión de Miguel: solo se saltea el plazo).
+
+En la base:
+- `publish_exam_tables_from_schedule` cierra por defecto 24 h antes y guarda `titular_dni` y los nombres del tribunal.
+- `get_exam_table_roster` pasa a ser solo para el titular.
+- Funciones nuevas: `get_exam_tables_admin_overview` y `admin_enroll_student_in_exam_table`.
+- Las reglas de elegibilidad pasan sin cambios a `exam_enrollment_assert_eligible`, una función interna compartida por el portal y el admin.
+
+Verificación:
+- harness local PASS (`5e01b6e37c5a8d7a`);
+- regresiones 03.3, 06.3 y academic_status: PASS;
+- reemplazo sobre el schema de Producción: sin errores;
+- `npm run check` PASS (2570 tests).
+
+Pendiente: aplicar en Producción con el OK de Miguel; el logo por institución en el acta queda para después.

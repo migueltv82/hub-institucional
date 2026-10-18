@@ -1180,4 +1180,23 @@ describe('teacherPortalData', () => {
       }),
     ])
   })
+
+  it('marca como titular solo la mesa donde el docente es titular, no donde es vocal (EX.8)', () => {
+    const mesa = (id, titular, titularDni, vocal1) => ({
+      id, profesorTitular: titular, titular_dni: titularDni, vocal1, carrera: 'Profesorado', materia: id, fechaIso: '2026-11-02', estado: 'confirmada',
+    })
+    const result = mapWorkspaceSnapshotToTeacherPortal({
+      snapshot: {
+        cronograma: [
+          mesa('M-TITULAR', 'Ana Diaz', '30.111.222', 'Luis Gomez'),
+          mesa('M-VOCAL', 'Luis Gomez', '28999888', 'Ana Diaz'),
+        ],
+      },
+      teacherRows: [{ record_id: 'teacher-record-1', email: '30111222@docentes.inst-1.local', full_name: 'Ana Diaz', dni: '30111222' }],
+      user: { id: 'user-ana', email: '30111222@docentes.inst-1.local', nombre: 'Ana Diaz' },
+      activeInstitution: { id: 'inst-1' },
+    })
+
+    expect(Object.fromEntries(result.exams.map((exam) => [exam.id, exam.esTitular]))).toEqual({ 'M-TITULAR': true, 'M-VOCAL': false })
+  })
 })
