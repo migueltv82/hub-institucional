@@ -1076,3 +1076,12 @@ Miguel volvió a ver `SOURCE_FILE_WORKSPACE_BUSY` al publicar. En los logs de Pr
 ## 2026-10-18 — EX.6: publicar mandaba el id interno del motor en vez del código de materia (Claude)
 
 En la demo, `publish_exam_tables_from_schedule` omitió la mesa: "La materia subject-profesorado-de-prueba-uat-uat01 no esta en el catalogo academico". El tribunal final trae `materiaId` interno del motor, y `buildPublishedCronogramaFromFinalTribunals` lo copiaba a `materia`/`codigo`. El test existente usaba un `materiaId` que ya era un código (ING06), por eso no lo detectaba, y el harness EX.1 armaba el payload a mano. Ahora la pantalla le pasa las materias del motor y se publica el código del catálogo (UAT01); el id interno queda en `materiaId`. Se reprodujo con los datos de la demo y se agregó un test con un id real del motor. `npm run check` PASS.
+
+## 2026-10-18 — Demo de mesas de punta a punta en Producción: PASS (Miguel + Claude)
+
+Miguel armó las mesas, confirmó el tribunal y publicó el cronograma; el alumno de prueba se inscribió desde su portal. Verificado en la base:
+- `exam_tables` tiene una fila `open` (UAT01, primer llamado, 02/11/2026) y la inscripción cierra 48 h antes;
+- `exam_table_subjects` está vinculado a UAT01;
+- `exam_enrollments` tiene una fila `registered`, con `student_record_id`, subject `UAT01` y program `PROFESORADO DE PRUEBA UAT`.
+
+En el camino se corrigieron EX.3 (reinicio sin la RPC legacy), EX.5/5b (BUSY por escrituras paralelas) y EX.6 (código de materia). EX.4 se revirtió por la regla dura de días de asistencia.
