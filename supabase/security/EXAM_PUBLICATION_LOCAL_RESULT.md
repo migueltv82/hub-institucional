@@ -80,3 +80,21 @@ Verificación de solo lectura:
 Advisors de seguridad: sin hallazgos nuevos, salvo el aviso esperado "authenticated puede ejecutar SECURITY DEFINER" para la RPC nueva, que valida owner/admin/editor o superadmin por dentro. Siguen los avisos de línea base: tablas con RLS sin policies, a las que se accede solo por RPC; dos RPC anon públicas de login/estado; y la protección de contraseñas filtradas apagada.
 
 Pendiente: la demo de punta a punta en la app (armar mesas → confirmar el tribunal → publicar → el alumno se inscribe).
+
+## EX.7: inscriptos de la mesa en el portal docente (local, run `f63eaf9a97c7beec`: PASS)
+
+Al publicar, cada mesa guarda en `exam_tables.metadata.tribunal_dnis` los DNI de titular y vocales; el front los resuelve desde los docentes del motor. La RPC nueva `get_exam_table_roster(uuid, text, text)` (SECURITY DEFINER, `anon` sin EXECUTE) devuelve nombre, DNI, legajo y carrera de los inscriptos `registered`.
+
+| Quién | Resultado |
+| --- | --- |
+| Admin de la institución | Ve la lista (solo el inscripto; el libre no aparece) |
+| Vocal del tribunal (DNI con puntos en el legajo) | Ve la lista |
+| Docente con asignación activa de la materia | Ve la lista |
+| Docente ajeno al tribunal | `Acceso denegado` |
+| Alumno | `Acceso denegado` |
+| Vocal en una mesa donde no es tribunal | `Acceso denegado` |
+| Docente ajeno, mesa inexistente | `Acceso denegado` (no revela qué mesas existen) |
+| Admin, mesa inexistente | `EXAM_TABLE_NOT_FOUND` |
+| `anon` | Sin EXECUTE |
+
+Portal docente: botón "Ver inscriptos" en cada mesa, con la tabla de alumnos o el motivo si no puede verlos. Las mesas publicadas antes de EX.7 no tienen `tribunal_dnis`: su titular las ve por la asignación de la materia, y los vocales las ven después de republicar.

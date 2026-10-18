@@ -20,6 +20,13 @@ describe('examTablePublication', () => {
     ])
   })
 
+  it('manda los DNI del tribunal como texto separado por comas (EX.7)', () => {
+    expect(buildExamPublicationPayload([{ id: 'm1', tribunal_dnis: ['90000001', '90000004'] }, { id: 'm2', tribunal_dnis: [] }])).toEqual([
+      { id: 'm1', tribunal_dnis: '90000001,90000004' },
+      { id: 'm2' },
+    ])
+  })
+
   it('llama a publish_exam_tables_from_schedule y resume el resultado', async () => {
     rpc.mockResolvedValue({ data: { publicadas: 1, nuevas: 1, actualizadas: 0, canceladas: 0, omitidas: [{ id: 'm3', motivo: 'La materia ZZZ no esta.' }], conservadas_con_inscriptos: [] }, error: null })
 

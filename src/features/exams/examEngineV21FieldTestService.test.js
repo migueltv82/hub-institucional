@@ -394,14 +394,19 @@ describe('examEngineV21FieldTestService', () => {
       fechaSugerida: '2026-11-02',
       estadoFinal: 'FINAL_CONFIRMED',
       llamado: 'PRIMER_LLAMADO',
+      titularId: 'doc-uat-1',
+      vocal1Id: 'doc-uat-3',
+      vocal2Id: 'doc-sin-dni',
     }], {
       materias: [{ id: 'subject-profesorado-de-prueba-uat-uat01', codigo: 'UAT01', materia: 'UAT01' }],
+      docentes: [{ id: 'doc-uat-1', dni: '90000001' }, { id: 'doc-uat-3', dni: '90.000.004' }, { id: 'doc-sin-dni' }],
     })
 
     expect(cronograma[0]).toMatchObject({
       materia: 'UAT01',
       codigo: 'UAT01',
       materiaId: 'subject-profesorado-de-prueba-uat-uat01',
+      tribunal_dnis: ['90000001', '90000004'],
     })
   })
 

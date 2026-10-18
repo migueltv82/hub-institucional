@@ -829,6 +829,7 @@ function ExamEngineV21FieldTestPage({
     const publishedCronograma = buildPublishedCronogramaFromFinalTribunals(finalResult.finalTribunals, {
       generatedAt: new Date().toISOString(),
       materias: engineData?.materias,
+      docentes: engineData?.docentes,
     })
 
     if (!publishedCronograma.length) {

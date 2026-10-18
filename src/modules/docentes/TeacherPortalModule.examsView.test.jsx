@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DashboardView, ExamsView } from './TeacherPortalModule.jsx'
 import { confirmTeacherExamAssignment } from './services/teacherExamAssignments.js'
+import { fetchExamTableRoster } from './services/teacherExamRoster.js'
 import { getTeacherVisibleEmail, isTeacherTechnicalEmail } from './services/teacherContactDisplay.js'
 
 // Huso horario negativo a proposito: reproduce el bug real de formatDate()
@@ -11,6 +12,10 @@ process.env.TZ = 'America/Argentina/Buenos_Aires'
 
 vi.mock('./services/teacherExamAssignments.js', () => ({
   confirmTeacherExamAssignment: vi.fn(),
+}))
+
+vi.mock('./services/teacherExamRoster.js', () => ({
+  fetchExamTableRoster: vi.fn(),
 }))
 
 vi.mock('react-hot-toast', () => ({
@@ -165,5 +170,33 @@ describe('ExamsView - precronograma en revision', () => {
     expect(screen.getByText(/26 de ago de 2026/)).toBeInTheDocument()
     expect(screen.getByText('confirmada')).toBeInTheDocument()
     expect(screen.getByText(/CORBALAN MIGUEL/)).toBeInTheDocument()
+  })
+})
+
+describe('ExamsView - inscriptos de la mesa (EX.7)', () => {
+  const data = {
+    currentInstitution: { id: 'inst-1' },
+    exams: [{ id: 'exam-engine-v21-m1-2026-11-02', nombreMateria: 'MATERIA DE PRUEBA UAT', fechaIso: '2026-11-02' }],
+  }
+
+  it('al hacer click en la mesa muestra la lista de alumnos inscriptos', async () => {
+    fetchExamTableRoster.mockResolvedValue({ estado: 'open', alumnos: [{ nombre: 'Ana Regular', dni: '11111111', carrera: 'PROFESORADO DE PRUEBA UAT' }] })
+    render(<ExamsView data={data} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /ver inscriptos/i }))
+
+    expect(await screen.findByText('Ana Regular')).toBeInTheDocument()
+    expect(screen.getByText('11111111')).toBeInTheDocument()
+    expect(screen.getByText('1 alumno inscripto')).toBeInTheDocument()
+    expect(fetchExamTableRoster).toHaveBeenCalledWith({ institutionId: 'inst-1', examKey: 'exam-engine-v21-m1-2026-11-02' })
+  })
+
+  it('muestra el motivo si el docente no puede ver la lista', async () => {
+    fetchExamTableRoster.mockRejectedValue(new Error('Solo el tribunal de la mesa puede ver los inscriptos.'))
+    render(<ExamsView data={data} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /ver inscriptos/i }))
+
+    expect(await screen.findByText('Solo el tribunal de la mesa puede ver los inscriptos.')).toBeInTheDocument()
   })
 })

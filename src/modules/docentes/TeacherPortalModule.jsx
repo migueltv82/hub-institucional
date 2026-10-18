@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
@@ -27,6 +27,7 @@ import SubjectDetailView from './pages/SubjectDetailView.jsx'
 import SubjectsView from './pages/SubjectsView.jsx'
 import { buildSubjectDisplayIndex, buildSubjectKey, fetchTeacherSubjects } from './services/teacherSubjects.js'
 import { fetchTeacherExamAssignments } from './services/teacherExamAssignments.js'
+import { fetchExamTableRoster } from './services/teacherExamRoster.js'
 import {
   buildTeacherScheduleGrids,
   buildTeacherWeeklyOverviewGrid,
@@ -567,8 +568,54 @@ function ExamAssignmentCard({ assignment }) {
   )
 }
 
+function ExamRosterPanel({ institutionId, examKey }) {
+  const [state, setState] = useState({ loading: true, error: '', alumnos: EMPTY_ARRAY })
+
+  useEffect(() => {
+    let active = true
+    fetchExamTableRoster({ institutionId, examKey })
+      .then((result) => { if (active) setState({ loading: false, error: '', alumnos: result.alumnos }) })
+      .catch((error) => { if (active) setState({ loading: false, error: error.message, alumnos: EMPTY_ARRAY }) })
+    return () => { active = false }
+  }, [institutionId, examKey])
+
+  if (state.loading) return <p className="mt-3 text-sm text-slate-500">Cargando inscriptos...</p>
+  if (state.error) return <p className="mt-3 text-sm text-red-700">{state.error}</p>
+  if (!state.alumnos.length) return <p className="mt-3 text-sm text-slate-500">Todavia no hay alumnos inscriptos.</p>
+
+  return (
+    <div className="mt-3 overflow-x-auto rounded-md border border-slate-200 bg-white">
+      <table className="min-w-full text-left text-sm">
+        <thead className="bg-slate-100 text-xs font-bold uppercase text-slate-600">
+          <tr>
+            <th className="px-3 py-2">#</th>
+            <th className="px-3 py-2">Alumno</th>
+            <th className="px-3 py-2">DNI</th>
+            <th className="px-3 py-2">Carrera</th>
+          </tr>
+        </thead>
+        <tbody>
+          {state.alumnos.map((alumno, index) => (
+            <tr key={`${alumno.dni}-${index}`} className="border-t border-slate-100">
+              <td className="px-3 py-2 text-slate-500">{index + 1}</td>
+              <td className="px-3 py-2 font-semibold text-slate-900">{alumno.nombre || '-'}</td>
+              <td className="px-3 py-2 text-slate-700">{alumno.dni || '-'}</td>
+              <td className="px-3 py-2 text-slate-700">{alumno.carrera || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+        {state.alumnos.length} {state.alumnos.length === 1 ? 'alumno inscripto' : 'alumnos inscriptos'}
+      </p>
+    </div>
+  )
+}
+
 export function ExamsView({ data, examAssignments = EMPTY_ARRAY }) {
   const exams = data?.exams ?? EMPTY_ARRAY
+  const institutionId = data?.currentInstitution?.id
+  const [openRosterKey, setOpenRosterKey] = useState('')
 
   return (
     <div className="space-y-6">
@@ -605,6 +652,20 @@ export function ExamsView({ data, examAssignments = EMPTY_ARRAY }) {
                   <p><strong className="text-slate-900">Vocales:</strong> {[exam.vocal1 || exam.primerVocal, exam.vocal2 || exam.segundoVocal].filter(Boolean).join(' / ') || '-'}</p>
                   <p><strong className="text-slate-900">Aula:</strong> {exam.aula || exam.location || '-'}</p>
                 </div>
+                {exam.id && institutionId && (
+                  <>
+                    <button
+                      aria-expanded={openRosterKey === exam.id}
+                      className="btn-secondary mt-4 w-full sm:w-auto"
+                      onClick={() => setOpenRosterKey((current) => (current === exam.id ? '' : exam.id))}
+                      type="button"
+                    >
+                      <UsersRound className="h-4 w-4" />
+                      {openRosterKey === exam.id ? 'Ocultar inscriptos' : 'Ver inscriptos'}
+                    </button>
+                    {openRosterKey === exam.id && <ExamRosterPanel examKey={exam.id} institutionId={institutionId} />}
+                  </>
+                )}
               </article>
             ))}
           </div>

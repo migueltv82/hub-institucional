@@ -3,14 +3,15 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 // EX.1: al publicar el cronograma final, crea o actualiza las mesas en exam_tables para que el
 // portal alumno las muestre y la inscripcion (upsert_exam_enrollment_from_portal) las acepte.
 // La regla y los permisos viven en la RPC publish_exam_tables_from_schedule (08_exam_tables.sql).
-const MESA_FIELDS = ['id', 'materia', 'codigo', 'carrera', 'fechaIso', 'fechaSugerida', 'inicio', 'fin', 'aula', 'exam_call', 'llamado', 'exam_type', 'inscription_mode']
+const MESA_FIELDS = ['id', 'materia', 'codigo', 'carrera', 'fechaIso', 'fechaSugerida', 'inicio', 'fin', 'aula', 'exam_call', 'llamado', 'exam_type', 'inscription_mode', 'tribunal_dnis']
 
 export function buildExamPublicationPayload(cronograma = []) {
   return (Array.isArray(cronograma) ? cronograma : [])
     .filter((mesa) => mesa && typeof mesa === 'object')
     .map((mesa) => Object.fromEntries(MESA_FIELDS
-      .filter((field) => mesa[field] !== undefined && mesa[field] !== null && String(mesa[field]).trim() !== '')
-      .map((field) => [field, String(mesa[field]).trim()])))
+      .map((field) => [field, Array.isArray(mesa[field]) ? mesa[field].join(',') : mesa[field]])
+      .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '')
+      .map(([field, value]) => [field, String(value).trim()])))
 }
 
 export async function publishExamTables({ institutionId, workspaceKey = 'main', cronograma }) {

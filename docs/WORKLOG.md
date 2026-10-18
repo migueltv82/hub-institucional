@@ -1085,3 +1085,12 @@ Miguel armó las mesas, confirmó el tribunal y publicó el cronograma; el alumn
 - `exam_enrollments` tiene una fila `registered`, con `student_record_id`, subject `UAT01` y program `PROFESORADO DE PRUEBA UAT`.
 
 En el camino se corrigieron EX.3 (reinicio sin la RPC legacy), EX.5/5b (BUSY por escrituras paralelas) y EX.6 (código de materia). EX.4 se revirtió por la regla dura de días de asistencia.
+
+## 2026-10-18 — EX.7: lista de inscriptos por mesa en el portal docente (Claude)
+
+Pedido de Miguel: al hacer click en una mesa del portal docente, ver los alumnos inscriptos.
+- Publicar guarda los DNI del tribunal en `exam_tables.metadata.tribunal_dnis`.
+- RPC nueva `get_exam_table_roster`: tribunal (por DNI del legajo), docente asignado a la materia o personal de gestión; nadie más.
+- Botón "Ver inscriptos" en cada mesa.
+
+Harness local PASS (`f63eaf9a97c7beec`) con 9 casos de permisos; tests de servicio y de pantalla; matriz de funciones actualizada. `npm run check` PASS (2554 tests). Pendiente: aplicar en Producción con el OK de Miguel.

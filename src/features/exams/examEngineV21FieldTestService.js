@@ -742,6 +742,10 @@ export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], 
   const subjectCodeById = new Map(asArray(options.materias)
     .map((materia) => [clean(materia?.id), clean(materia?.codigo ?? materia?.materia)])
     .filter(([id, codigo]) => id && codigo))
+  // DNI de titular y vocales: la RPC los guarda para que el tribunal vea los inscriptos desde su portal.
+  const dniByTeacherId = new Map(asArray(options.docentes)
+    .map((docente) => [clean(docente?.id), clean(docente?.dni ?? docente?.dni_docente).replace(/\D/g, '')])
+    .filter(([id, dni]) => id && dni))
 
   return asArray(finalTribunals)
     .filter((mesa) => getPublishableFinalStatus(mesa.estadoFinal ?? mesa.estado) === 'confirmada')
@@ -775,6 +779,9 @@ export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], 
         vocal2: clean(mesa.vocal2),
         vocal2Id: clean(mesa.vocal2Id),
         aula: clean(mesa.aula) || 'A confirmar',
+        tribunal_dnis: [mesa.titularId, mesa.vocal1Id, mesa.vocal2Id]
+          .map((teacherId) => dniByTeacherId.get(clean(teacherId)))
+          .filter(Boolean),
         estado: 'confirmada',
         estadoFinal: clean(mesa.estadoFinal ?? mesa.estado),
         exam_type: call.exam_call === 'special' ? 'special' : 'regular',

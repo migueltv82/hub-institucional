@@ -135,6 +135,7 @@ const invokedRpcContracts = new Set([
   'academic_update_teacher_assignment_condition',
   'delete_institution_user',
   'get_academic_transition_config',
+  'get_exam_table_roster',
   'get_public_app_status',
   'get_student_portal_workspace_snapshot',
   'list_active_login_institutions',

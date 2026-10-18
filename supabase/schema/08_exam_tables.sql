@@ -1298,6 +1298,7 @@ declare
   cancelled_count integer := 0;
   kept jsonb := '[]'::jsonb;
   stale record;
+  tribunal_dnis jsonb;
 begin
   if (select auth.uid()) is null then
     raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
@@ -1328,6 +1329,15 @@ begin
     exam_date := btrim(coalesce(mesa ->> 'fechaIso', mesa ->> 'fechaSugerida', ''));
     start_time := coalesce(nullif(btrim(coalesce(mesa ->> 'inicio', '')), ''), '08:00');
     end_time := nullif(btrim(coalesce(mesa ->> 'fin', '')), '');
+    -- DNI de titular y vocales: autorizan al tribunal a ver los inscriptos (get_exam_table_roster).
+    tribunal_dnis := coalesce((
+      select jsonb_agg(distinct dni)
+      from (
+        select regexp_replace(part, '[^0-9]', '', 'g') as dni
+        from regexp_split_to_table(coalesce(mesa ->> 'tribunal_dnis', ''), ',') as part
+      ) cleaned
+      where dni <> ''
+    ), '[]'::jsonb);
 
     if published_id = '' or subject_code = '' or career_text = '' then
       skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'Faltan id, materia o carrera.');
@@ -1420,7 +1430,7 @@ begin
         case when mesa ->> 'exam_type' = 'special' then 'special' else 'regular' end,
         starts_at, ends_at, nullif(btrim(coalesce(mesa ->> 'aula', '')), ''), opens_at, closes_at, 'open',
         legacy_key, published_id, 'exam_engine_v21',
-        jsonb_build_object('inscription_mode', coalesce(nullif(mesa ->> 'inscription_mode', ''), 'student_self_service'), 'published_by', 'publish_exam_tables_from_schedule'),
+        jsonb_build_object('inscription_mode', coalesce(nullif(mesa ->> 'inscription_mode', ''), 'student_self_service'), 'published_by', 'publish_exam_tables_from_schedule', 'tribunal_dnis', tribunal_dnis),
         (select auth.uid()), (select auth.uid())
       )
       returning id into table_id;
@@ -1440,6 +1450,7 @@ begin
           status = 'open',
           closed_at = null,
           legacy_snapshot_id = published_id,
+          metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object('tribunal_dnis', tribunal_dnis),
           updated_by = (select auth.uid()),
           updated_at = timezone('utc', now()),
           lock_version = lock_version + 1
@@ -1508,3 +1519,105 @@ $$;
 
 revoke execute on function public.publish_exam_tables_from_schedule(uuid, text, jsonb, timestamptz, integer) from public, anon;
 grant execute on function public.publish_exam_tables_from_schedule(uuid, text, jsonb, timestamptz, integer) to authenticated;
+
+-- Inscriptos de una mesa publicada, para el tribunal (portal docente) y el personal de gestion.
+-- Datos personales de alumnos: el docente solo ve la mesa si su legajo (DNI) esta en el tribunal publicado
+-- o si tiene asignada la materia de la mesa. exam_enrollments no tiene policies: se lee solo por aca.
+create or replace function public.get_exam_table_roster(
+  target_institution_id uuid,
+  target_workspace_key text,
+  target_exam_key text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  caller_id uuid := (select auth.uid());
+  clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+  clean_exam_key text := lower(btrim(coalesce(target_exam_key, '')));
+  table_row record;
+  is_staff boolean;
+  caller_dnis text[];
+begin
+  if caller_id is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+
+  is_staff := public.is_super_admin()
+    or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor']);
+  if target_institution_id is null or not (is_staff or public.is_member_of_institution(target_institution_id)) then
+    raise exception 'Acceso denegado: solo el tribunal de la mesa puede ver los inscriptos.' using errcode = '42501';
+  end if;
+
+  select exam_table.id, exam_table.legacy_snapshot_id, exam_table.status, exam_table.metadata into table_row
+  from public.exam_tables exam_table
+  where exam_table.institution_id = target_institution_id
+    and exam_table.workspace_key = clean_workspace_key
+    and exam_table.legacy_exam_table_id = clean_exam_key;
+
+  if not is_staff then
+    select coalesce(array_agg(regexp_replace(teacher.dni, '[^0-9]', '', 'g')), array[]::text[]) into caller_dnis
+    from public.teacher_records teacher
+    where teacher.institution_id = target_institution_id
+      and teacher.workspace_key = clean_workspace_key
+      and teacher.profile_id = caller_id
+      and regexp_replace(coalesce(teacher.dni, ''), '[^0-9]', '', 'g') <> '';
+
+    if table_row.id is null or not (
+      exists (
+        select 1 from jsonb_array_elements_text(coalesce(table_row.metadata -> 'tribunal_dnis', '[]'::jsonb)) tribunal(dni)
+        where tribunal.dni = any(caller_dnis)
+      )
+      or exists (
+        select 1
+        from public.exam_table_subjects exam_subject
+        join public.subject_teacher_assignments assignment
+          on assignment.institution_id = exam_subject.institution_id
+         and assignment.subject_id = exam_subject.legacy_subject_id
+         and assignment.program_id = exam_subject.legacy_program_id
+        where exam_subject.institution_id = target_institution_id
+          and exam_subject.exam_table_id = table_row.id
+          and assignment.workspace_key = clean_workspace_key
+          and assignment.teacher_id = caller_id
+          and assignment.status = 'active'
+          and assignment.deleted_at is null
+      )
+    ) then
+      -- Mismo error si la mesa no existe: no se revela que mesas hay.
+      raise exception 'Acceso denegado: solo el tribunal de la mesa puede ver los inscriptos.' using errcode = '42501';
+    end if;
+  end if;
+
+  if table_row.id is null then
+    raise exception 'EXAM_TABLE_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  return jsonb_build_object(
+    'mesa_id', table_row.legacy_snapshot_id,
+    'estado', table_row.status,
+    'alumnos', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'nombre', coalesce(nullif(btrim(student.full_name), ''), btrim(concat_ws(', ', student.last_name, student.first_name))),
+        'dni', coalesce(nullif(btrim(student.dni), ''), student.national_id),
+        'legajo', student.legajo,
+        'carrera', enrollment.program_id,
+        'materia', enrollment.subject_id,
+        'inscripto_el', enrollment.enrolled_at
+      ) order by coalesce(nullif(btrim(student.full_name), ''), student.last_name, ''), student.id)
+      from public.exam_enrollments enrollment
+      join public.student_records student
+        on student.institution_id = enrollment.institution_id
+       and student.id = enrollment.student_record_id
+      where enrollment.institution_id = target_institution_id
+        and enrollment.exam_table_id = table_row.id
+        and enrollment.status = 'registered'
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke execute on function public.get_exam_table_roster(uuid, text, text) from public, anon;
+grant execute on function public.get_exam_table_roster(uuid, text, text) to authenticated;
