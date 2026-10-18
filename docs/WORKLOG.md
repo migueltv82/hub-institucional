@@ -1160,3 +1160,12 @@ Verificación:
 - acta revisada visualmente con el logo del modelo.
 
 Pendiente: aplicar `set_institution_logo` en Producción con el OK de Miguel; después Miguel carga el logo desde la app.
+
+## 2026-10-18 — EX.9 aplicado en Producción (Claude)
+
+Con el OK de Miguel se creó `set_institution_logo` en Producción. Verificado:
+- permisos;
+- una sola firma;
+- el admin puede y el docente no (en transacción revertida).
+
+Miguel carga el logo desde Mesas y actas.

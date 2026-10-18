@@ -162,3 +162,12 @@ Front:
 - Tarjeta "Logo del colegio" en Mesas y actas, visible para owner, admin o superadmin. El navegador achica la imagen a 900×300 como máximo.
 - El acta muestra el logo centrado en el encabezado (hasta 100×26 mm, sin deformar). Si no hay logo o es inválido, usa el nombre del colegio.
 - Verificado visualmente con el logo del modelo de Miguel: entra en A4 con los 25 renglones.
+
+## EX.9 aplicado en Producción (`lzjp…aeco`, 2026-10-18, con OK de Miguel)
+
+Migración `ex9_set_institution_logo`: solo `create or replace function public.set_institution_logo` y revoke/grant, sin datos.
+
+Verificación:
+- una sola firma; SECURITY DEFINER; sin EXECUTE para `anon` ni `public`; con EXECUTE para `authenticated`;
+- en transacción con `rollback`: el admin de la institución guarda un PNG (OK) y el docente DOCENTE Uat recibe `Acceso denegado`;
+- la institución sigue sin logo, para que Miguel lo cargue desde la app.
