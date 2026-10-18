@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const calls = vi.hoisted(() => ({ deletes: [], upserts: [] }))
+const calls = vi.hoisted(() => ({ deletes: [], upserts: [], inFlight: 0, maxInFlight: 0 }))
 
 vi.mock('../lib/supabase.js', () => {
   const existing = {
@@ -12,7 +12,14 @@ vi.mock('../lib/supabase.js', () => {
       select: () => query,
       eq: () => query,
       then: (resolve) => resolve({ data: existing[table] ?? [], error: null }),
-      upsert: (rows) => { calls.upserts.push({ table, count: rows.length }); return Promise.resolve({ error: null }) },
+      upsert: async (rows) => {
+        calls.upserts.push({ table, count: rows.length })
+        calls.inFlight += 1
+        calls.maxInFlight = Math.max(calls.maxInFlight, calls.inFlight)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        calls.inFlight -= 1
+        return { error: null }
+      },
       delete: () => ({ in: (column, ids) => { calls.deletes.push({ table, ids }); return Promise.resolve({ error: null }) } }),
     }
     return query
@@ -23,7 +30,7 @@ vi.mock('../lib/supabase.js', () => {
 const { syncRosterRecords } = await import('./rosterRecords.js')
 
 describe('syncRosterRecords (PB.2)', () => {
-  beforeEach(() => { calls.deletes.length = 0; calls.upserts.length = 0 })
+  beforeEach(() => { calls.deletes.length = 0; calls.upserts.length = 0; calls.maxInFlight = 0 })
 
   it('el autosave no borra legajos de alumnos ni de docentes que faltan en la planilla', async () => {
     const snapshot = {
@@ -34,5 +41,15 @@ describe('syncRosterRecords (PB.2)', () => {
     expect(calls.deletes).toEqual([])
     expect(result.students.deleted).toBe(0)
     expect(result.teachers.deleted).toBe(0)
+  })
+
+  it('escribe alumnos y docentes de a uno: en paralelo chocaban con el lock del workspace (EX.5)', async () => {
+    const snapshot = {
+      alumnos: [{ nombre: 'Ana', apellido: 'Uno', email: 'ana@example.invalid', carrera: 'PROFESORADO DE INGLES' }],
+      docentes: [{ nombre: 'Docente', apellido: 'En Planilla', dni: '22222222', carreras: ['PROFESORADO DE INGLES'] }],
+    }
+    await syncRosterRecords({ institutionId: 'a1000000-0000-4000-8000-000000000001', workspaceKey: 'main', snapshot, useRemote: true })
+    expect(calls.upserts.map((call) => call.table)).toEqual(['student_records', 'teacher_records'])
+    expect(calls.maxInFlight).toBe(1)
   })
 })

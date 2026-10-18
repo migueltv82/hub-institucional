@@ -475,26 +475,25 @@ export async function syncTeacherAcademicRecords({
   assertTeacherDisplayNames(workloadRows, WORKLOAD_TABLE)
   assertTeacherWorkloadRows(workloadRows)
 
-  const [availability, workload] = await Promise.all([
-    syncTableRows({
-      tableName: AVAILABILITY_TABLE,
-      rows: availabilityRows,
-      selectFields: 'id, teacher_identity, day_of_week, shift, start_time, end_time, valid_from, valid_until',
-      conflictColumns: ['institution_id', 'workspace_key', 'teacher_identity', 'day_of_week', 'shift', 'start_time', 'end_time', 'valid_from', 'valid_until'],
-      keyForRow: keyForAvailability,
-      institutionId,
-      workspaceKey,
-    }),
-    syncTableRows({
-      tableName: WORKLOAD_TABLE,
-      rows: workloadRows,
-      selectFields: 'id, teacher_identity, program_id, plan_id, subject_id, valid_from, valid_until',
-      conflictColumns: ['institution_id', 'workspace_key', 'teacher_identity', 'program_id', 'plan_id', 'subject_id', 'valid_from', 'valid_until'],
-      keyForRow: keyForWorkload,
-      institutionId,
-      workspaceKey,
-    }),
-  ])
+  // En serie: en paralelo chocaban contra el lock del workspace (SOURCE_FILE_WORKSPACE_BUSY).
+  const availability = await syncTableRows({
+    tableName: AVAILABILITY_TABLE,
+    rows: availabilityRows,
+    selectFields: 'id, teacher_identity, day_of_week, shift, start_time, end_time, valid_from, valid_until',
+    conflictColumns: ['institution_id', 'workspace_key', 'teacher_identity', 'day_of_week', 'shift', 'start_time', 'end_time', 'valid_from', 'valid_until'],
+    keyForRow: keyForAvailability,
+    institutionId,
+    workspaceKey,
+  })
+  const workload = await syncTableRows({
+    tableName: WORKLOAD_TABLE,
+    rows: workloadRows,
+    selectFields: 'id, teacher_identity, program_id, plan_id, subject_id, valid_from, valid_until',
+    conflictColumns: ['institution_id', 'workspace_key', 'teacher_identity', 'program_id', 'plan_id', 'subject_id', 'valid_from', 'valid_until'],
+    keyForRow: keyForWorkload,
+    institutionId,
+    workspaceKey,
+  })
 
   return {
     source: 'supabase',

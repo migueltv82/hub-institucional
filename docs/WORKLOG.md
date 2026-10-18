@@ -1068,3 +1068,7 @@ El gateway de archivos toma un lock por workspace en cada escritura (`pg_try_adv
 - cada paso reintenta dos veces si encuentra el workspace ocupado (otra sesión) y, si sigue ocupado, muestra un mensaje claro en vez del código.
 
 Tests nuevos. `npm run check` PASS.
+
+## 2026-10-18 — EX.5b: el BUSY venía de escrituras paralelas dentro de la sincronización de padrones (Claude)
+
+Miguel volvió a ver `SOURCE_FILE_WORKSPACE_BUSY` al publicar. En los logs de Producción: el upsert del snapshot dio 200 y luego el upsert de `teacher_records` dio 500 por el lock, con un solo intento. `syncRosterRecords` escribía `student_records` y `teacher_records` en paralelo, y `syncTeacherAcademicRecords` hacía lo mismo con disponibilidad y carga horaria. Ahora van en serie. Test nuevo: alumnos y docentes nunca se escriben en simultáneo. `npm run check` PASS.
