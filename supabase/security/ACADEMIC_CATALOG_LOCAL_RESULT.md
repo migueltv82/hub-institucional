@@ -1,6 +1,6 @@
 # CAT.1 — Carga del catálogo académico (ensayo local)
 
-Run `02c5a4fa5fb07d90`: **PASS**. Evidencia completa en `ACADEMIC_CATALOG_LOCAL_EVIDENCE.json`. Staging y Producción: NONE.
+Run `bfaf07cea9eee403` (después de la auditoría): **PASS**. Evidencia completa en `ACADEMIC_CATALOG_LOCAL_EVIDENCE.json`. Staging y Producción: NONE.
 
 ## Problema
 
@@ -36,3 +36,23 @@ Tests unitarios en `scripts/buildAcademicCatalogSql.test.js`: validaciones de pl
 - El portal lista las materias de **todos** los planes de la carrera, incluidos los cerrados. Es comportamiento previo de `05_student_portal_secure_read.sql`, no de CAT.1. Queda para v1.1.
 - No se cargan `course_schedules` ni `teacher_subject_assignments` relacionales: el portal alumno todavía no muestra horarios. El portal docente no los necesita; usa `subject_teacher_assignments`, que se asignan desde la app.
 - v1.1: botón "Publicar catálogo" en la app, vía la Edge.
+
+## Auditoría independiente y ajustes (CAT.1b)
+
+Veredicto de la auditoría sobre `30f6f31`: PASS con observaciones, sin P1. Ajustes:
+
+| Hallazgo | Ajuste |
+| --- | --- |
+| P2: re-correr con una carrera renombrada o un plan movido de carrera dejaba inscripciones y planes de alumnos con la referencia vieja, sin error | El SQL aborta sin escribir en los dos casos. Tampoco deja cargar una carrera con el mismo nombre normalizado que otra ya cargada. |
+| P2: el plan del alumno era "el activo más nuevo", y con planes convivientes elegía mal | `--alumnos`: el plan sale de la planilla de alumnos, por DNI. Sin ese dato, solo vincula si la carrera tiene un único plan activo. |
+| P2: un legajo podía quedar vinculado a dos carreras | El vínculo por carrera exige exactamente una carrera coincidente. |
+| P2: cargar correlativas bloquea de golpe a los alumnos sin historia académica, y CURSADA/FINAL se pisaban | Las correlativas van solo con `--con-correlativas` (decisión pendiente de Miguel). `tipo_correlativa` se traduce a `enrollment`/`exam` y es parte de la clave. |
+| P3: `\r` o `$$` en el nombre de la institución | Se rechazan al generar; el bloque DO usa `$cat1$` y no interpola el nombre. |
+| P3: `standard_conforming_strings` | `set local standard_conforming_strings = on` al empezar. |
+| P3: fechas como `Date` o número de serie de Excel se perdían; una re-corrida pisaba con null | Se reconocen Date, ISO, DD/MM/AAAA y serie de Excel; lo demás se avisa. Las re-corridas no borran fechas existentes (`coalesce`). |
+| P3: `materia_nombre` vacío fallaba recién en el SQL Editor | Error al generar. |
+| P3: estados, requisitos y tipos desconocidos se cargaban sin aviso; una correlativa sin plan iba al primer plan | Se avisan. Una correlativa sin `plan_id` con la materia en varios planes es error. |
+| P3: la normalización SQL difería de la JS (ç, â, ã, ö) | `translate` ampliado. El harness compara SQL y JS con 6 muestras: iguales. |
+| P3: se vinculaban legajos inactivos; el SQL Editor no mostraba los conteos (la última instrucción era `commit`) | Solo legajos activos. El resumen corre después del `commit`. |
+
+El harness ahora cubre: plan conviviente con y sin planilla de alumnos, renombre de carrera (aborta sin escribir), fechas `Date`, correlativa FINAL→`exam:approved`, paridad de normalización y resumen después del commit. Tests unitarios: 11.

@@ -217,14 +217,16 @@ El portal alumno lee carreras, planes y materias del **catálogo relacional**. S
 1. El admin de la institución sube las tres planillas en la app, en orden: académica, docentes, alumnos.
 2. En la PC de Miguel, desde `release/v1` actualizado:
    ```powershell
-   node scripts/buildAcademicCatalogSql.mjs --academica "<ruta>\plantilla-academica.xlsx" --institucion "<nombre exacto de la institución>" --salida catalogo.sql
+   node scripts/buildAcademicCatalogSql.mjs --academica "<ruta>\plantilla-academica.xlsx" --alumnos "<ruta>\plantilla-alumnos.xlsx" --institucion "<nombre exacto de la institución>" --salida catalogo.sql
    ```
-   Si lista `errores`, no genera el SQL: hay que corregir la planilla y volver a correrlo. Usa el mismo lector que la app, así que carrera y materia quedan escritas igual que en el snapshot.
-3. Supabase → SQL Editor: pegar **todo** `catalogo.sql` y apretar Run. Es una sola transacción: si la institución no existe o algo falla, no escribe nada. La última tabla muestra los conteos. `alumnos_con_plan` tiene que ser igual a `alumnos`. Si es menor, hay alumnos con una carrera que no está en la planilla académica.
+   Si lista `errores`, no genera el SQL: hay que corregir la planilla y volver a correrlo. Las `advertencias` (fechas o estados no reconocidos) no frenan, pero hay que leerlas. Usa el mismo lector que la app, así que carrera y materia quedan escritas igual que en el snapshot.
+   - `--alumnos`: vincula a cada alumno con el plan que dice su planilla (por DNI). Sin ese dato, solo se vincula cuando la carrera tiene un único plan activo. Nunca se adivina entre planes convivientes.
+   - `--con-correlativas`: **no va por defecto** (decisión de Miguel). Si se cargan, el portal y el RPC de mesas exigen la nota de la correlativa. Un alumno de 2.º año en adelante sin historia académica cargada queda bloqueado.
+3. Supabase → SQL Editor: pegar **todo** `catalogo.sql` y apretar Run. Es una sola transacción: si la institución no existe o algo falla, no escribe nada. También aborta, sin escribir, si la planilla renombra una carrera ya cargada o mueve un plan a otra carrera, porque eso rompería inscripciones y asignaciones. La tabla final muestra los conteos. `alumnos_con_plan` tiene que ser igual a `alumnos_activos`. Si es menor, hay alumnos sin plan en la planilla o con una carrera que no está en la planilla académica.
 4. En la app: **Crear accesos** de docentes y de alumnos.
 5. En la app: asignar cada docente a sus materias (panel de asignaciones). Sin asignación, el docente no ve a sus alumnos.
 
-Límites: no borra nada; una materia que se saca de la planilla queda en el catálogo. No carga horarios relacionales, así que el portal alumno todavía no muestra horarios. El portal lista las materias de todos los planes de la carrera, incluidos los cerrados. Evidencia: `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md`.
+Límites: no borra nada; una materia que se saca de la planilla queda en el catálogo. Para renombrar una carrera hay que hacerlo a mano junto con sus inscripciones (v1.1). No carga horarios relacionales, así que el portal alumno todavía no muestra horarios. El portal lista las materias de todos los planes de la carrera, incluidos los cerrados. Evidencia: `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md`.
 
 ## 9. Rollback
 

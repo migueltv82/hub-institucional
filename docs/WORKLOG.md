@@ -968,3 +968,15 @@ Pruebas:
 - 6 tests unitarios.
 
 Runbook §8.1 nuevo. Evidencia: `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md`.
+
+## 2026-10-18 — CAT.1b: ajustes de la auditoría independiente (Claude)
+
+Auditoría de CAT.1: PASS con observaciones, sin P1.
+
+Ajustes:
+- el SQL aborta si la corrida renombraría una carrera o movería un plan;
+- el plan de cada alumno sale de la planilla de alumnos (`--alumnos`) y nunca se adivina entre planes convivientes;
+- las correlativas solo se cargan con `--con-correlativas`, porque bloquean a los alumnos sin historia académica (decisión de Miguel);
+- fechas de Excel, nombre de institución blindado, `standard_conforming_strings` y resumen después del commit.
+
+Harness PASS (run `bfaf07cea9eee403`), 11 tests unitarios. Detalle en `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md`.
