@@ -1136,3 +1136,13 @@ Verificado en navegador real (Chromium, con datos de muestra y servicios simulad
 - Revision independiente CHIEF CODE AUDITOR: PASS, sin hallazgos introducidos. Seguridad: guard local de UX; la autorizacion sigue en el servidor, sin nuevos datos, secretos ni SQL. Revision adversarial: limite aplicado al payload real; consumidor captura el Error.
 - `quality:deps`: PASS (0 high/critical; 7 moderate preexistentes). Typecheck no disponible (JS). Database/RLS: no aplica. Browser/E2E: no ejecutado; cambio acotado al servicio, consumidor revisado. Riesgo residual: no se verifico el aviso en navegador real.
 - Validacion final: npm run check PASS (audit:repo, lint, 329 archivos / 2581 tests, build y audit:prod). Performance: WARNING por chunks >500 kB existentes; sin medicion de mejora. Code Review/Security/Adversarial: PASS; sin hallazgos introducidos. QUALITY GATE: PASS WITH WARNINGS (aviso no verificado en navegador y deuda moderate existente).
+## 2026-10-18 — EX.7/EX.8 aplicados en Producción (Claude)
+
+Con el OK de Miguel se aplicaron en Producción las 6 funciones de EX.7/EX.8, en tres migraciones de solo `create or replace`, sin datos. Verificado:
+- permisos (la función de reglas compartida es interna);
+- una sola firma de la inscripción del portal;
+- default de 24 h;
+- advisors sin hallazgos nuevos;
+- lectura real del panel de actas y de los inscriptos como admin, en transacción revertida.
+
+Falta que Miguel actualice la app y republique el cronograma, para que la mesa guarde el titular, el tribunal y el cierre a 24 h. Evidencia: `supabase/security/EXAM_PUBLICATION_LOCAL_RESULT.md`.

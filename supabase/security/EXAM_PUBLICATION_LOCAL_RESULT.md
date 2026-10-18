@@ -122,3 +122,27 @@ Regresiones después de mover las reglas a `exam_enrollment_assert_eligible`:
 - QA.1 integral con navegador: PASS (`29507ed02f394d82`).
 
 Reemplazo sobre el schema anterior (`af29229`, el que está en Producción): sin errores; `upsert_exam_enrollment_from_portal` mantiene una sola firma de 14 parámetros y el default de horas pasa a 24.
+
+## EX.7/EX.8 aplicados en Producción (`lzjp…aeco`, 2026-10-18, con OK de Miguel)
+
+Tres migraciones vía MCP `apply_migration`, desde `release/v1` `ea4b469`, solo `create or replace` y revoke/grant, sin `DROP` ni datos:
+- `ex8_enrollment_eligibility_shared`: `exam_enrollment_assert_eligible` + `upsert_exam_enrollment_from_portal`;
+- `ex8_publish_24h_tribunal`: `publish_exam_tables_from_schedule`;
+- `ex8_roster_actas_admin_enrollment`: `get_exam_table_roster`, `get_exam_tables_admin_overview`, `admin_enroll_student_in_exam_table` y `notify pgrst`.
+
+Verificación de solo lectura:
+
+| Función | DEFINER | anon | authenticated |
+| --- | --- | --- | --- |
+| `exam_enrollment_assert_eligible` | sí | no | **no** (interna) |
+| `upsert_exam_enrollment_from_portal` (una firma, 14 parámetros) | sí | no | sí |
+| `publish_exam_tables_from_schedule` (default 24 h) | sí | no | sí |
+| `get_exam_table_roster`, `get_exam_tables_admin_overview`, `admin_enroll_student_in_exam_table` | sí | no | sí |
+
+Advisors de seguridad: sin hallazgos nuevos, salvo el aviso esperado "authenticated puede ejecutar SECURITY DEFINER" para las RPC nuevas, que validan rol por dentro.
+
+Prueba de lectura en transacción con `rollback`, como admin de la institución:
+- `get_exam_tables_admin_overview` devuelve la mesa UAT01 (02/11, 1 inscripto);
+- `get_exam_table_roster` devuelve al alumno inscripto.
+
+La mesa publicada antes del cambio conserva el cierre a 48 h y el tribunal vacío hasta que se republique el cronograma.
