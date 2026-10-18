@@ -1,25 +1,57 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { ClipboardCheck, Printer, RefreshCcw, UserPlus, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ClipboardCheck, Download, Printer, RefreshCcw, UserPlus, UsersRound, X } from 'lucide-react'
 import {
   canPrintActa,
   enrollStudentAsAdmin,
   fetchExamActaRoster,
   fetchExamTablesOverview,
   formatArgentinaTime,
+  formatRoomLabel,
   getArgentinaDateKey,
   groupMesasByCareerAndYear,
+  shiftDateKey,
+  summarizeExamDays,
+  summarizeMesas,
 } from '../../services/examActas.js'
 import { buildExamActasPdf, formatActaDate } from '../../utils/examActaPdf.js'
 
 const EMPTY_ARRAY = []
+const ALL_CAREERS = ''
 
 function clean(value) {
   return String(value ?? '').trim()
 }
 
+function normalize(value) {
+  return clean(value).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 function todayKey() {
   return getArgentinaDateKey(new Date().toISOString())
+}
+
+function formatDayLabel(dateKey) {
+  const timestamp = Date.parse(`${dateKey}T12:00:00-03:00`)
+  if (!Number.isFinite(timestamp)) return dateKey
+  const label = new Date(timestamp).toLocaleDateString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+function formatChipLabel(dateKey) {
+  const timestamp = Date.parse(`${dateKey}T12:00:00-03:00`)
+  if (!Number.isFinite(timestamp)) return dateKey
+  return new Date(timestamp).toLocaleDateString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+  })
 }
 
 function tribunalLabel(tribunal = {}) {
@@ -31,15 +63,76 @@ function actaFileName(label) {
   return `actas-${label}.pdf`.replace(/[^a-z0-9.-]+/gi, '-').toLowerCase()
 }
 
+function matchesSearch(mesa, term) {
+  if (!term) return true
+  const tribunal = mesa.tribunal ?? {}
+  return normalize([mesa.materia, mesa.materia_codigo, tribunal.titular, tribunal.vocal1, tribunal.vocal2, mesa.aula].join(' ')).includes(term)
+}
+
+// Abre el PDF con el dialogo de impresion; si el navegador bloquea la ventana, lo descarga.
+function openForPrinting(doc, fileName) {
+  doc.autoPrint()
+  const url = doc.output('bloburl')
+  const opened = typeof window !== 'undefined' ? window.open(url, '_blank') : null
+  if (!opened) {
+    doc.save(fileName)
+    return false
+  }
+  return true
+}
+
+function MesaRoster({ institutionId, workspaceKey, examKey }) {
+  const [state, setState] = useState({ loading: true, error: '', alumnos: EMPTY_ARRAY })
+
+  useEffect(() => {
+    let active = true
+    fetchExamActaRoster({ institutionId, workspaceKey, examKey })
+      .then((alumnos) => { if (active) setState({ loading: false, error: '', alumnos }) })
+      .catch((error) => { if (active) setState({ loading: false, error: error.message, alumnos: EMPTY_ARRAY }) })
+    return () => { active = false }
+  }, [examKey, institutionId, workspaceKey])
+
+  if (state.loading) return <p className="text-sm text-slate-500">Cargando inscriptos...</p>
+  if (state.error) return <p className="text-sm text-red-700">{state.error}</p>
+  if (!state.alumnos.length) return <p className="text-sm text-slate-500">No hay alumnos inscriptos.</p>
+
+  return (
+    <div className="overflow-x-auto rounded-md border border-slate-200">
+      <table className="min-w-full text-left text-sm">
+        <thead className="bg-slate-100 text-xs font-bold uppercase text-slate-600">
+          <tr>
+            <th className="px-3 py-2">Nº</th>
+            <th className="px-3 py-2">DNI</th>
+            <th className="px-3 py-2">Apellido</th>
+            <th className="px-3 py-2">Nombre</th>
+            <th className="px-3 py-2">Inscripcion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {state.alumnos.map((alumno, index) => (
+            <tr className="border-t border-slate-100" key={`${alumno.dni}-${index}`}>
+              <td className="px-3 py-2 text-slate-500">{index + 1}</td>
+              <td className="px-3 py-2">{alumno.dni || '-'}</td>
+              <td className="px-3 py-2 font-semibold text-slate-900">{alumno.apellido || alumno.nombre || '-'}</td>
+              <td className="px-3 py-2">{alumno.nombres || ''}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{alumno.inscripcion_especial ? 'Especial (admin)' : 'Portal'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function SpecialEnrollmentDialog({ mesa, students, onClose, onConfirm, busy }) {
   const [studentRecordId, setStudentRecordId] = useState('')
   const [reason, setReason] = useState('')
   const [search, setSearch] = useState('')
   const careerStudents = useMemo(() => {
-    const term = clean(search).toLowerCase()
+    const term = normalize(search)
     return (students ?? EMPTY_ARRAY)
       .filter((student) => clean(student.record_id) && clean(student.carrera) === clean(mesa.carrera))
-      .filter((student) => !term || `${student.apellido} ${student.nombre} ${student.full_name} ${student.dni}`.toLowerCase().includes(term))
+      .filter((student) => !term || normalize(`${student.apellido} ${student.nombre} ${student.full_name} ${student.dni}`).includes(term))
       .sort((a, b) => clean(a.apellido || a.full_name).localeCompare(clean(b.apellido || b.full_name), 'es'))
   }, [mesa.carrera, search, students])
 
@@ -109,16 +202,27 @@ function SpecialEnrollmentDialog({ mesa, students, onClose, onConfirm, busy }) {
   )
 }
 
+function SummaryStat({ label, value, tone = 'text-slate-950' }) {
+  return (
+    <div className="rounded-md bg-slate-50 px-3 py-2">
+      <p className="text-xs font-bold uppercase text-slate-500">{label}</p>
+      <p className={`text-2xl font-bold ${tone}`}>{value}</p>
+    </div>
+  )
+}
+
 function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'main', canManage = false, students = EMPTY_ARRAY }) {
   const [mesas, setMesas] = useState(EMPTY_ARRAY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [dateKey, setDateKey] = useState(todayKey)
   const [showAllDates, setShowAllDates] = useState(false)
+  const [career, setCareer] = useState(ALL_CAREERS)
+  const [search, setSearch] = useState('')
+  const [openRoster, setOpenRoster] = useState('')
   const [printing, setPrinting] = useState('')
   const [enrollMesa, setEnrollMesa] = useState(null)
   const [enrolling, setEnrolling] = useState(false)
-
   const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
@@ -135,34 +239,55 @@ function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'ma
     setReloadToken((token) => token + 1)
   }
 
-  const visibleMesas = useMemo(
+  const examDays = useMemo(() => summarizeExamDays(mesas), [mesas])
+  const upcomingDays = useMemo(() => {
+    const today = todayKey()
+    const upcoming = examDays.filter((day) => day.dateKey >= today)
+    return (upcoming.length ? upcoming : examDays.slice(-8)).slice(0, 8)
+  }, [examDays])
+  const careers = useMemo(() => [...new Set(mesas.map((mesa) => clean(mesa.carrera)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')), [mesas])
+
+  const dayMesas = useMemo(
     () => (showAllDates ? mesas : mesas.filter((mesa) => getArgentinaDateKey(mesa.inicio) === dateKey)),
     [dateKey, mesas, showAllDates],
   )
+  const visibleMesas = useMemo(() => {
+    const term = normalize(search)
+    return dayMesas
+      .filter((mesa) => !career || clean(mesa.carrera) === career)
+      .filter((mesa) => matchesSearch(mesa, term))
+  }, [career, dayMesas, search])
   const groups = useMemo(() => groupMesasByCareerAndYear(visibleMesas), [visibleMesas])
-  const printableMesas = visibleMesas.filter(canPrintActa)
+  const summary = summarizeMesas(visibleMesas)
+  const selectionLabel = showAllDates ? 'todas' : dateKey
 
-  async function printActas(targetMesas, label) {
-    const withStudents = targetMesas.filter(canPrintActa)
-    if (!withStudents.length) {
+  async function buildActas(targetMesas) {
+    const actas = []
+    for (const mesa of targetMesas.filter(canPrintActa)) {
+      const alumnos = await fetchExamActaRoster({ institutionId, workspaceKey, examKey: mesa.mesa_id })
+      if (alumnos.length) actas.push({ mesa, alumnos })
+    }
+    return actas
+  }
+
+  async function outputActas(targetMesas, label, mode) {
+    if (!targetMesas.some(canPrintActa)) {
       toast.error('No hay mesas con alumnos inscriptos: no se genera ningun acta.')
       return
     }
     setPrinting(label)
     try {
-      const actas = []
-      for (const mesa of withStudents) {
-        const alumnos = await fetchExamActaRoster({ institutionId, workspaceKey, examKey: mesa.mesa_id })
-        if (alumnos.length) actas.push({ mesa, alumnos })
-      }
+      const actas = await buildActas(targetMesas)
       if (!actas.length) {
         toast.error('Las mesas ya no tienen alumnos inscriptos: no se genera ningun acta.')
         return
       }
       const doc = await buildExamActasPdf({ institutionName, actas })
-      doc.save(actaFileName(label))
+      const fileName = actaFileName(label)
+      if (mode === 'download') doc.save(fileName)
+      else if (!openForPrinting(doc, fileName)) toast.success('El navegador bloqueo la ventana de impresion: se descargo el PDF.')
       const skipped = targetMesas.length - actas.length
-      toast.success(`${actas.length} ${actas.length === 1 ? 'acta generada' : 'actas generadas'}${skipped ? `; ${skipped} sin inscriptos no se imprimen` : ''}.`)
+      toast.success(`${actas.length} ${actas.length === 1 ? 'acta' : 'actas'}${skipped ? `; ${skipped} ${skipped === 1 ? 'mesa sin inscriptos no se imprime' : 'mesas sin inscriptos no se imprimen'}` : ''}.`)
     } catch (printError) {
       toast.error(printError.message)
     } finally {
@@ -184,6 +309,12 @@ function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'ma
     }
   }
 
+  function selectDay(nextDateKey) {
+    setShowAllDates(false)
+    setDateKey(nextDateKey)
+    setOpenRoster('')
+  }
+
   return (
     <div className="min-w-0 space-y-6">
       <section className="rise-in admin-module-heading">
@@ -195,7 +326,7 @@ function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'ma
               Mesas y actas
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Mesas publicadas por carrera y año. El acta volante se genera solo para mesas con alumnos inscriptos.
+              Elegi el dia, revisa las mesas por carrera y año, e imprimi las actas volantes. Las mesas sin alumnos inscriptos no generan acta.
             </p>
           </div>
           <button className="btn-secondary" disabled={loading} onClick={reload} type="button">
@@ -205,33 +336,105 @@ function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'ma
         </div>
       </section>
 
-      <section className="soft-card flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-wrap items-end gap-3">
+      <section className="soft-card space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-wrap items-end gap-2">
+            <button aria-label="Dia anterior" className="btn-secondary" disabled={showAllDates} onClick={() => selectDay(shiftDateKey(dateKey, -1))} type="button">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <label className="text-sm font-semibold text-slate-800">
+              Fecha de examen
+              <input
+                className="mt-1 block rounded-md border border-slate-300 px-3 py-2 text-sm"
+                disabled={showAllDates}
+                onChange={(event) => selectDay(event.target.value)}
+                type="date"
+                value={dateKey}
+              />
+            </label>
+            <button aria-label="Dia siguiente" className="btn-secondary" disabled={showAllDates} onClick={() => selectDay(shiftDateKey(dateKey, 1))} type="button">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <button className="btn-secondary" onClick={() => selectDay(todayKey())} type="button">Hoy</button>
+            <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+              <input checked={showAllDates} onChange={(event) => setShowAllDates(event.target.checked)} type="checkbox" />
+              Ver todas las fechas
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn-primary"
+              disabled={!summary.actas || Boolean(printing)}
+              onClick={() => void outputActas(visibleMesas, selectionLabel, 'print')}
+              title={summary.actas ? '' : 'Ninguna mesa de esta seleccion tiene inscriptos'}
+              type="button"
+            >
+              <Printer className="h-4 w-4" />
+              {printing === selectionLabel ? 'Generando...' : `Imprimir actas (${summary.actas})`}
+            </button>
+            <button
+              className="btn-secondary"
+              disabled={!summary.actas || Boolean(printing)}
+              onClick={() => void outputActas(visibleMesas, selectionLabel, 'download')}
+              type="button"
+            >
+              <Download className="h-4 w-4" />
+              Descargar PDF
+            </button>
+          </div>
+        </div>
+
+        {upcomingDays.length > 0 && (
+          <div>
+            <p className="text-xs font-bold uppercase text-slate-500">Fechas con mesas</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {upcomingDays.map((day) => {
+                const selected = !showAllDates && day.dateKey === dateKey
+                return (
+                  <button
+                    aria-pressed={selected}
+                    className={`rounded-md border px-3 py-2 text-left text-xs ${selected ? 'border-teal-600 bg-teal-50 text-teal-900' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+                    key={day.dateKey}
+                    onClick={() => selectDay(day.dateKey)}
+                    type="button"
+                  >
+                    <span className="block font-bold capitalize">{formatChipLabel(day.dateKey)}</span>
+                    <span>{day.mesas} {day.mesas === 1 ? 'mesa' : 'mesas'} · {day.actas} {day.actas === 1 ? 'acta' : 'actas'}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 sm:flex-row">
           <label className="text-sm font-semibold text-slate-800">
-            Fecha de examen
+            Carrera
+            <select className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm" onChange={(event) => setCareer(event.target.value)} value={career}>
+              <option value={ALL_CAREERS}>Todas las carreras</option>
+              {careers.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+          <label className="flex-1 text-sm font-semibold text-slate-800">
+            Buscar
             <input
-              className="mt-1 block rounded-md border border-slate-300 px-3 py-2 text-sm"
-              disabled={showAllDates}
-              onChange={(event) => setDateKey(event.target.value)}
-              type="date"
-              value={dateKey}
+              className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Materia, codigo, docente o aula"
+              value={search}
             />
           </label>
-          <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
-            <input checked={showAllDates} onChange={(event) => setShowAllDates(event.target.checked)} type="checkbox" />
-            Ver todas las fechas
-          </label>
         </div>
-        <button
-          className="btn-primary"
-          disabled={!printableMesas.length || Boolean(printing)}
-          onClick={() => void printActas(visibleMesas, showAllDates ? 'todas' : dateKey)}
-          title={printableMesas.length ? '' : 'Ninguna mesa de esta seleccion tiene inscriptos'}
-          type="button"
-        >
-          <Printer className="h-4 w-4" />
-          {printing ? 'Generando...' : `Imprimir actas (${printableMesas.length})`}
-        </button>
+
+        <div>
+          <p className="text-sm font-semibold text-slate-700">{showAllDates ? 'Todas las fechas' : formatDayLabel(dateKey)}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <SummaryStat label="Mesas" value={summary.mesas} />
+            <SummaryStat label="Actas a imprimir" tone="text-teal-700" value={summary.actas} />
+            <SummaryStat label="Sin inscriptos" tone="text-slate-500" value={summary.sinInscriptos} />
+            <SummaryStat label="Alumnos" value={summary.alumnos} />
+          </div>
+        </div>
       </section>
 
       {loading ? (
@@ -240,7 +443,7 @@ function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'ma
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : groups.length === 0 ? (
         <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">
-          {showAllDates ? 'Todavia no hay mesas publicadas.' : 'No hay mesas publicadas para esta fecha.'}
+          {mesas.length === 0 ? 'Todavia no hay mesas publicadas.' : 'No hay mesas para esta seleccion.'}
         </p>
       ) : (
         groups.map((group) => (
@@ -253,36 +456,47 @@ function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'ma
                 </p>
                 {yearGroup.mesas.map((mesa) => {
                   const printable = canPrintActa(mesa)
+                  const rosterOpen = openRoster === mesa.mesa_id
+                  const label = `${mesa.materia_codigo}-${getArgentinaDateKey(mesa.inicio)}`
                   return (
-                    <article className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between" key={mesa.mesa_id}>
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-950">{mesa.materia} <span className="text-sm font-normal text-slate-500">{mesa.materia_codigo}</span></p>
-                        <p className="text-sm text-slate-600">
-                          {formatActaDate(mesa.inicio)} {formatArgentinaTime(mesa.inicio)} · {mesa.llamado || 'Llamado'} · Aula {mesa.aula || 'a confirmar'}
-                        </p>
-                        <p className="text-xs text-slate-500">{tribunalLabel(mesa.tribunal)}</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-2 py-1 text-xs font-bold ${printable ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                          {mesa.inscriptos} {Number(mesa.inscriptos) === 1 ? 'inscripto' : 'inscriptos'}
-                        </span>
-                        <button
-                          className="btn-secondary"
-                          disabled={!printable || Boolean(printing)}
-                          onClick={() => void printActas([mesa], `${mesa.materia_codigo}-${getArgentinaDateKey(mesa.inicio)}`)}
-                          title={printable ? '' : 'Sin inscriptos: no se genera acta'}
-                          type="button"
-                        >
-                          <Printer className="h-4 w-4" />
-                          {printable ? 'Imprimir acta' : 'Sin acta'}
-                        </button>
-                        {canManage && (
-                          <button className="btn-secondary" onClick={() => setEnrollMesa(mesa)} type="button">
-                            <UserPlus className="h-4 w-4" />
-                            Inscripcion especial
+                    <article className="space-y-3 rounded-lg border border-slate-200 bg-white p-4" key={mesa.mesa_id}>
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-950">{mesa.materia} <span className="text-sm font-normal text-slate-500">{mesa.materia_codigo}</span></p>
+                          <p className="text-sm text-slate-600">
+                            {formatActaDate(mesa.inicio)} {formatArgentinaTime(mesa.inicio)} · {mesa.llamado || 'Llamado'} · {formatRoomLabel(mesa.aula)}
+                          </p>
+                          <p className="text-xs text-slate-500">{tribunalLabel(mesa.tribunal)}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2 py-1 text-xs font-bold ${printable ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                            {mesa.inscriptos} {Number(mesa.inscriptos) === 1 ? 'inscripto' : 'inscriptos'}
+                          </span>
+                          {printable && (
+                            <button aria-expanded={rosterOpen} className="btn-secondary" onClick={() => setOpenRoster(rosterOpen ? '' : mesa.mesa_id)} type="button">
+                              <UsersRound className="h-4 w-4" />
+                              {rosterOpen ? 'Ocultar inscriptos' : 'Ver inscriptos'}
+                            </button>
+                          )}
+                          <button
+                            className="btn-secondary"
+                            disabled={!printable || Boolean(printing)}
+                            onClick={() => void outputActas([mesa], label, 'print')}
+                            title={printable ? '' : 'Sin inscriptos: no se genera acta'}
+                            type="button"
+                          >
+                            <Printer className="h-4 w-4" />
+                            {printing === label ? 'Generando...' : printable ? 'Imprimir acta' : 'Sin acta'}
                           </button>
-                        )}
+                          {canManage && (
+                            <button className="btn-secondary" onClick={() => setEnrollMesa(mesa)} type="button">
+                              <UserPlus className="h-4 w-4" />
+                              Inscripcion especial
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      {rosterOpen && <MesaRoster examKey={mesa.mesa_id} institutionId={institutionId} workspaceKey={workspaceKey} />}
                     </article>
                   )
                 })}

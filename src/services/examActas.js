@@ -32,6 +32,7 @@ function translateError(error, fallback) {
   const code = Object.keys(ADMIN_ENROLLMENT_ERRORS).find((key) => message.includes(key))
   if (code) return ADMIN_ENROLLMENT_ERRORS[code]
   if (error?.code === '42501') return 'Tu rol no permite gestionar mesas y actas.'
+  if (error?.code === 'PGRST202') return 'Falta actualizar la base de datos para usar Mesas y actas. Avisale al responsable tecnico.'
   return fallback
 }
 
@@ -80,7 +81,7 @@ export function getArgentinaDateKey(value) {
 export function formatArgentinaTime(value) {
   const timestamp = Date.parse(clean(value))
   if (!Number.isFinite(timestamp)) return ''
-  return new Date(timestamp).toLocaleTimeString('es-AR', { timeZone: ARGENTINA_TIME_ZONE, hour: '2-digit', minute: '2-digit' })
+  return new Date(timestamp).toLocaleTimeString('es-AR', { timeZone: ARGENTINA_TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 }
 
 // Solo las mesas con inscriptos generan acta: asi no se imprime papel en blanco.
@@ -114,3 +115,45 @@ export function groupMesasByCareerAndYear(mesas = []) {
         })),
     }))
 }
+
+// Suma dias a una fecha YYYY-MM-DD sin depender de la zona horaria del navegador.
+export function shiftDateKey(dateKey, days) {
+  const match = clean(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return clean(dateKey)
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days))
+  return date.toISOString().slice(0, 10)
+}
+
+// Resumen de un conjunto de mesas: cuantas hay, cuantas llevan acta y cuantos alumnos rinden.
+export function summarizeMesas(mesas = []) {
+  const list = Array.isArray(mesas) ? mesas : []
+  const conActa = list.filter(canPrintActa)
+  return {
+    mesas: list.length,
+    actas: conActa.length,
+    sinInscriptos: list.length - conActa.length,
+    alumnos: conActa.reduce((total, mesa) => total + Number(mesa.inscriptos), 0),
+  }
+}
+
+// Fechas con mesas publicadas, en orden, para elegir el dia a imprimir.
+export function summarizeExamDays(mesas = []) {
+  const byDay = new Map()
+  ;(Array.isArray(mesas) ? mesas : []).forEach((mesa) => {
+    const dateKey = getArgentinaDateKey(mesa?.inicio)
+    if (!dateKey) return
+    if (!byDay.has(dateKey)) byDay.set(dateKey, [])
+    byDay.get(dateKey).push(mesa)
+  })
+  return [...byDay.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dateKey, items]) => ({ dateKey, ...summarizeMesas(items) }))
+}
+
+// "Aula 5" o "A1" -> "Aula 5" / "Aula A1", sin repetir la palabra.
+export function formatRoomLabel(room) {
+  const value = clean(room)
+  if (!value) return 'Aula a confirmar'
+  return /^aula\b/i.test(value) ? value : `Aula ${value}`
+}
+

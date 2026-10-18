@@ -5,10 +5,15 @@ vi.mock('../lib/supabase.js', () => ({ isSupabaseConfigured: true, supabase: { r
 
 const {
   canPrintActa,
+  formatArgentinaTime,
+  formatRoomLabel,
   enrollStudentAsAdmin,
   fetchExamTablesOverview,
   getArgentinaDateKey,
   groupMesasByCareerAndYear,
+  shiftDateKey,
+  summarizeExamDays,
+  summarizeMesas,
 } = await import('./examActas.js')
 
 describe('examActas', () => {
@@ -62,5 +67,36 @@ describe('examActas', () => {
       target_student_record_id: 's1',
       target_reason: 'Certificado medico',
     })
+  })
+
+  it('se mueve de a un dia cruzando meses y anios', () => {
+    expect(shiftDateKey('2026-10-31', 1)).toBe('2026-11-01')
+    expect(shiftDateKey('2027-01-01', -1)).toBe('2026-12-31')
+  })
+
+  it('resume las fechas con mesas: cuantas llevan acta y cuantos alumnos rinden', () => {
+    const mesas = [
+      { mesa_id: 'a', inicio: '2026-11-02T11:00:00Z', inscriptos: 3 },
+      { mesa_id: 'b', inicio: '2026-11-02T21:00:00Z', inscriptos: 0 },
+      { mesa_id: 'c', inicio: '2026-11-03T01:30:00Z', inscriptos: 1 },
+      { mesa_id: 'd', inicio: '2026-11-04T11:00:00Z', inscriptos: 2 },
+    ]
+    expect(summarizeExamDays(mesas)).toEqual([
+      { dateKey: '2026-11-02', mesas: 3, actas: 2, sinInscriptos: 1, alumnos: 4 },
+      { dateKey: '2026-11-04', mesas: 1, actas: 1, sinInscriptos: 0, alumnos: 2 },
+    ])
+    expect(summarizeMesas([])).toEqual({ mesas: 0, actas: 0, sinInscriptos: 0, alumnos: 0 })
+  })
+
+  it('avisa que falta actualizar la base si la funcion no existe todavia', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'Could not find the function' } })
+    await expect(fetchExamTablesOverview({ institutionId: 'inst-1' })).rejects.toThrow('Falta actualizar la base de datos')
+  })
+
+  it('muestra la hora en formato de 24 h y el aula sin repetir la palabra', () => {
+    expect(formatArgentinaTime('2026-11-02T21:00:00Z')).toBe('18:00')
+    expect(formatRoomLabel('Aula 5')).toBe('Aula 5')
+    expect(formatRoomLabel('A1')).toBe('Aula A1')
+    expect(formatRoomLabel('')).toBe('Aula a confirmar')
   })
 })

@@ -1116,3 +1116,15 @@ Verificación:
 - `npm run check` PASS (2570 tests).
 
 Pendiente: aplicar en Producción con el OK de Miguel; el logo por institución en el acta queda para después.
+
+## 2026-10-18 — EX.8b: Mesas y actas para el uso diario (Claude)
+
+Miguel imprime las actas el día de cada mesa. Mejoras en la sección:
+- **Navegación por día:** día anterior, "Hoy", día siguiente y botones con las fechas que tienen mesas (cantidad de mesas y de actas de cada día).
+- **Resumen del día:** mesas, actas a imprimir, sin inscriptos y alumnos.
+- **Filtros:** por carrera y buscador por materia, código, docente o aula.
+- **Por mesa:** "Ver inscriptos" (indica si la inscripción fue por el portal o especial).
+- **Impresión:** "Imprimir" abre el PDF con el diálogo de impresión (si el navegador bloquea la ventana, lo descarga); "Descargar PDF" aparte.
+- **Correcciones:** hora en formato de 24 h, aula sin repetir la palabra y aviso claro si la base todavía no tiene las funciones (PGRST202).
+
+Verificado en navegador real (Chromium, con datos de muestra y servicios simulados): escritorio, celular sin scroll horizontal y flujo de impresión (abre 3 actas y avisa que 1 mesa sin inscriptos no se imprime). Tests de pantalla y servicio actualizados. `npm run check` PASS. Sigue pendiente aplicar EX.7/EX.8 en Producción con el OK de Miguel.

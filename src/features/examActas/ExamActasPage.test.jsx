@@ -1,52 +1,130 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const services = vi.hoisted(() => ({
   fetchExamTablesOverview: vi.fn(),
   fetchExamActaRoster: vi.fn(),
   enrollStudentAsAdmin: vi.fn(),
 }))
-const pdf = vi.hoisted(() => ({ save: vi.fn(), buildExamActasPdf: vi.fn() }))
+const pdf = vi.hoisted(() => ({ doc: null, buildExamActasPdf: vi.fn() }))
 
 vi.mock('../../services/examActas.js', async (importOriginal) => ({ ...(await importOriginal()), ...services }))
 vi.mock('../../utils/examActaPdf.js', async (importOriginal) => ({ ...(await importOriginal()), buildExamActasPdf: pdf.buildExamActasPdf }))
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }))
 
 const { default: ExamActasPage } = await import('./ExamActasPage.jsx')
+const { getArgentinaDateKey, shiftDateKey } = await import('../../services/examActas.js')
 
-const today = new Date().toISOString()
+const today = getArgentinaDateKey(new Date().toISOString())
+const tomorrow = shiftDateKey(today, 1)
+// 11:00 UTC = 08:00 en Argentina: siempre cae en el mismo dia calendario.
+const at = (dateKey) => `${dateKey}T11:00:00Z`
 const mesa = (id, materia, inscriptos, extra = {}) => ({
-  mesa_id: id, materia, materia_codigo: id.toUpperCase(), carrera: 'PROFESORADO DE PRUEBA UAT', anio: 1, inicio: today,
+  mesa_id: id, materia, materia_codigo: id.toUpperCase(), carrera: 'PROFESORADO DE PRUEBA UAT', anio: 1, inicio: at(today),
   llamado: 'Primer llamado', aula: 'A1', tribunal: { titular: 'DOCENTE Uat' }, inscriptos, tipo: 'regular', ...extra,
 })
 
-afterEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  pdf.doc = { save: vi.fn(), autoPrint: vi.fn(), output: vi.fn(() => 'blob:acta') }
+  pdf.buildExamActasPdf.mockImplementation(async () => pdf.doc)
+  vi.spyOn(window, 'open').mockReturnValue({})
+})
+
+afterEach(() => {
+  vi.clearAllMocks()
+  vi.restoreAllMocks()
+})
 
 describe('ExamActasPage', () => {
-  it('lista las mesas del dia y no ofrece acta para las que no tienen inscriptos', async () => {
-    services.fetchExamTablesOverview.mockResolvedValue([mesa('uat01', 'MATERIA DE PRUEBA UAT', 2), mesa('uat02', 'TALLER DE PRUEBA UAT', 0)])
+  it('muestra las mesas de hoy por carrera y anio, con el resumen del dia', async () => {
+    services.fetchExamTablesOverview.mockResolvedValue([
+      mesa('uat01', 'MATERIA DE PRUEBA UAT', 2),
+      mesa('uat02', 'TALLER DE PRUEBA UAT', 0),
+      mesa('uat03', 'SEMINARIO DE MAÑANA', 1, { inicio: at(tomorrow) }),
+    ])
     render(<ExamActasPage canManage institutionId="inst-1" institutionName="Instituto" />)
 
     expect(await screen.findByText('MATERIA DE PRUEBA UAT')).toBeInTheDocument()
-    expect(screen.getByText('PROFESORADO DE PRUEBA UAT')).toBeInTheDocument()
+    expect(screen.queryByText('SEMINARIO DE MAÑANA')).not.toBeInTheDocument()
     expect(screen.getByText('1º año')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /sin acta/i })).toBeDisabled()
     expect(screen.getByRole('button', { name: /^imprimir acta$/i })).toBeEnabled()
     expect(screen.getByRole('button', { name: /imprimir actas \(1\)/i })).toBeEnabled()
+    const stat = (label) => screen.getByText(label).nextSibling.textContent
+    expect([stat('Mesas'), stat('Actas a imprimir'), stat('Sin inscriptos'), stat('Alumnos')]).toEqual(['2', '1', '1', '2'])
   })
 
-  it('imprime solo las actas de mesas con inscriptos', async () => {
+  it('cambia de dia con las fechas que tienen mesas y con las flechas', async () => {
+    services.fetchExamTablesOverview.mockResolvedValue([
+      mesa('uat01', 'MATERIA DE PRUEBA UAT', 2),
+      mesa('uat03', 'SEMINARIO DE MAÑANA', 1, { inicio: at(tomorrow) }),
+    ])
+    render(<ExamActasPage institutionId="inst-1" />)
+    await screen.findByText('MATERIA DE PRUEBA UAT')
+
+    const chips = screen.getByText('Fechas con mesas').nextSibling
+    expect(within(chips).getAllByRole('button')).toHaveLength(2)
+    fireEvent.click(within(chips).getAllByRole('button')[1])
+    expect(screen.getByText('SEMINARIO DE MAÑANA')).toBeInTheDocument()
+    expect(screen.queryByText('MATERIA DE PRUEBA UAT')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dia anterior' }))
+    expect(screen.getByText('MATERIA DE PRUEBA UAT')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Dia siguiente' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hoy' }))
+    expect(screen.getByText('MATERIA DE PRUEBA UAT')).toBeInTheDocument()
+  })
+
+  it('filtra por carrera y por busqueda', async () => {
+    services.fetchExamTablesOverview.mockResolvedValue([
+      mesa('uat01', 'MATERIA DE PRUEBA UAT', 2),
+      mesa('ing01', 'FONETICA INGLESA', 1, { carrera: 'PROFESORADO DE INGLES', tribunal: { titular: 'Corbalan Miguel' } }),
+    ])
+    render(<ExamActasPage institutionId="inst-1" />)
+    await screen.findByText('MATERIA DE PRUEBA UAT')
+
+    fireEvent.change(screen.getByLabelText('Carrera'), { target: { value: 'PROFESORADO DE INGLES' } })
+    expect(screen.queryByText('MATERIA DE PRUEBA UAT')).not.toBeInTheDocument()
+    expect(screen.getByText('FONETICA INGLESA')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Carrera'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Buscar'), { target: { value: 'corbalan' } })
+    expect(screen.queryByText('MATERIA DE PRUEBA UAT')).not.toBeInTheDocument()
+    expect(screen.getByText('FONETICA INGLESA')).toBeInTheDocument()
+  })
+
+  it('imprime solo las actas de mesas con inscriptos y abre el dialogo de impresion', async () => {
     services.fetchExamTablesOverview.mockResolvedValue([mesa('uat01', 'MATERIA DE PRUEBA UAT', 1), mesa('uat02', 'TALLER DE PRUEBA UAT', 0)])
     services.fetchExamActaRoster.mockResolvedValue([{ apellido: 'Regular', nombres: 'Ana', dni: '11111111' }])
-    pdf.buildExamActasPdf.mockResolvedValue({ save: pdf.save })
     render(<ExamActasPage canManage institutionId="inst-1" institutionName="Instituto" />)
 
     fireEvent.click(await screen.findByRole('button', { name: /imprimir actas \(1\)/i }))
 
-    await waitFor(() => expect(pdf.save).toHaveBeenCalled())
+    await waitFor(() => expect(window.open).toHaveBeenCalledWith('blob:acta', '_blank'))
+    expect(pdf.doc.autoPrint).toHaveBeenCalled()
     expect(services.fetchExamActaRoster).toHaveBeenCalledTimes(1)
     expect(services.fetchExamActaRoster).toHaveBeenCalledWith({ institutionId: 'inst-1', workspaceKey: 'main', examKey: 'uat01' })
     expect(pdf.buildExamActasPdf.mock.calls[0][0].actas.map((acta) => acta.mesa.mesa_id)).toEqual(['uat01'])
+  })
+
+  it('si el navegador bloquea la ventana, descarga el PDF', async () => {
+    window.open.mockReturnValue(null)
+    services.fetchExamTablesOverview.mockResolvedValue([mesa('uat01', 'MATERIA DE PRUEBA UAT', 1)])
+    services.fetchExamActaRoster.mockResolvedValue([{ apellido: 'Regular', nombres: 'Ana', dni: '11111111' }])
+    render(<ExamActasPage institutionId="inst-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /^imprimir acta$/i }))
+    await waitFor(() => expect(pdf.doc.save).toHaveBeenCalled())
+  })
+
+  it('muestra los inscriptos de una mesa', async () => {
+    services.fetchExamTablesOverview.mockResolvedValue([mesa('uat01', 'MATERIA DE PRUEBA UAT', 1)])
+    services.fetchExamActaRoster.mockResolvedValue([{ apellido: 'Regular', nombres: 'Ana', dni: '11111111', inscripcion_especial: true }])
+    render(<ExamActasPage institutionId="inst-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /ver inscriptos/i }))
+    expect(await screen.findByText('Regular')).toBeInTheDocument()
+    expect(screen.getByText('Especial (admin)')).toBeInTheDocument()
   })
 
   it('sin permiso de gestion no muestra la inscripcion especial', async () => {
@@ -77,5 +155,11 @@ describe('ExamActasPage', () => {
       institutionId: 'inst-1', workspaceKey: 'main', examKey: 'uat01', studentRecordId: 's1', reason: 'Certificado medico',
     }))
     await waitFor(() => expect(services.fetchExamTablesOverview).toHaveBeenCalledTimes(2))
+  })
+
+  it('explica si la base todavia no tiene la seccion', async () => {
+    services.fetchExamTablesOverview.mockRejectedValue(new Error('Falta actualizar la base de datos para usar Mesas y actas. Avisale al responsable tecnico.'))
+    render(<ExamActasPage institutionId="inst-1" />)
+    expect(await screen.findByText(/Falta actualizar la base de datos/)).toBeInTheDocument()
   })
 })
