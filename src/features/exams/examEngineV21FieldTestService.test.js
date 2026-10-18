@@ -385,6 +385,26 @@ describe('examEngineV21FieldTestService', () => {
     expect(csv).toBe('fecha,materiaMesa\n2026-11-27,"Geografia, Regional"')
   })
 
+  it('publica con el codigo de materia del catalogo, no con el id interno del motor (EX.6)', () => {
+    const cronograma = buildPublishedCronogramaFromFinalTribunals([{
+      id: 'draft:profesorado de prueba uat::uat01:PRIMER_LLAMADO',
+      carrera: 'PROFESORADO DE PRUEBA UAT',
+      materiaId: 'subject-profesorado-de-prueba-uat-uat01',
+      materiaMesa: 'MATERIA DE PRUEBA UAT',
+      fechaSugerida: '2026-11-02',
+      estadoFinal: 'FINAL_CONFIRMED',
+      llamado: 'PRIMER_LLAMADO',
+    }], {
+      materias: [{ id: 'subject-profesorado-de-prueba-uat-uat01', codigo: 'UAT01', materia: 'UAT01' }],
+    })
+
+    expect(cronograma[0]).toMatchObject({
+      materia: 'UAT01',
+      codigo: 'UAT01',
+      materiaId: 'subject-profesorado-de-prueba-uat-uat01',
+    })
+  })
+
   it('convierte tribunales finales confirmados en cronograma publicable para portales', () => {
     const cronograma = buildPublishedCronogramaFromFinalTribunals([{
       id: 'mesa-ing06',

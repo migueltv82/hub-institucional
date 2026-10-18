@@ -1072,3 +1072,7 @@ Tests nuevos. `npm run check` PASS.
 ## 2026-10-18 — EX.5b: el BUSY venía de escrituras paralelas dentro de la sincronización de padrones (Claude)
 
 Miguel volvió a ver `SOURCE_FILE_WORKSPACE_BUSY` al publicar. En los logs de Producción: el upsert del snapshot dio 200 y luego el upsert de `teacher_records` dio 500 por el lock, con un solo intento. `syncRosterRecords` escribía `student_records` y `teacher_records` en paralelo, y `syncTeacherAcademicRecords` hacía lo mismo con disponibilidad y carga horaria. Ahora van en serie. Test nuevo: alumnos y docentes nunca se escriben en simultáneo. `npm run check` PASS.
+
+## 2026-10-18 — EX.6: publicar mandaba el id interno del motor en vez del código de materia (Claude)
+
+En la demo, `publish_exam_tables_from_schedule` omitió la mesa: "La materia subject-profesorado-de-prueba-uat-uat01 no esta en el catalogo academico". El tribunal final trae `materiaId` interno del motor, y `buildPublishedCronogramaFromFinalTribunals` lo copiaba a `materia`/`codigo`. El test existente usaba un `materiaId` que ya era un código (ING06), por eso no lo detectaba, y el harness EX.1 armaba el payload a mano. Ahora la pantalla le pasa las materias del motor y se publica el código del catálogo (UAT01); el id interno queda en `materiaId`. Se reprodujo con los datos de la demo y se agregó un test con un id real del motor. `npm run check` PASS.

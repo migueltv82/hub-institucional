@@ -737,13 +737,19 @@ export function createConfirmedFinalReviewRowsFromTeacherStatus(tribunalRows = [
 
 export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], options = {}) {
   const publishedAt = clean(options.generatedAt) || new Date().toISOString()
+  // El tribunal trae el id interno del motor (subject-<carrera>-<codigo>); la publicacion necesita el
+  // codigo de materia del catalogo, que es lo que espera publish_exam_tables_from_schedule.
+  const subjectCodeById = new Map(asArray(options.materias)
+    .map((materia) => [clean(materia?.id), clean(materia?.codigo ?? materia?.materia)])
+    .filter(([id, codigo]) => id && codigo))
 
   return asArray(finalTribunals)
     .filter((mesa) => getPublishableFinalStatus(mesa.estadoFinal ?? mesa.estado) === 'confirmada')
     .filter((mesa) => clean(mesa.fechaSugerida ?? mesa.fechaIso ?? mesa.fecha))
     .map((mesa, index) => {
       const fechaIso = clean(mesa.fechaSugerida ?? mesa.fechaIso ?? mesa.fecha)
-      const materia = clean(mesa.materiaId ?? mesa.materia_id ?? mesa.materia ?? mesa.codigo)
+      const materiaId = clean(mesa.materiaId ?? mesa.materia_id ?? mesa.materia ?? mesa.codigo)
+      const materia = subjectCodeById.get(materiaId) || clean(mesa.codigo) || materiaId
       const nombreMateria = clean(mesa.materiaMesa ?? mesa.nombreMateria ?? mesa.materia_nombre ?? mesa.nombre ?? materia)
       const call = getCallMetadata(mesa.llamado ?? mesa.exam_call ?? mesa.callKey)
 
@@ -754,6 +760,7 @@ export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], 
         anio: clean(mesa.anio ?? mesa.anio_cursada ?? mesa.year),
         materia,
         codigo: materia,
+        materiaId,
         nombreMateria,
         fechaIso,
         fecha: formatDisplayDate(fechaIso),
