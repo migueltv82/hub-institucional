@@ -1364,9 +1364,9 @@ export function buildRegularExamInputFromWorkspaceSnapshot(snapshot = {}) {
   const cargaHorariaDocenteForInput = useStructuredTeacherSource
     ? teacherSource.validWorkloadRows
     : []
-  // La disponibilidad declarada vale aunque la carga horaria venga de horarios (fuente
-  // legacy): sin esto, un docente solo podia ser vocal los dias en que dicta clase.
-  const disponibilidadDocenteForInput = teacherSource.validAvailabilityRows
+  const disponibilidadDocenteForInput = useStructuredTeacherSource
+    ? teacherSource.validAvailabilityRows
+    : []
   const teacherBuild = buildTeachers({
     docentes: safeSnapshot.docentes,
     horariosDocentes: horariosDocentesForInput,
