@@ -1055,3 +1055,7 @@ La documentación de demo usa el puerto local 4173, concentra la validación en 
 ## 2026-10-18 — EX.3: "Reiniciar proceso" funciona sin la RPC legacy (Claude)
 
 En la demo, "Reiniciar proceso" fallaba porque pedía `academic_admin_reset_exam_process`. Esa RPC era del flujo de revisión docente (diferido) y no está en el schema canónico. Además, el repair viejo no conoce `exam_tables`, depende de `legacy_exam_sessions` y no se debe aplicar. Ahora, si la RPC no existe, el reset es local: limpia el cronograma armado y el estado del asistente. Las mesas ya publicadas se reconcilian al volver a publicar (EX.1: las retiradas sin inscriptos se cancelan). Se actualizaron el texto de confirmación y el test. `npm run check` PASS (2540 tests).
+
+## 2026-10-18 — EX.4 revertido: la regla dura de días de asistencia se mantiene (Claude)
+
+EX.4 hacía que la disponibilidad declarada sumara días en los que el docente no asiste. Eso rompe una regla dura del motor: un vocal solo puede tomar mesa los días que asiste al instituto (Miguel). Se revirtió. El problema estaba en los datos de la demo: los vocales daban clase los martes y la mesa caía un lunes. Se corrigió `uat-2-docentes.xlsx` (vocales los lunes 20 a 22) y, con el motor original, el tribunal queda completo. Se agregó un test que fija la regla. Las invariantes 04.x no lo detectaban.
