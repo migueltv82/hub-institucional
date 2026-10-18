@@ -1059,3 +1059,12 @@ En la demo, "Reiniciar proceso" fallaba porque pedía `academic_admin_reset_exam
 ## 2026-10-18 — EX.4 revertido: la regla dura de días de asistencia se mantiene (Claude)
 
 EX.4 hacía que la disponibilidad declarada sumara días en los que el docente no asiste. Eso rompe una regla dura del motor: un vocal solo puede tomar mesa los días que asiste al instituto (Miguel). Se revirtió. El problema estaba en los datos de la demo: los vocales daban clase los martes y la mesa caía un lunes. Se corrigió `uat-2-docentes.xlsx` (vocales los lunes 20 a 22) y, con el motor original, el tribunal queda completo. Se agregó un test que fija la regla. Las invariantes 04.x no lo detectaban.
+
+## 2026-10-18 — EX.5: "Publicar cronograma" fallaba con SOURCE_FILE_WORKSPACE_BUSY (Claude)
+
+El gateway de archivos toma un lock por workspace en cada escritura (`pg_try_advisory_xact_lock`, sin espera) en 11 tablas: snapshot, padrones, legacy_*, estado del motor, etc. Al guardar, la app sincronizaba `legacy_subjects_catalog`, `legacy_subject_prerequisites` y `legacy_exam_sessions` en paralelo (`Promise.all`), así que chocaban entre sí. Además, el autosave y el guardado del estado del motor podían cruzarse con el guardado explícito. Cambios en `workspaceWriteGuard.js`:
+- las escrituras de un mismo workspace en la pestaña van de a una (`serializeWorkspaceWrite`, en el snapshot y en el estado del motor);
+- las tres sincronizaciones legacy van en serie;
+- cada paso reintenta dos veces si encuentra el workspace ocupado (otra sesión) y, si sigue ocupado, muestra un mensaje claro en vez del código.
+
+Tests nuevos. `npm run check` PASS.

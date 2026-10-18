@@ -1,5 +1,6 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 import { syncRosterRecords } from './rosterRecords.js'
+import { retryThrownWorkspaceBusy, retryWhenWorkspaceBusy, serializeWorkspaceWrite } from './workspaceWriteGuard.js'
 import { invokeSourceFileStorage } from './sourceFileStorageGateway.js'
 import { canonicalStorageUuid } from './sourceFileStoragePath.js'
 import {
@@ -900,24 +901,13 @@ export async function fetchWorkspaceSnapshot({ institutionId, workspaceKey, useR
   return fetchPromise
 }
 
-export const WORKSPACE_BUSY_MESSAGE = 'Se estaban guardando otros cambios de este espacio de trabajo al mismo tiempo. Espera unos segundos y volve a intentar.'
+export { isWorkspaceBusyError, retryWhenWorkspaceBusy, WORKSPACE_BUSY_MESSAGE } from './workspaceWriteGuard.js'
 
-// El gateway de archivos bloquea el workspace mientras guarda (SOURCE_FILE_WORKSPACE_BUSY, 55P03).
-// Si dos guardados se cruzan, se reintenta una vez; si sigue ocupado, se explica en lugar de mostrar el codigo.
-export function isWorkspaceBusyError(error) {
-  return error?.code === '55P03' || String(error?.message ?? '').includes('SOURCE_FILE_WORKSPACE_BUSY')
+export function saveWorkspaceSnapshot(options = {}) {
+  return serializeWorkspaceWrite(options, () => saveWorkspaceSnapshotNow(options))
 }
 
-export async function retryWhenWorkspaceBusy(run, { delayMs = 800 } = {}) {
-  const first = await run()
-  if (!isWorkspaceBusyError(first?.error)) return first
-  await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs))
-  const second = await run()
-  if (!isWorkspaceBusyError(second?.error)) return second
-  return { ...second, error: Object.assign(new Error(WORKSPACE_BUSY_MESSAGE), { code: second.error.code }) }
-}
-
-export async function saveWorkspaceSnapshot({
+async function saveWorkspaceSnapshotNow({
   institutionId,
   workspaceKey,
   ownerEmail,
@@ -1020,12 +1010,12 @@ export async function saveWorkspaceSnapshot({
   }
 
   try {
-    await syncRosterRecords({
+    await retryThrownWorkspaceBusy(() => syncRosterRecords({
       institutionId,
       workspaceKey,
       snapshot: normalizedPayload,
       useRemote,
-    })
+    }))
   } catch (error) {
     logWorkspaceSnapshotDiagnostic('warn', 'roster-sync:error', {
       counts: getSnapshotCounts(normalizedPayload),
@@ -1040,12 +1030,12 @@ export async function saveWorkspaceSnapshot({
   }
 
   try {
-    await syncTeacherAcademicRecords({
+    await retryThrownWorkspaceBusy(() => syncTeacherAcademicRecords({
       institutionId,
       workspaceKey,
       snapshot: normalizedPayload,
       useRemote,
-    })
+    }))
   } catch (error) {
     logWorkspaceSnapshotDiagnostic('warn', 'teacher-academic-sync:error', {
       counts: getSnapshotCounts(normalizedPayload),
@@ -1060,11 +1050,11 @@ export async function saveWorkspaceSnapshot({
   }
 
   try {
-    await Promise.all([
-      syncLegacySubjectsCatalog({ institutionId, workspaceKey, snapshot: normalizedPayload, useRemote }),
-      syncLegacySubjectPrerequisites({ institutionId, workspaceKey, snapshot: normalizedPayload, useRemote }),
-      syncLegacyExamSessions({ institutionId, workspaceKey, snapshot: normalizedPayload, useRemote }),
-    ])
+    // En serie: en paralelo chocaban entre si contra el lock del workspace.
+    const legacyContext = { institutionId, workspaceKey, snapshot: normalizedPayload, useRemote }
+    await retryThrownWorkspaceBusy(() => syncLegacySubjectsCatalog(legacyContext))
+    await retryThrownWorkspaceBusy(() => syncLegacySubjectPrerequisites(legacyContext))
+    await retryThrownWorkspaceBusy(() => syncLegacyExamSessions(legacyContext))
   } catch (error) {
     logWorkspaceSnapshotDiagnostic('warn', 'legacy-prerequisites-sync:error', {
       counts: getSnapshotCounts(normalizedPayload),
