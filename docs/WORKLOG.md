@@ -988,3 +988,7 @@ Apareció en el UAT. "Crear accesos" crea la cuenta del docente con el email té
 ## 2026-10-18 — PB.8: el portal docente contaba dos veces la misma materia (Claude)
 
 Apareció en el UAT: el resumen decía "2 materias" con una sola asignada. El horario trae `carrera_id` (el código de la planilla, "UAT") y la asignación trae `program_id` (el nombre de la carrera). La clave del grupo usaba el código antes que el nombre, así que generaba dos grupos. Pasaba con cualquier institución cuyos códigos de carrera no estén en el mapa de nombres conocidos. Ahora gana el nombre. Test de regresión: falla sin el arreglo y pasa con él.
+
+## 2026-10-18 — Decisión: el GO arranca sin correlatividades (Miguel)
+
+Opción (a): el catálogo se carga sin `--con-correlativas`. Las correlatividades se suman cuando esté cargada la historia académica de los alumnos (épica v1.1), para no bloquear a los alumnos de 2.º año en adelante.
