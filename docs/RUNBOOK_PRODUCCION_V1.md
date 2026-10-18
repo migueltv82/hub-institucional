@@ -210,6 +210,22 @@ Si la service role se expuso alguna vez (log, chat, captura): rotarla en Project
 
 Criterio: todos los checks PASS → **deploy cerrado**; avisar a la institución que terminó la ventana. Cualquier FAIL → sección 9.
 
+## 8.1 Carga de datos de una institución (CAT.1)
+
+El portal alumno lee carreras, planes y materias del **catálogo relacional**. Subir las planillas en la app **no** lo llena. Sin este paso, el alumno no ve ninguna materia. Va una vez por institución y otra vez cada vez que cambie la planilla académica.
+
+1. El admin de la institución sube las tres planillas en la app, en orden: académica, docentes, alumnos.
+2. En la PC de Miguel, desde `release/v1` actualizado:
+   ```powershell
+   node scripts/buildAcademicCatalogSql.mjs --academica "<ruta>\plantilla-academica.xlsx" --institucion "<nombre exacto de la institución>" --salida catalogo.sql
+   ```
+   Si lista `errores`, no genera el SQL: hay que corregir la planilla y volver a correrlo. Usa el mismo lector que la app, así que carrera y materia quedan escritas igual que en el snapshot.
+3. Supabase → SQL Editor: pegar **todo** `catalogo.sql` y apretar Run. Es una sola transacción: si la institución no existe o algo falla, no escribe nada. La última tabla muestra los conteos. `alumnos_con_plan` tiene que ser igual a `alumnos`. Si es menor, hay alumnos con una carrera que no está en la planilla académica.
+4. En la app: **Crear accesos** de docentes y de alumnos.
+5. En la app: asignar cada docente a sus materias (panel de asignaciones). Sin asignación, el docente no ve a sus alumnos.
+
+Límites: no borra nada; una materia que se saca de la planilla queda en el catálogo. No carga horarios relacionales, así que el portal alumno todavía no muestra horarios. El portal lista las materias de todos los planes de la carrera, incluidos los cerrados. Evidencia: `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md`.
+
 ## 9. Rollback
 
 Decide Miguel. El Verificador propone el nivel según qué falló. Se revierte **del componente más externo al más interno** y solo lo necesario.

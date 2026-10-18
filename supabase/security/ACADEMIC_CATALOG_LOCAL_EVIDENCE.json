@@ -1,0 +1,87 @@
+{
+  "task": "CAT.1",
+  "run": "02c5a4fa5fb07d90",
+  "staging": "NONE",
+  "production": "NONE",
+  "before": {
+    "careers": 0,
+    "plans": 0,
+    "subjects": 0,
+    "plan_subjects": 0,
+    "prerequisites": 0,
+    "student_plans": 0,
+    "student_records": 1,
+    "teacher_records": 0
+  },
+  "portalBefore": 0,
+  "generator": {
+    "institucion": "Instituto O'Higgins Prueba",
+    "carreras": 1,
+    "planes": 2,
+    "materias": 3,
+    "materiasEnPlanes": 3,
+    "correlativas": 1,
+    "advertencias": [],
+    "errores": []
+  },
+  "wrongInstitutionRejected": true,
+  "afterWrongInstitution": {
+    "careers": 0,
+    "plans": 0,
+    "subjects": 0,
+    "plan_subjects": 0,
+    "prerequisites": 0,
+    "student_plans": 0,
+    "student_records": 1,
+    "teacher_records": 0
+  },
+  "afterFirst": {
+    "careers": 1,
+    "plans": 2,
+    "subjects": 3,
+    "plan_subjects": 3,
+    "prerequisites": 1,
+    "student_plans": 1,
+    "student_records": 1,
+    "teacher_records": 0
+  },
+  "afterSecond": {
+    "careers": 1,
+    "plans": 2,
+    "subjects": 3,
+    "plan_subjects": 3,
+    "prerequisites": 1,
+    "student_plans": 1,
+    "student_records": 1,
+    "teacher_records": 0
+  },
+  "portalAfter": {
+    "materias": [
+      {
+        "materia": "ING01",
+        "carrera": "Profesorado de Inglés",
+        "anio": "1"
+      },
+      {
+        "materia": "ING02",
+        "carrera": "Profesorado de Inglés",
+        "anio": "2"
+      },
+      {
+        "materia": "OLD01",
+        "carrera": "Profesorado de Inglés",
+        "anio": "1"
+      }
+    ],
+    "correlatividades": 1
+  },
+  "studentPlan": {
+    "plan": "ING-2024",
+    "current_year": 1
+  },
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "errors": []
+  }
+}

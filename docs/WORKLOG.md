@@ -958,3 +958,13 @@ Test nuevo: falla sin el arreglo y pasa con él. `npm run check` PASS (2516 test
 Apareció en el UAT: los avisos de "Crear accesos" mostraban "padrÃ³n" y "tenÃ­an". Había 12 textos doblemente codificados en `GeneradorCronograma.jsx` y `ExamEngineV21FieldTestPage.jsx`, más el título de un test. Se corrigieron.
 
 Nuevo `scripts/sourceEncoding.test.js`: recorre `src/` y falla si vuelve a aparecer un acento roto. Se comprobó que falla sin el arreglo. `npm run check` PASS (2518 tests).
+
+## 2026-10-18 — CAT.1: carga del catálogo académico (Claude; P1 del GO)
+
+El UAT en Producción mostró que el portal alumno no lista materias: lee el catálogo relacional y subir las planillas no lo llena. Nuevo `scripts/buildAcademicCatalogSql.mjs`: usa el mismo lector que la app, valida la planilla y genera un SQL transaccional para el SQL Editor. No necesita service role, no borra y no crea legajos; además vincula a los alumnos existentes con su plan.
+
+Pruebas:
+- harness local `scripts/validateAcademicCatalogLocal.mjs` PASS (run `02c5a4fa5fb07d90`): antes 0 materias, después 3; idempotente; una institución inexistente aborta sin escribir;
+- 6 tests unitarios.
+
+Runbook §8.1 nuevo. Evidencia: `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md`.
