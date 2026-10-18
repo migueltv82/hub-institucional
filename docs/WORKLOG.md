@@ -984,3 +984,7 @@ Harness PASS (run `bfaf07cea9eee403`), 11 tests unitarios. Detalle en `supabase/
 ## 2026-10-18 — PB.7: el panel de asignaciones no encontraba la cuenta del docente (Claude)
 
 Apareció en el UAT. "Crear accesos" crea la cuenta del docente con el email técnico `DNI@docentes.<institución>.local`. El panel de materias asignadas la buscaba con el email de contacto de la planilla, y si ese email existía, nunca la encontraba: "No se encontro un usuario docente". Ahora `resolveTeacherProfile` prueba primero el email técnico y después el de contacto, y lo mismo vale para elegir un reemplazante. Test nuevo. `npm run check` PASS.
+
+## 2026-10-18 — PB.8: el portal docente contaba dos veces la misma materia (Claude)
+
+Apareció en el UAT: el resumen decía "2 materias" con una sola asignada. El horario trae `carrera_id` (el código de la planilla, "UAT") y la asignación trae `program_id` (el nombre de la carrera). La clave del grupo usaba el código antes que el nombre, así que generaba dos grupos. Pasaba con cualquier institución cuyos códigos de carrera no estén en el mapa de nombres conocidos. Ahora gana el nombre. Test de regresión: falla sin el arreglo y pasa con él.

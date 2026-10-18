@@ -680,9 +680,11 @@ function resolveSubjectGroupCareerName(value) {
   return resolveCareerDisplayName(cleaned) || cleaned
 }
 
+// Gana el nombre de carrera: el horario trae carrera_id (codigo de la planilla, p.ej. "UAT") y la
+// asignacion trae program_id (nombre). Con el codigo primero, la misma materia contaba dos veces (PB.8).
 function getSubjectGroupCareerIdentity(row = {}, fallbackCareer = '') {
   const stableId = clean(getFirst(row, ['carrera_id', 'carreraId', 'program_id', 'programId']))
-  return normalizeIdentityText(resolveSubjectGroupCareerName(stableId || fallbackCareer))
+  return normalizeIdentityText(resolveSubjectGroupCareerName(fallbackCareer || stableId))
 }
 
 function getSubjectGroupKey({ careerKey, code, name }) {
