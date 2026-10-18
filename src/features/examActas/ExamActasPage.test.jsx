@@ -7,9 +7,11 @@ const services = vi.hoisted(() => ({
   enrollStudentAsAdmin: vi.fn(),
 }))
 const pdf = vi.hoisted(() => ({ doc: null, buildExamActasPdf: vi.fn() }))
+const logoService = vi.hoisted(() => ({ prepareLogoDataUrl: vi.fn(), saveInstitutionLogo: vi.fn() }))
 
 vi.mock('../../services/examActas.js', async (importOriginal) => ({ ...(await importOriginal()), ...services }))
 vi.mock('../../utils/examActaPdf.js', async (importOriginal) => ({ ...(await importOriginal()), buildExamActasPdf: pdf.buildExamActasPdf }))
+vi.mock('../../services/institutionLogo.js', () => logoService)
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }))
 
 const { default: ExamActasPage } = await import('./ExamActasPage.jsx')
@@ -161,5 +163,33 @@ describe('ExamActasPage', () => {
     services.fetchExamTablesOverview.mockRejectedValue(new Error('Falta actualizar la base de datos para usar Mesas y actas. Avisale al responsable tecnico.'))
     render(<ExamActasPage institutionId="inst-1" />)
     expect(await screen.findByText(/Falta actualizar la base de datos/)).toBeInTheDocument()
+  })
+
+  it('el admin carga el logo y las actas lo usan', async () => {
+    services.fetchExamTablesOverview.mockResolvedValue([mesa('uat01', 'MATERIA DE PRUEBA UAT', 1)])
+    services.fetchExamActaRoster.mockResolvedValue([{ apellido: 'Regular', nombres: 'Ana', dni: '11111111' }])
+    logoService.prepareLogoDataUrl.mockResolvedValue('data:image/png;base64,AAA=')
+    logoService.saveInstitutionLogo.mockResolvedValue('data:image/png;base64,AAA=')
+    const onLogoChange = vi.fn()
+    const { rerender } = render(<ExamActasPage canChangeLogo institutionId="inst-1" onLogoChange={onLogoChange} />)
+
+    expect(await screen.findByText('Sin logo')).toBeInTheDocument()
+    const file = new File(['x'], 'logo.png', { type: 'image/png' })
+    fireEvent.change(screen.getByLabelText('Archivo del logo'), { target: { files: [file] } })
+    await waitFor(() => expect(onLogoChange).toHaveBeenCalledWith('data:image/png;base64,AAA='))
+    expect(logoService.saveInstitutionLogo).toHaveBeenCalledWith({ institutionId: 'inst-1', logoDataUrl: 'data:image/png;base64,AAA=' })
+
+    rerender(<ExamActasPage canChangeLogo institutionId="inst-1" institutionLogoUrl="data:image/png;base64,AAA=" onLogoChange={onLogoChange} />)
+    expect(screen.getByAltText('Logo del colegio')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^imprimir acta$/i }))
+    await waitFor(() => expect(pdf.buildExamActasPdf).toHaveBeenCalled())
+    expect(pdf.buildExamActasPdf.mock.calls[0][0].institutionLogo).toBe('data:image/png;base64,AAA=')
+  })
+
+  it('sin permiso para cambiar el logo y sin logo cargado, no muestra la tarjeta', async () => {
+    services.fetchExamTablesOverview.mockResolvedValue([mesa('uat01', 'MATERIA DE PRUEBA UAT', 1)])
+    render(<ExamActasPage canManage institutionId="inst-1" />)
+    await screen.findByText('MATERIA DE PRUEBA UAT')
+    expect(screen.queryByText('Logo del colegio')).not.toBeInTheDocument()
   })
 })

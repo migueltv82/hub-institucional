@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACTA_ROWS_PER_PAGE, buildActaPages, buildExamActasPdf, formatActaDate, splitStudentName } from './examActaPdf.js'
+import { ACTA_ROWS_PER_PAGE, buildActaPages, buildExamActasPdf, fitActaLogo, formatActaDate, splitStudentName } from './examActaPdf.js'
 
 const mesa = {
   mesa_id: 'm1',
@@ -42,5 +42,30 @@ describe('examActaPdf', () => {
     for (const expected of ['ACTA VOLANTE DE EXAMEN', 'REGULARES', '02/11/26', 'Practicas Discursivas en Ingles IV', 'Profesorado de Ingles', '2015', '37656860', 'DIAZ LOZANO', 'MARIA CRISTINA', 'Presidente', 'Titular Uno', 'Fonetica I']) {
       expect(text).toContain(expected)
     }
+  })
+
+  it('ubica el logo centrado, sin deformarlo y dentro del encabezado', () => {
+    const size = fitActaLogo(441, 135)
+    expect(size.width).toBeCloseTo(84.93, 1)
+    expect(size.height).toBeCloseTo(26, 5)
+    expect(size.x + size.width / 2).toBeCloseTo(105, 5)
+    expect(fitActaLogo(0, 10)).toBeNull()
+  })
+
+  it('pone el logo del colegio en el encabezado; sin logo usa el nombre', async () => {
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    const actas = [{ mesa, alumnos: [{ apellido: 'Diaz', nombres: 'Ana', dni: '1' }] }]
+    const withLogo = (await buildExamActasPdf({ institutionName: 'Instituto Con Logo', institutionLogo: PNG, actas })).output()
+    const withoutLogo = (await buildExamActasPdf({ institutionName: 'Instituto Sin Logo', actas })).output()
+
+    expect(withLogo).toContain('/Subtype /Image')
+    expect(withLogo).not.toContain('Instituto Con Logo')
+    expect(withoutLogo).not.toContain('/Subtype /Image')
+    expect(withoutLogo).toContain('Instituto Sin Logo')
+  })
+
+  it('si el logo no es una imagen valida, cae al nombre en lugar de romper el acta', async () => {
+    const doc = await buildExamActasPdf({ institutionName: 'Instituto', institutionLogo: 'data:image/png;base64,AAAA', actas: [{ mesa, alumnos: [{ nombre: 'Ana' }] }] })
+    expect(doc.output()).toContain('Instituto')
   })
 })

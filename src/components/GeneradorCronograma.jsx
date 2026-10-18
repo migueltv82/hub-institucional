@@ -168,6 +168,8 @@ function GeneradorCronograma() {
   const [adminReviewSecondApprovals, setAdminReviewSecondApprovals] = useState([])
   const [examEngineV21State, setExamEngineV21State] = useState(null)
   const [activeWorkspaceView, setActiveWorkspaceView] = useState(readStoredWorkspaceView)
+  // El logo guardado desde Mesas y actas se ve al instante, sin esperar a recargar la institucion.
+  const [logoOverride, setLogoOverride] = useState({ institutionId: '', logo: '' })
   const [hasOpenedExamEngineV21, setHasOpenedExamEngineV21] = useState(false)
   const [activeDashboardSection, setActiveDashboardSection] = useState('overview')
   const [isClearingWorkspace, setIsClearingWorkspace] = useState(false)
@@ -1732,6 +1734,9 @@ function GeneradorCronograma() {
               <ExamActasPage
                 canManage={canEditWorkspace}
                 institutionId={activeInstitutionId}
+                canChangeLogo={isSuperAdmin || ['owner', 'admin'].includes(activeInstitution?.role)}
+                institutionLogoUrl={logoOverride.institutionId === activeInstitutionId ? logoOverride.logo : (activeInstitution?.logo_url ?? '')}
+                onLogoChange={(logo) => setLogoOverride({ institutionId: activeInstitutionId, logo })}
                 institutionName={activeInstitutionName}
                 students={alumnos}
                 workspaceKey={workspaceKey}

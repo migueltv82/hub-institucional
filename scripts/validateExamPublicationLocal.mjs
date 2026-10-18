@@ -39,7 +39,7 @@ export function mesa(code, draftId, date, extra = {}) {
 export async function main() {
   const run = randomBytes(8).toString('hex')
   const database = disposableDatabase(`gotrue_harness_${run}`)
-  const report = { task: 'EX.1+EX.7+EX.8', run, staging: 'NONE', production: 'NONE' }
+  const report = { task: 'EX.1+EX.7+EX.8+EX.9', run, staging: 'NONE', production: 'NONE' }
   let step = 'preflight', created = false
   const docker = (args, input) => {
     try { return execFileSync('docker', args, { input, encoding: 'utf8', windowsHide: true, timeout: 120000, maxBuffer: 64 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }) }
@@ -222,6 +222,25 @@ update public.student_grades set program_id = 'UAT' where student_id = '${REGULA
     const ymd = (d) => d.toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
     report.window24 = publish(ADMIN, [m1Next, mesa('UAT02', 'w30', ymd(in30h), { inicio: hhmm(in30h), fin: '' }), mesa('UAT02', 'w20', ymd(in20h), { inicio: hhmm(in20h), fin: '' })])
 
+    step = 'institution logo'
+    // EX.9: el logo del colegio para las actas lo cambia solo el owner/admin, con formato y tamano acotados.
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    const setLogo = (actor, value) => sqlState(actor, `select public.set_institution_logo('${INSTITUTION}', '${value}');`)
+    report.logo = {
+      admin: setLogo(ADMIN, PNG),
+      docente: setLogo(TEACHER, PNG),
+      alumno: setLogo(REGULAR, PNG),
+      svg: setLogo(ADMIN, 'data:image/svg+xml;base64,PHN2Zz4='),
+      urlExterna: setLogo(ADMIN, 'https://example.invalid/logo.png'),
+      muyGrande: setLogo(ADMIN, `data:image/png;base64,${'A'.repeat(400001)}`),
+      anon: sql(`select has_function_privilege('anon', 'public.set_institution_logo(uuid,text)', 'execute');`),
+    }
+    as(ADMIN, `select public.set_institution_logo('${INSTITUTION}', '${PNG}');`, true)
+    report.logo.guardado = sql(`select logo_url = '${PNG}' from public.institutions where id = '${INSTITUTION}';`)
+    report.logo.enLogin = sql(`select count(*) from public.list_active_login_institutions() where id = '${INSTITUTION}' and logo_url = '${PNG}';`)
+    as(ADMIN, `select public.set_institution_logo('${INSTITUTION}', '');`, true)
+    report.logo.quitado = sql(`select logo_url is null from public.institutions where id = '${INSTITUTION}';`)
+
     step = 'assertions'
     assert.equal(report.teacherPublish, 'Acceso denegado: solo el personal de gestion de la institucion publica mesas.')
     assert.equal(report.studentPublish, report.teacherPublish)
@@ -255,6 +274,10 @@ update public.student_grades set program_id = 'UAT' where student_id = '${REGULA
     assert.equal(report.special.repetida, 'EXAM_ENROLLMENT_ALREADY_REGISTERED')
     assert.deepEqual(report.special.auditoria, { creado_por_admin: true, motivo: 'Pedido de la secretaria', evento: 'admin_special_enrollment' })
     assert.equal(report.special.despuesDelDia, 'EXAM_ADMIN_ENROLLMENT_AFTER_EXAM_DAY')
+    const logoDenied = 'Acceso denegado: solo el owner o admin de la institucion cambia el logo.'
+    assert.deepEqual([report.logo.admin, report.logo.docente, report.logo.alumno], ['OK', logoDenied, logoDenied])
+    assert.deepEqual([report.logo.svg, report.logo.urlExterna, report.logo.muyGrande], ['INSTITUTION_LOGO_INVALID', 'INSTITUTION_LOGO_INVALID', 'INSTITUTION_LOGO_INVALID'])
+    assert.deepEqual([report.logo.anon, report.logo.guardado, report.logo.enLogin, report.logo.quitado], ['f', 't', '1', 't'])
     assert.deepEqual(report.window24.omitidas.map((item) => item.motivo), ['Faltan menos de 24 horas para la mesa: no se abre inscripcion.'], 'cierre por defecto 24 h antes: a 30 h se publica, a 20 h no')
     assert.equal(report.roster.adminMesaInexistente, 'EXAM_TABLE_NOT_FOUND')
     assert.equal(report.roster.anonPuedeEjecutar, 'f')

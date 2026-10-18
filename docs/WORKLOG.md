@@ -1146,3 +1146,17 @@ Con el OK de Miguel se aplicaron en Producción las 6 funciones de EX.7/EX.8, en
 - lectura real del panel de actas y de los inscriptos como admin, en transacción revertida.
 
 Falta que Miguel actualice la app y republique el cronograma, para que la mesa guarde el titular, el tribunal y el cierre a 24 h. Evidencia: `supabase/security/EXAM_PUBLICATION_LOCAL_RESULT.md`.
+
+## 2026-10-18 — EX.9: logo del colegio en las actas (Claude)
+
+Pedido de Miguel. Cada institución ya tenía `logo_url`, pero solo el superadmin podía editarla. Cambios:
+- **Base:** RPC `set_institution_logo`, para owner/admin o superadmin; acepta solo PNG/JPEG como data URL de hasta 400.000 caracteres, o vacío para quitarlo.
+- **Mesas y actas:** tarjeta "Logo del colegio" para cargar, cambiar o quitar el logo; el navegador achica la imagen.
+- **Acta:** el logo va centrado en el encabezado; si no hay logo, el nombre del colegio.
+
+Verificación:
+- harness local PASS (`e8b1d227da3cca31`) con permisos y formatos;
+- tests de servicio, PDF y pantalla;
+- acta revisada visualmente con el logo del modelo.
+
+Pendiente: aplicar `set_institution_logo` en Producción con el OK de Miguel; después Miguel carga el logo desde la app.

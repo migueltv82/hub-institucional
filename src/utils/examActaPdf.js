@@ -49,18 +49,50 @@ export function buildActaPages(alumnos = [], rowsPerPage = ACTA_ROWS_PER_PAGE) {
   return pages
 }
 
-function drawActaPage(doc, { institutionName, mesa, rows, pageLabel }) {
-  const left = 15
-  const right = 195
-  let y = 18
+const LOGO_MAX_WIDTH_MM = 100
+const LOGO_MAX_HEIGHT_MM = 26
 
+// Medidas del logo en el acta (mm), centrado y sin deformar.
+export function fitActaLogo(widthPx, heightPx) {
+  if (!(widthPx > 0) || !(heightPx > 0)) return null
+  const scale = Math.min(LOGO_MAX_WIDTH_MM / widthPx, LOGO_MAX_HEIGHT_MM / heightPx)
+  const width = widthPx * scale
+  const height = heightPx * scale
+  return { width, height, x: 105 - width / 2 }
+}
+
+function readLogo(doc, logoDataUrl) {
+  const value = clean(logoDataUrl)
+  const format = value.match(/^data:image\/(png|jpeg);base64,/)?.[1]
+  if (!format) return null
+  try {
+    const properties = doc.getImageProperties(value)
+    const size = fitActaLogo(properties.width, properties.height)
+    return size ? { ...size, data: value, format: format === 'png' ? 'PNG' : 'JPEG' } : null
+  } catch {
+    return null
+  }
+}
+
+// Encabezado: el logo del colegio, o su nombre si no tiene logo cargado.
+function drawActaHeader(doc, { institutionName, logo }) {
+  if (logo) {
+    doc.addImage(logo.data, logo.format, logo.x, 8 + (LOGO_MAX_HEIGHT_MM - logo.height) / 2, logo.width, logo.height, 'institution-logo', 'FAST')
+    return 38
+  }
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
-  doc.text(clean(institutionName) || 'Instituto', 105, y, { align: 'center' })
+  doc.text(clean(institutionName) || 'Instituto', 105, 18, { align: 'center' })
   doc.setLineWidth(0.6)
-  doc.line(60, y + 3, 150, y + 3)
+  doc.line(60, 21, 150, 21)
+  return 32
+}
 
-  y += 14
+function drawActaPage(doc, { institutionName, logo, mesa, rows, pageLabel }) {
+  const left = 15
+  const right = 195
+  let y = drawActaHeader(doc, { institutionName, logo })
+
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.text('Folio Nº ________', right, y, { align: 'right' })
@@ -152,9 +184,10 @@ function drawActaPage(doc, { institutionName, mesa, rows, pageLabel }) {
 }
 
 // Un PDF con un acta por mesa (en orden). Las mesas sin inscriptos no se reciben: el que llama las filtra.
-export async function buildExamActasPdf({ institutionName, actas = [] }) {
+export async function buildExamActasPdf({ institutionName, institutionLogo = '', actas = [] }) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const logo = readLogo(doc, institutionLogo)
   let first = true
   actas.forEach(({ mesa, alumnos }) => {
     const pages = buildActaPages(alumnos)
@@ -163,6 +196,7 @@ export async function buildExamActasPdf({ institutionName, actas = [] }) {
       first = false
       drawActaPage(doc, {
         institutionName,
+        logo,
         mesa,
         rows,
         pageLabel: pages.length > 1 ? `Hoja ${index + 1} de ${pages.length}` : '',

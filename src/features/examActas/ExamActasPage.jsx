@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { ChevronLeft, ChevronRight, ClipboardCheck, Download, Printer, RefreshCcw, UserPlus, UsersRound, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ClipboardCheck, Download, ImageUp, Printer, RefreshCcw, Trash2, UserPlus, UsersRound, X } from 'lucide-react'
 import {
   canPrintActa,
   enrollStudentAsAdmin,
@@ -15,6 +15,7 @@ import {
   summarizeMesas,
 } from '../../services/examActas.js'
 import { buildExamActasPdf, formatActaDate } from '../../utils/examActaPdf.js'
+import { prepareLogoDataUrl, saveInstitutionLogo } from '../../services/institutionLogo.js'
 
 const EMPTY_ARRAY = []
 const ALL_CAREERS = ''
@@ -211,7 +212,77 @@ function SummaryStat({ label, value, tone = 'text-slate-950' }) {
   )
 }
 
-function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'main', canManage = false, students = EMPTY_ARRAY }) {
+function InstitutionLogoCard({ institutionId, logo, canChange, onChange }) {
+  const [saving, setSaving] = useState(false)
+
+  async function save(nextLogo, message) {
+    setSaving(true)
+    try {
+      onChange(await saveInstitutionLogo({ institutionId, logoDataUrl: nextLogo }))
+      toast.success(message)
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try {
+      await save(await prepareLogoDataUrl(file), 'Logo guardado: ya sale en las actas.')
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  if (!logo && !canChange) return null
+
+  return (
+    <section className="soft-card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-4">
+        {logo ? (
+          <img alt="Logo del colegio" className="h-14 max-w-[220px] object-contain" src={logo} />
+        ) : (
+          <div className="flex h-14 w-40 items-center justify-center rounded-md border border-dashed border-slate-300 text-xs text-slate-500">Sin logo</div>
+        )}
+        <div>
+          <p className="text-sm font-bold text-slate-900">Logo del colegio</p>
+          <p className="text-xs text-slate-600">{logo ? 'Sale en el encabezado de cada acta.' : 'Cargalo para que salga en el encabezado de las actas (PNG o JPG).'}</p>
+        </div>
+      </div>
+      {canChange && (
+        <div className="flex flex-wrap gap-2">
+          <label className={`btn-secondary cursor-pointer ${saving ? 'pointer-events-none opacity-60' : ''}`}>
+            <ImageUp className="h-4 w-4" />
+            {saving ? 'Guardando...' : logo ? 'Cambiar logo' : 'Cargar logo'}
+            <input accept="image/png,image/jpeg" aria-label="Archivo del logo" className="sr-only" disabled={saving} onChange={(event) => void handleFile(event)} type="file" />
+          </label>
+          {logo && (
+            <button className="btn-secondary" disabled={saving} onClick={() => void save('', 'Logo quitado.')} type="button">
+              <Trash2 className="h-4 w-4" />
+              Quitar
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ExamActasPage({
+  institutionId,
+  institutionName = '',
+  institutionLogoUrl = '',
+  workspaceKey = 'main',
+  canManage = false,
+  canChangeLogo = false,
+  onLogoChange,
+  students = EMPTY_ARRAY,
+}) {
+  const logo = institutionLogoUrl
   const [mesas, setMesas] = useState(EMPTY_ARRAY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -282,7 +353,7 @@ function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'ma
         toast.error('Las mesas ya no tienen alumnos inscriptos: no se genera ningun acta.')
         return
       }
-      const doc = await buildExamActasPdf({ institutionName, actas })
+      const doc = await buildExamActasPdf({ institutionName, institutionLogo: logo, actas })
       const fileName = actaFileName(label)
       if (mode === 'download') doc.save(fileName)
       else if (!openForPrinting(doc, fileName)) toast.success('El navegador bloqueo la ventana de impresion: se descargo el PDF.')
@@ -335,6 +406,8 @@ function ExamActasPage({ institutionId, institutionName = '', workspaceKey = 'ma
           </button>
         </div>
       </section>
+
+      <InstitutionLogoCard canChange={canChangeLogo} institutionId={institutionId} logo={logo} onChange={(nextLogo) => onLogoChange?.(nextLogo)} />
 
       <section className="soft-card space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">

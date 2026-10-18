@@ -143,6 +143,7 @@ const invokedRpcContracts = new Set([
   'list_active_login_institutions',
   'publish_exam_tables_from_schedule',
   'remove_user_membership',
+  'set_institution_logo',
   'set_user_access_status',
   'teacher_remove_student_subject_records',
   'teacher_reset_student_subject_academic_records',

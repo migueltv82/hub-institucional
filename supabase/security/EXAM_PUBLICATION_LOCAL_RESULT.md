@@ -146,3 +146,19 @@ Prueba de lectura en transacción con `rollback`, como admin de la institución:
 - `get_exam_table_roster` devuelve al alumno inscripto.
 
 La mesa publicada antes del cambio conserva el cierre a 48 h y el tribunal vacío hasta que se republique el cronograma.
+
+## EX.9: logo del colegio en las actas (local, run `e8b1d227da3cca31`: PASS)
+
+RPC nueva `set_institution_logo(uuid, text)` en `01_foundation.sql` (SECURITY DEFINER, `anon` sin EXECUTE).
+
+| Caso | Resultado |
+| --- | --- |
+| Admin carga PNG | OK; queda en `institutions.logo_url` y aparece en `list_active_login_institutions` |
+| Docente / alumno | `Acceso denegado` |
+| SVG / URL externa / más de 400.000 caracteres | `INSTITUTION_LOGO_INVALID` |
+| Admin manda vacío | El logo se quita (`null`) |
+
+Front:
+- Tarjeta "Logo del colegio" en Mesas y actas, visible para owner, admin o superadmin. El navegador achica la imagen a 900×300 como máximo.
+- El acta muestra el logo centrado en el encabezado (hasta 100×26 mm, sin deformar). Si no hay logo o es inválido, usa el nombre del colegio.
+- Verificado visualmente con el logo del modelo de Miguel: entra en A4 con los 25 renglones.
