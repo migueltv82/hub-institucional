@@ -946,3 +946,9 @@ Pendiente: redeploy de las Edge Functions (Miguel, CLI). Evidencia: `supabase/se
 ## 2026-10-18 — PROD1b: Edge Functions publicadas y smoke PASS (Miguel + Claude)
 
 `admin-users` v5 y `source-file-storage` v2 en Producción. Hubo una v4 publicada por error desde `main` (`release/v1` estaba ocupada por un worktree de Codex); se resolvió con `checkout --detach origin/release/v1`. smokeCheck PASS. Pendiente para el GO: los secrets de orígenes, cuando haya dominio.
+
+## 2026-10-18 — PB.5: el import de alumnos pisaba el nombre del alumno con el de la materia (Claude)
+
+Apareció al armar las planillas del UAT. `parseTemplateV2StudentsWorkbook` mezcla la fila del alumno con la fila del plan de estudios, y la fila del plan trae `nombre` (de la materia) y `observaciones`. Resultado: si la materia existía en el plan, todos los alumnos importados quedaban con la materia como nombre de pila, en su cuenta, en el padrón y en el listado del docente. Ahora se conservan `nombre` y `observaciones` del alumno.
+
+Test nuevo: falla sin el arreglo y pasa con él. `npm run check` PASS (2516 tests).

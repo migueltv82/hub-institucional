@@ -444,6 +444,9 @@ export async function parseTemplateV2StudentsWorkbook(file, { planesEstudio = []
       ...subject,
       id: studentIdentity,
       alumno_id: clean(row.alumno_id) || studentIdentity,
+      // PB.5: la fila del plan trae `nombre` (de la materia) y `observaciones`; no pisan los del alumno.
+      nombre: row.nombre,
+      observaciones: row.observaciones,
       plan_id: clean(subject.plan_id ?? subject.planId ?? row.plan_id),
       carrera_id: careerId,
       carrera: clean(subject.carrera) || careerById.get(careerId) || '',

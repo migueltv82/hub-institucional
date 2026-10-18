@@ -255,6 +255,40 @@ describe('parseTemplateV2StudentsWorkbook', () => {
     ])
   })
 
+  it('conserva el nombre y las observaciones del alumno cuando la materia existe en el plan (PB.5)', async () => {
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('alumnos_inscripciones')
+    sheet.addRow(['alumno_id', 'apellido', 'nombre', 'dni', 'email', 'carrera_id', 'plan_id', 'materia_id', 'materia_codigo', 'materia_nombre', 'observaciones'])
+    sheet.addRow(['alu-3', 'Perez', 'Ana', '30111222', 'ana@example.com', 'ING', 'ING-PLAN', 'ING01', 'ING01', 'Ingles I', 'del alumno'])
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const result = await parseTemplateV2StudentsWorkbook(workbookFile(buffer, 'alumnos.xlsx'), {
+      planesEstudio: [{
+        plan_id: 'ING-PLAN',
+        carrera_id: 'ING',
+        materia_id: 'ING01',
+        materia_codigo: 'ING01',
+        materia_nombre: 'Ingles I',
+        observaciones: 'del plan',
+        carrera: 'PROFESORADO DE INGLES',
+        materia: 'ING01',
+        nombre: 'Ingles I',
+        anio: 1,
+      }],
+    })
+
+    expect(result.datasets.alumnos).toEqual([
+      expect.objectContaining({
+        apellido: 'Perez',
+        nombre: 'Ana',
+        observaciones: 'del alumno',
+        carrera: 'PROFESORADO DE INGLES',
+        materia: 'ING01',
+        nombreMateria: 'Ingles I',
+      }),
+    ])
+  })
+
   it('resuelve el nombre de carrera por carrera_id cuando la fila no tiene materia_id (caso real: alumno sin cursada previa)', async () => {
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet('alumnos_inscripciones')
