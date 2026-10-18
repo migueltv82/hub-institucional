@@ -292,6 +292,14 @@ function mergeStudentRow(existing = {}, incoming = {}) {
     next[field] = value
   })
 
+  // PB.6: full_name se calcula al cargar el padron; si la planilla nueva corrige nombre o apellido
+  // y no trae full_name, se recalcula. Si no, el nombre viejo vuelve a aparecer y a sincronizarse.
+  const renamed = hasValueForMerge(incoming.nombre) || hasValueForMerge(incoming.apellido)
+  if (renamed && !hasValueForMerge(incoming.full_name) && hasValueForMerge(existing.full_name)) {
+    const fullName = [clean(next.nombre), clean(next.apellido)].filter(Boolean).join(' ')
+    if (fullName) next.full_name = fullName
+  }
+
   return next
 }
 

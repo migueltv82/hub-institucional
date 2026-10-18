@@ -900,6 +900,23 @@ export async function fetchWorkspaceSnapshot({ institutionId, workspaceKey, useR
   return fetchPromise
 }
 
+export const WORKSPACE_BUSY_MESSAGE = 'Se estaban guardando otros cambios de este espacio de trabajo al mismo tiempo. Espera unos segundos y volve a intentar.'
+
+// El gateway de archivos bloquea el workspace mientras guarda (SOURCE_FILE_WORKSPACE_BUSY, 55P03).
+// Si dos guardados se cruzan, se reintenta una vez; si sigue ocupado, se explica en lugar de mostrar el codigo.
+export function isWorkspaceBusyError(error) {
+  return error?.code === '55P03' || String(error?.message ?? '').includes('SOURCE_FILE_WORKSPACE_BUSY')
+}
+
+export async function retryWhenWorkspaceBusy(run, { delayMs = 800 } = {}) {
+  const first = await run()
+  if (!isWorkspaceBusyError(first?.error)) return first
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs))
+  const second = await run()
+  if (!isWorkspaceBusyError(second?.error)) return second
+  return { ...second, error: Object.assign(new Error(WORKSPACE_BUSY_MESSAGE), { code: second.error.code }) }
+}
+
 export async function saveWorkspaceSnapshot({
   institutionId,
   workspaceKey,
@@ -963,14 +980,14 @@ export async function saveWorkspaceSnapshot({
   }
 
   // Se usa upsert para que el mismo workspace se actualice sin requerir un create inicial.
-  const { error } = await supabase.from(TABLE_NAME).upsert({
+  const { error } = await retryWhenWorkspaceBusy(() => supabase.from(TABLE_NAME).upsert({
     institution_id: institutionId,
     workspace_key: workspaceKey,
     owner_user_id: ownerUserId ?? null,
     owner_email: ownerEmail,
     payload: normalizedPayload,
     updated_at: updatedAt,
-  })
+  }))
 
   if (error) {
     logWorkspaceSnapshotDiagnostic('warn', 'save:supabase-error', {

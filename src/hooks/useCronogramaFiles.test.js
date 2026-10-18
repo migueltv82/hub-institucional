@@ -85,6 +85,24 @@ describe('useCronogramaFiles', () => {
     ])
   })
 
+  it('recalcula el nombre completo cuando la planilla corrige nombre o apellido (PB.6)', () => {
+    const result = mergeStudentRows(
+      [{ alumno_id: 'a-1', nombre: 'MATERIA DE PRUEBA', apellido: 'ALUMNO', full_name: 'MATERIA DE PRUEBA ALUMNO', dni: '1' }],
+      [{ alumno_id: 'a-1', nombre: 'Uat', apellido: 'ALUMNO', dni: '1' }],
+    )
+
+    expect(result.rows).toEqual([{ alumno_id: 'a-1', nombre: 'Uat', apellido: 'ALUMNO', full_name: 'Uat ALUMNO', dni: '1' }])
+  })
+
+  it('respeta el nombre completo si la planilla lo trae', () => {
+    const result = mergeStudentRows(
+      [{ alumno_id: 'a-1', nombre: 'Ana', apellido: 'Perez', full_name: 'Ana Perez' }],
+      [{ alumno_id: 'a-1', nombre: 'Ana Maria', full_name: 'Perez, Ana Maria' }],
+    )
+
+    expect(result.rows[0].full_name).toBe('Perez, Ana Maria')
+  })
+
   it('actualiza el mismo alumno por DNI aunque la nueva planilla traiga otro id', () => {
     const result = mergeStudentRows(
       [{

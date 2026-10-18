@@ -1011,3 +1011,8 @@ Hoy el colegio maneja todo con planillas y sus sistemas actuales. Este sistema s
 - la base solo tiene datos de prueba;
 - backups y plan Pro (P10) quedan diferidos; se contrata Pro antes de la implementación;
 - la prioridad es que todo funcione de punta a punta.
+
+## 2026-10-18 — PB.6 y mensaje de workspace ocupado (Claude)
+
+- PB.6: al re-subir la planilla de alumnos se actualizaban `nombre` y `apellido`, pero `full_name` (calculado al cargar el padrón) quedaba viejo. El padrón y la sincronización de legajos usan ese campo, así que el nombre corregido volvía a pisarse. Ahora `full_name` se recalcula cuando la planilla corrige nombre o apellido y no trae su propio `full_name`. Test de regresión: falla sin el arreglo y pasa con él.
+- Si dos guardados del workspace se cruzan (`SOURCE_FILE_WORKSPACE_BUSY`, 55P03), el guardado reintenta una vez. Si sigue ocupado, muestra un mensaje en español en lugar del código. 4 tests.
