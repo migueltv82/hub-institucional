@@ -20,6 +20,7 @@ import {
   confirmExamAssignmentsAsAdmin,
   fetchExamTeacherAssignmentsForReview,
   publishExamTeacherAssignmentsForReview,
+  EXAM_PROCESS_RESET_LOCAL_ONLY_MESSAGE,
   resetExamProcessForWorkspace,
 } from '../../services/examTeacherAssignments.js'
 import {
@@ -875,7 +876,7 @@ function ExamEngineV21FieldTestPage({
     }
 
     const confirmed = typeof window === 'undefined' || window.confirm(
-      'Esto va a borrar el cronograma publicado, las mesas enviadas a docentes, sus confirmaciones u objeciones y las inscripciones a mesas de examen. Los padrones, materias, notas y asistencias no se tocan. Continuar?',
+      'Esto va a borrar el cronograma armado y volver al primer paso. Las mesas ya publicadas se actualizan cuando publiques el cronograma nuevo: las que no esten y no tengan inscriptos se cancelan. Los padrones, materias, notas y asistencias no se tocan. Continuar?',
     )
 
     if (!confirmed) return
@@ -896,9 +897,11 @@ function ExamEngineV21FieldTestPage({
 
       resetLocalRunState()
       toast.success(
-        resetResult.skippedRemote
-          ? 'Proceso reiniciado en esta sesion.'
-          : 'Proceso de mesas reiniciado. Ya podes probar desde cero.',
+        resetResult.warning === EXAM_PROCESS_RESET_LOCAL_ONLY_MESSAGE
+          ? EXAM_PROCESS_RESET_LOCAL_ONLY_MESSAGE
+          : resetResult.skippedRemote
+            ? 'Proceso reiniciado en esta sesion.'
+            : 'Proceso de mesas reiniciado. Ya podes probar desde cero.',
       )
     } catch (error) {
       toast.error(error.message)

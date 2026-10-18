@@ -513,7 +513,7 @@ describe('resetExamProcessForWorkspace', () => {
     expect(result).toEqual({ success: true, summary })
   })
 
-  it('devuelve una guia clara si falta ejecutar la migracion del reset', async () => {
+  it('reinicia solo en local si la base no tiene la RPC de reset (v1)', async () => {
     const { resetExamProcessForWorkspace } = await loadService({
       rpcImplementation: () => Promise.resolve({
         data: null,
@@ -523,8 +523,13 @@ describe('resetExamProcessForWorkspace', () => {
 
     const result = await resetExamProcessForWorkspace({ institutionId: 'inst-1' })
 
-    expect(result.success).toBe(false)
-    expect(result.error).toContain('repair_06_exam_process_reset_rpc.sql')
+    expect(result).toMatchObject({
+      success: true,
+      skippedRemote: true,
+      warning: expect.stringContaining('vuelvas a publicar el cronograma'),
+      summary: { exam_enrollments_reset: 0 },
+    })
+    expect(JSON.stringify(result)).not.toContain('repair_06')
   })
 
   it('permite continuar con reset local si la RPC remota de reset agota el timeout', async () => {

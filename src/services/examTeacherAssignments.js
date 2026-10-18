@@ -664,6 +664,9 @@ function isRecoverableExamProcessResetError(error) {
     errorText.includes('networkerror')
 }
 
+export const EXAM_PROCESS_RESET_LOCAL_ONLY_MESSAGE =
+  'Proceso reiniciado. Las mesas ya publicadas se actualizan cuando vuelvas a publicar el cronograma.'
+
 function buildSkippedRemoteResetResult(error) {
   return {
     success: true,
@@ -734,12 +737,15 @@ export async function resetExamProcessForWorkspace({
       return buildSkippedRemoteResetResult(error)
     }
 
-    const migrationHint = isMissingExamProcessResetFunction(error)
-      ? ' Ejecuta supabase/docs/repair_06_exam_process_reset_rpc.sql en Supabase y vuelve a intentar.'
-      : ''
+    // v1 no instala esta RPC (era del flujo de revision docente, diferido). El reset es local:
+    // las mesas ya publicadas se reconcilian al volver a publicar el cronograma.
+    if (isMissingExamProcessResetFunction(error)) {
+      return buildSkippedRemoteResetResult(EXAM_PROCESS_RESET_LOCAL_ONLY_MESSAGE)
+    }
+
     return {
       success: false,
-      error: `No se pudo reiniciar el proceso de mesas.${migrationHint} ${error.message}`,
+      error: `No se pudo reiniciar el proceso de mesas. ${error.message}`,
     }
   }
 
