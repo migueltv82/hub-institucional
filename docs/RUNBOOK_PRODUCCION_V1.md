@@ -315,6 +315,7 @@ Comentario en la tarjeta del deploy con: hash, hora de inicio y fin, archivos SQ
 | --- | --- |
 | No hay drift read-only de Producción posterior al 2026-09-25 (P7, P8) | [CODEX] PROD0 |
 | `SOURCE_FILE_STORAGE_ALLOWED_ORIGINS` no está documentado en `docs/SECURITY.md` ni en el checklist de Staging | Incluido en PROD0 como verificación; doc a cargo de Codex |
-| Plan de Supabase de Producción y existencia de backups automáticos/PITR sin confirmar (P10) | [HUMANO] |
+| P10: Producción sigue en plan **Free** (decisión de Miguel, 18/10), sin backups automáticos restaurables. Sin P10 no hay restore completo (Auth + datos): solo el archive propio del §3 y la reparación puntual de `public` (R4b) | Riesgo **abierto**: para el GO hace falta Pro o una aceptación de riesgo escrita de Miguel |
+| P11: branch protection de `main` | Cumplido el 18/10 (ver `docs/BRANCH_PROTECTION.md`) |
 | R4 sobre Supabase gestionado nunca ensayado; RB.1 descartó el restore manual del archive | Ensayar un restore gestionado en Staging, o aceptar el riesgo por escrito: decide [HUMANO] |
 | Smoke automático | Resuelto: `scripts/smokeCheck.mjs` (07.1) |

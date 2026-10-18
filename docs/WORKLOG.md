@@ -998,3 +998,9 @@ Opción (a): el catálogo se carga sin `--con-correlativas`. Las correlatividade
 Circuito completo con usuarios de prueba: superadmin → institución → planillas → accesos → catálogo → inscripción del alumno → asignación del docente → asistencia y notas → lectura del alumno.
 
 Bugs encontrados y corregidos en el camino: PB.5, acentos rotos, CAT.1/CAT.1b, PB.7 y PB.8. Pendientes: PB.6 y la limpieza de los datos de prueba antes de la carga real. Detalle en `supabase/security/UAT_PROD_RESULT.md`.
+
+## 2026-10-18 — Gates P10 y P11 (Miguel)
+
+- P11 cumplido: `main` protegida, con PR obligatorio y check `Quality gate (Node 22.13)` requerido; GitHub informa `protected = true`.
+- P10: por decisión de Miguel, Producción sigue en plan Free. Queda como riesgo abierto del GO: no hay restore completo; solo el `pg_dump` propio y la reparación puntual R4b.
+- Miguel borró el proyecto Supabase "Hub-Institucional-1", que no se usaba.

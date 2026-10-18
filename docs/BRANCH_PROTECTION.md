@@ -115,3 +115,7 @@ Para documentación, indicar qué enlaces y consistencia se revisaron; CI sigue 
 - [ ] No se afirma aplicación en producción sin verificarla contra ese ambiente. El CI local no aplica ni certifica migraciones remotas.
 
 El merge aprobado no equivale a autorización de despliegue: también debe completarse la [preparación para producción](PRODUCTION_READINESS.md).
+
+## Verificación 2026-10-18
+
+Miguel configuró la regla de `main` en Settings → Branches: PR obligatorio sin aprobaciones requeridas, check `Quality gate (Node 22.13)` requerido, sin bypass, sin force push y sin borrado. La API de ramas de GitHub informa `main: protected = true`. El gate P11 del runbook de Producción queda cumplido.
