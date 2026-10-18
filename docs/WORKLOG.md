@@ -925,3 +925,9 @@ Auditoría de SEC.3: PASS. Ajustes:
 - se documentó el rol docente global como riesgo v1.1.
 
 Matriz y QA.1: PASS.
+
+## 2026-10-17 — RB.1a parser CRLF y resultado fail-fast del harness
+
+La auditoría cruzada de RB.1 detectó que `runbookSqlBlocks` no extraía bloques SQL en checkouts CRLF y que el harness terminaba `COMPLETED` aunque §3.3 fallara o §4 no devolviera los valores esperados. El parser ahora acepta LF/CRLF y exige bloques no vacíos; la evaluación solo da PASS cuando los cuatro pasos obligatorios pasan y las cuatro fallas R4 coinciden con las causas documentadas.
+
+Run `26684363bed76de0`: §3.3, §4, backup y listado PASS; cuatro fallas R4 esperadas; focales 6/6; cleanup 0. Staging, Production, SQL remoto y deploy: NONE.

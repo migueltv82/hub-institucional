@@ -1,6 +1,6 @@
 # RB.1 — Comandos del runbook de Producción ensayados en local
 
-Fecha: 2026-10-17. Implementado por Claude mientras Codex no estaba disponible; la auditoría queda para Codex. Evidencia: `RUNBOOK_COMMANDS_LOCAL_EVIDENCE.json`. Reproducción: `node scripts/validateRunbookCommandsLocal.mjs`.
+Fecha: 2026-10-17. Implementado por Claude mientras Codex no estaba disponible y corregido por Codex en RB.1a tras la auditoría cruzada. Evidencia: `RUNBOOK_COMMANDS_LOCAL_EVIDENCE.json`. Reproducción: `node scripts/validateRunbookCommandsLocal.mjs`.
 
 ## Método
 
@@ -10,7 +10,7 @@ Stack descartable (`scripts/localSupabaseStack.mjs`): baseline de 9 SQL, 2 usuar
 
 | Paso del runbook | Resultado |
 | --- | --- |
-| §3.1 `pg_dump --format=custom --no-owner --no-privileges --schema=public --schema=auth --schema=storage` como `postgres` | **OK**, archive con 833 entradas; `pg_restore --list` lo lee |
+| §3.1 `pg_dump --format=custom --no-owner --no-privileges --schema=public --schema=auth --schema=storage` como `postgres` | **OK**, archive con 835 entradas; `pg_restore --list` lo lee |
 | §3.3 snapshot de catálogo | **OK** |
 | §4 verificación post-SQL | **OK**: `handle_new_user_ok = t`, `firmas = 1`, `tablas_sin_rls = 0` de 40 |
 | §9-R4 `pg_restore --single-transaction` sobre base vacía | **FALLA**: `schema "public" already exists` |
@@ -27,3 +27,9 @@ Aunque se resolviera el orden de las FK, el trigger `handle_new_user` sobre `aut
 - **P10 pasa a ser obligatorio**: sin backups/PITR activos en Producción no hay rollback de datos viable. Decide Miguel.
 
 Cleanup: 0 bases, 0 contenedores, 0 archivos temporales; las bases destino extra también se borraron. Staging, Production, SQL remoto y deploy: NONE.
+
+## Correctivo RB.1a
+
+La auditoría cruzada encontró que el checkout de Windows convertía el runbook a CRLF. El parser exigía `LF` exacto, omitía los bloques SQL y aun así devolvía `COMPLETED` con código 0. RB.1a acepta LF/CRLF, exige bloques no vacíos y solo devuelve PASS cuando §3.3, §4, `pg_dump` y `pg_restore --list` pasan, §4 tiene los valores esperados y las cuatro fallas R4 coinciden con las causas documentadas.
+
+Run `26684363bed76de0`: PASS semántico, focales 6/6 y cleanup 0.

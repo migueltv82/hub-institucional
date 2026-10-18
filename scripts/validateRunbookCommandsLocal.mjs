@@ -14,6 +14,18 @@ const RUNBOOK = 'docs/RUNBOOK_PRODUCCION_V1.md';
 const DUMP = '/tmp/rb1_prod_pre_v1.dump';
 // Tablas cuya cantidad de filas se compara entre origen y restore.
 export const COUNTED_TABLES = Object.freeze(['auth.users', 'auth.identities', 'public.profiles', 'public.institutions', 'public.memberships', 'public.student_records', 'public.admin_audit_logs', 'storage.buckets', 'storage.objects']);
+export const REQUIRED_SUCCESS_STEPS = Object.freeze([
+  '3.3_catalog_snapshot_as_postgres',
+  '4_post_sql_verification_as_postgres',
+  '3.1_pg_dump_as_postgres',
+  '3.1_pg_restore_list',
+]);
+export const EXPECTED_R4_FAILURES = Object.freeze({
+  R4_restore_empty: /schema ["']public["'] already exists/i,
+  R4_restore_fresh_project: /schema ["']auth["'] already exists/i,
+  R4_restore_fresh_baseline_data_only: /identities_user_id_fkey/i,
+  R4_restore_fresh_baseline_data_only_disable_triggers: /must be owner of table audit_log_entries/i,
+});
 
 // Extrae los bloques ```sql de una seccion del runbook, para correr exactamente lo documentado.
 export function runbookSqlBlocks(markdown, heading) {
@@ -21,7 +33,23 @@ export function runbookSqlBlocks(markdown, heading) {
   assert.ok(start >= 0, `Seccion no encontrada: ${heading}`);
   const next = markdown.indexOf('\n## ', start + heading.length);
   const section = markdown.slice(start, next < 0 ? undefined : next);
-  return [...section.matchAll(/```sql\n([\s\S]*?)```/g)].map(match => match[1]);
+  const blocks = [...section.matchAll(/```sql\r?\n([\s\S]*?)```/g)]
+    .map(match => match[1].replaceAll('\r\n', '\n'))
+    .filter(sql => sql.trim());
+  assert.ok(blocks.length > 0, `Bloque SQL no encontrado en: ${heading}`);
+  return blocks;
+}
+
+export function evaluateRunbookSteps(steps) {
+  const requiredFailures = REQUIRED_SUCCESS_STEPS.filter(name => {
+    const outcome = steps[name];
+    return !outcome?.ok || (name === '4_post_sql_verification_as_postgres' && outcome.expected !== true);
+  });
+  const unexpectedR4 = Object.entries(EXPECTED_R4_FAILURES).filter(([name, pattern]) => {
+    const outcome = steps[name];
+    return !outcome || outcome.ok || !pattern.test(String(outcome.error ?? ''));
+  }).map(([name]) => name);
+  return { pass: requiredFailures.length === 0 && unexpectedR4.length === 0, requiredFailures, unexpectedR4 };
 }
 
 export function countsSql() {
@@ -109,7 +137,8 @@ insert into storage.objects(bucket_id,name,owner,metadata) values ('workspace-so
         report[`restore_${kind}`] = { countsEqual: JSON.stringify(counts) === JSON.stringify(report.sourceCounts), catalogEqual: JSON.stringify(catalog) === JSON.stringify(report.sourceCatalog), counts, catalog };
       }
     }
-    report.result = 'COMPLETED';
+    report.validation = evaluateRunbookSteps(report.steps);
+    report.result = report.validation.pass ? 'PASS' : 'FAIL';
   } catch (error) { report.result = 'FAIL'; report.error = `Failed at ${step}: ${String(error.message).split('\n')[0]}`; }
   finally {
     const errors = [];
@@ -123,6 +152,6 @@ insert into storage.objects(bucket_id,name,owner,metadata) values ('workspace-so
     if (stack && !stack.tornDown) report.cleanup = await stack.teardown();
     if (errors.length) report.cleanupExtra = errors;
   }
-  console.log(JSON.stringify(report, null, 2)); if (report.result !== 'COMPLETED') process.exitCode = 1; return report;
+  console.log(JSON.stringify(report, null, 2)); if (report.result !== 'PASS') process.exitCode = 1; return report;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main();
