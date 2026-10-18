@@ -1128,3 +1128,11 @@ Miguel imprime las actas el día de cada mesa. Mejoras en la sección:
 - **Correcciones:** hora en formato de 24 h, aula sin repetir la palabra y aviso claro si la base todavía no tiene las funciones (PGRST202).
 
 Verificado en navegador real (Chromium, con datos de muestra y servicios simulados): escritorio, celular sin scroll horizontal y flujo de impresión (abre 3 actas y avisa que 1 mesa sin inscriptos no se imprime). Tests de pantalla y servicio actualizados. `npm run check` PASS. Sigue pendiente aplicar EX.7/EX.8 en Producción con el OK de Miguel.
+
+## 2026-10-18 — EXP.1: Tope de mesas al publicar (Codex)
+
+- `publishExamTables` valida el payload normalizado contra `MAX_EXAM_PUBLICATION_TABLES` (400) antes de llamar a la RPC. Si excede el limite, informa: "El cronograma tiene demasiadas mesas para publicar de una vez".
+- Tests de frontera: 400 mesas se publican con una sola llamada; 401 se rechazan sin RPC. Focal: 6/6 PASS.
+- Revision independiente CHIEF CODE AUDITOR: PASS, sin hallazgos introducidos. Seguridad: guard local de UX; la autorizacion sigue en el servidor, sin nuevos datos, secretos ni SQL. Revision adversarial: limite aplicado al payload real; consumidor captura el Error.
+- `quality:deps`: PASS (0 high/critical; 7 moderate preexistentes). Typecheck no disponible (JS). Database/RLS: no aplica. Browser/E2E: no ejecutado; cambio acotado al servicio, consumidor revisado. Riesgo residual: no se verifico el aviso en navegador real.
+- Validacion final: npm run check PASS (audit:repo, lint, 329 archivos / 2581 tests, build y audit:prod). Performance: WARNING por chunks >500 kB existentes; sin medicion de mejora. Code Review/Security/Adversarial: PASS; sin hallazgos introducidos. QUALITY GATE: PASS WITH WARNINGS (aviso no verificado en navegador y deuda moderate existente).

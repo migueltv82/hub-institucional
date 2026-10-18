@@ -3,6 +3,8 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 // EX.1: al publicar el cronograma final, crea o actualiza las mesas en exam_tables para que el
 // portal alumno las muestre y la inscripcion (upsert_exam_enrollment_from_portal) las acepte.
 // La regla y los permisos viven en la RPC publish_exam_tables_from_schedule (08_exam_tables.sql).
+export const MAX_EXAM_PUBLICATION_TABLES = 400
+
 const MESA_FIELDS = ['id', 'materia', 'codigo', 'carrera', 'fechaIso', 'fechaSugerida', 'inicio', 'fin', 'aula', 'exam_call', 'llamado', 'exam_type', 'inscription_mode', 'tribunal_dnis', 'titular_dni', 'profesorTitular', 'vocal1', 'vocal2']
 
 export function buildExamPublicationPayload(cronograma = []) {
@@ -18,10 +20,15 @@ export async function publishExamTables({ institutionId, workspaceKey = 'main', 
   if (!isSupabaseConfigured || !supabase) throw new Error('Publicar mesas requiere Supabase configurado.')
   if (!institutionId) throw new Error('No hay una institucion activa para publicar las mesas.')
 
+  const payload = buildExamPublicationPayload(cronograma)
+  if (payload.length > MAX_EXAM_PUBLICATION_TABLES) {
+    throw new Error('El cronograma tiene demasiadas mesas para publicar de una vez')
+  }
+
   const { data, error } = await supabase.rpc('publish_exam_tables_from_schedule', {
     target_institution_id: institutionId,
     target_workspace_key: workspaceKey,
-    target_mesas: buildExamPublicationPayload(cronograma),
+    target_mesas: payload,
   })
   if (error) {
     if (error.code === '42501') throw new Error('Tu rol no permite publicar mesas para los alumnos.')

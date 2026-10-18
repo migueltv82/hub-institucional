@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const rpc = vi.fn()
 vi.mock('../lib/supabase.js', () => ({ isSupabaseConfigured: true, supabase: { rpc: (...args) => rpc(...args) } }))
 
-const { buildExamPublicationPayload, describeExamPublication, publishExamTables } = await import('./examTablePublication.js')
+const { MAX_EXAM_PUBLICATION_TABLES, buildExamPublicationPayload, describeExamPublication, publishExamTables } = await import('./examTablePublication.js')
 
 const mesa = {
   id: 'exam-engine-v21-m1-2026-11-02', materia: 'UAT01', codigo: 'UAT01', carrera: 'PROFESORADO DE PRUEBA UAT', fechaIso: '2026-11-02',
@@ -39,6 +39,21 @@ describe('examTablePublication', () => {
     ])
   })
 
+  it('publica un payload de exactamente 400 mesas', async () => {
+    expect(MAX_EXAM_PUBLICATION_TABLES).toBe(400)
+    const cronograma = Array.from({ length: 400 }, (_, i) => ({ ...mesa, id: `m${i}` }))
+    rpc.mockResolvedValue({ data: { publicadas: 400 }, error: null })
+    await expect(publishExamTables({ institutionId: 'inst-1', cronograma })).resolves.toMatchObject({ publicadas: 400 })
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('publish_exam_tables_from_schedule', {
+      target_institution_id: 'inst-1', target_workspace_key: 'main', target_mesas: buildExamPublicationPayload(cronograma),
+    })
+  })
+
+  it('rechaza 401 mesas sin llamar a la RPC', async () => {
+    const cronograma = Array.from({ length: 401 }, (_, i) => ({ ...mesa, id: `m${i}` }))
+    await expect(publishExamTables({ institutionId: 'inst-1', cronograma })).rejects.toThrow('El cronograma tiene demasiadas mesas para publicar de una vez')
+    expect(rpc).not.toHaveBeenCalled()
+  })
   it('traduce el rechazo por permisos', async () => {
     rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'Acceso denegado' } })
     await expect(publishExamTables({ institutionId: 'inst-1', cronograma: [mesa] })).rejects.toThrow('Tu rol no permite publicar mesas para los alumnos.')
