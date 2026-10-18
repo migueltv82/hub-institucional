@@ -1245,3 +1245,249 @@ USING (
   )
 );
 -- END teacher assignment SELECT policy
+
+-- ============================================================
+-- EX.1: publicar el cronograma final en exam_tables
+-- ============================================================
+-- "Publicar cronograma" guarda las mesas en workspace_snapshots.cronograma. El portal alumno
+-- (05 visible_schedule) y la inscripcion (upsert_exam_enrollment_from_portal) exigen ademas una
+-- fila en exam_tables con su exam_table_subjects. Esta RPC las crea o actualiza desde las mesas
+-- publicadas. Solo owner/admin/editor de la institucion activa, o superadmin.
+-- Claves: legacy_snapshot_id = id publicado ("exam-engine-v21-<mesa>-<fecha>", el que manda el alumno);
+-- legacy_exam_table_id = id sin prefijo ni fecha (el que cruza 05). Una mesa que ya no esta en el
+-- cronograma se cancela, salvo que tenga inscriptos: entonces se conserva y se informa.
+create or replace function public.publish_exam_tables_from_schedule(
+  target_institution_id uuid,
+  target_workspace_key text,
+  target_mesas jsonb,
+  target_enrollment_opens_at timestamptz default null,
+  target_close_hours_before integer default 48
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+  opens_at timestamptz := coalesce(target_enrollment_opens_at, timezone('utc', now()));
+  close_hours integer := greatest(coalesce(target_close_hours_before, 48), 0);
+  mesa jsonb;
+  published_id text;
+  legacy_key text;
+  subject_code text;
+  career_text text;
+  exam_date text;
+  start_time text;
+  end_time text;
+  starts_at timestamptz;
+  ends_at timestamptz;
+  closes_at timestamptz;
+  call_key text;
+  career_row record;
+  subject_row record;
+  table_id uuid;
+  primary_plan_subject record;
+  published_ids text[] := array[]::text[];
+  created_count integer := 0;
+  updated_count integer := 0;
+  skipped jsonb := '[]'::jsonb;
+  cancelled_count integer := 0;
+  kept jsonb := '[]'::jsonb;
+  stale record;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+
+  if target_institution_id is null
+    or not (
+      public.is_super_admin()
+      or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
+    )
+    or not exists (select 1 from public.institutions where id = target_institution_id and status = 'active')
+  then
+    raise exception 'Acceso denegado: solo el personal de gestion de la institucion publica mesas.' using errcode = '42501';
+  end if;
+
+  if jsonb_typeof(coalesce(target_mesas, 'null'::jsonb)) <> 'array' then
+    raise exception 'EXAM_PUBLISH_INVALID_PAYLOAD' using errcode = '22023';
+  end if;
+
+  -- Una publicacion a la vez por workspace.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('exam_publish:' || target_institution_id::text || ':' || clean_workspace_key, 0));
+
+  for mesa in select value from jsonb_array_elements(target_mesas) loop
+    published_id := btrim(coalesce(mesa ->> 'id', ''));
+    legacy_key := regexp_replace(regexp_replace(lower(published_id), '^exam-engine-v21-', ''), '-[0-9]{4}-[0-9]{2}-[0-9]{2}$', '');
+    subject_code := btrim(coalesce(mesa ->> 'materia', mesa ->> 'codigo', ''));
+    career_text := btrim(coalesce(mesa ->> 'carrera', ''));
+    exam_date := btrim(coalesce(mesa ->> 'fechaIso', mesa ->> 'fechaSugerida', ''));
+    start_time := coalesce(nullif(btrim(coalesce(mesa ->> 'inicio', '')), ''), '08:00');
+    end_time := nullif(btrim(coalesce(mesa ->> 'fin', '')), '');
+
+    if published_id = '' or legacy_key = '' or subject_code = '' or career_text = '' then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'Faltan id, materia o carrera.');
+      continue;
+    end if;
+    if exam_date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' or start_time !~ '^[0-9]{1,2}:[0-9]{2}' or (end_time is not null and end_time !~ '^[0-9]{1,2}:[0-9]{2}') then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'Fecha u hora invalida.');
+      continue;
+    end if;
+
+    select career.id, career.name into career_row
+    from public.careers career
+    where career.institution_id = target_institution_id
+      and career.status = 'active'
+      and (career.name = career_text or career.external_code = career_text)
+    order by (career.name = career_text) desc
+    limit 1;
+    if career_row.id is null then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', format('La carrera %s no esta en el catalogo academico.', career_text));
+      continue;
+    end if;
+
+    select subject.id, subject.code into subject_row
+    from public.subjects subject
+    where subject.institution_id = target_institution_id and subject.code = subject_code;
+    if subject_row.id is null then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', format('La materia %s no esta en el catalogo academico.', subject_code));
+      continue;
+    end if;
+
+    -- Plan principal: el activo mas reciente de la carrera que contiene la materia.
+    select plan_subject.id as plan_subject_id, plan.id as plan_id into primary_plan_subject
+    from public.study_plan_subjects plan_subject
+    join public.study_plans plan on plan.institution_id = plan_subject.institution_id and plan.id = plan_subject.plan_id
+    where plan_subject.institution_id = target_institution_id
+      and plan_subject.subject_id = subject_row.id
+      and plan.career_id = career_row.id
+    order by (plan.status = 'active') desc, plan.plan_year desc nulls last, plan.created_at desc
+    limit 1;
+    if primary_plan_subject.plan_subject_id is null then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', format('La materia %s no esta en ningun plan de %s.', subject_code, career_row.name));
+      continue;
+    end if;
+
+    starts_at := (exam_date || ' ' || start_time)::timestamp at time zone 'America/Argentina/Buenos_Aires';
+    ends_at := case when end_time is null then null else (exam_date || ' ' || end_time)::timestamp at time zone 'America/Argentina/Buenos_Aires' end;
+    if ends_at is not null and ends_at <= starts_at then
+      ends_at := null;
+    end if;
+    closes_at := starts_at - make_interval(hours => close_hours);
+    if closes_at <= opens_at then
+      closes_at := starts_at;
+    end if;
+    if closes_at <= opens_at then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'La mesa ya paso: no se abre inscripcion.');
+      continue;
+    end if;
+
+    call_key := coalesce(nullif(btrim(coalesce(mesa ->> 'exam_call', '')), ''), 'first');
+
+    select exam_table.id into table_id
+    from public.exam_tables exam_table
+    where exam_table.institution_id = target_institution_id
+      and exam_table.workspace_key = clean_workspace_key
+      and exam_table.legacy_exam_table_id = legacy_key
+    for update;
+
+    if table_id is null then
+      insert into public.exam_tables (
+        institution_id, workspace_key, primary_career_id, primary_study_plan_id, exam_period_key, exam_call_key,
+        exam_call_label, exam_type, scheduled_starts_at, scheduled_ends_at, room, enrollment_opens_at,
+        enrollment_closes_at, status, legacy_exam_table_id, legacy_snapshot_id, source, metadata, created_by, updated_by
+      ) values (
+        target_institution_id, clean_workspace_key, career_row.id, primary_plan_subject.plan_id, left(exam_date, 7), call_key,
+        coalesce(nullif(btrim(coalesce(mesa ->> 'llamado', '')), ''), 'Primer llamado'),
+        case when mesa ->> 'exam_type' = 'special' then 'special' else 'regular' end,
+        starts_at, ends_at, nullif(btrim(coalesce(mesa ->> 'aula', '')), ''), opens_at, closes_at, 'open',
+        legacy_key, published_id, 'exam_engine_v21',
+        jsonb_build_object('inscription_mode', coalesce(nullif(mesa ->> 'inscription_mode', ''), 'student_self_service'), 'published_by', 'publish_exam_tables_from_schedule'),
+        (select auth.uid()), (select auth.uid())
+      )
+      returning id into table_id;
+      created_count := created_count + 1;
+    else
+      update public.exam_tables
+      set primary_career_id = career_row.id,
+          primary_study_plan_id = primary_plan_subject.plan_id,
+          exam_period_key = left(exam_date, 7),
+          exam_call_key = call_key,
+          exam_call_label = coalesce(nullif(btrim(coalesce(mesa ->> 'llamado', '')), ''), exam_call_label),
+          scheduled_starts_at = starts_at,
+          scheduled_ends_at = ends_at,
+          room = nullif(btrim(coalesce(mesa ->> 'aula', '')), ''),
+          enrollment_opens_at = least(enrollment_opens_at, opens_at),
+          enrollment_closes_at = closes_at,
+          status = 'open',
+          closed_at = null,
+          legacy_snapshot_id = published_id,
+          updated_by = (select auth.uid()),
+          updated_at = timezone('utc', now()),
+          lock_version = lock_version + 1
+      where id = table_id and institution_id = target_institution_id;
+      updated_count := updated_count + 1;
+    end if;
+
+    -- Una fila por plan de la carrera que contiene la materia; la del plan principal es la primaria.
+    -- Primero se baja la marca de primaria vieja: el indice admite una sola primaria por mesa.
+    update public.exam_table_subjects
+    set is_primary = false
+    where institution_id = target_institution_id and exam_table_id = table_id and is_primary
+      and study_plan_subject_id <> primary_plan_subject.plan_subject_id;
+    update public.exam_table_subjects
+    set is_primary = true
+    where institution_id = target_institution_id and exam_table_id = table_id and not is_primary
+      and study_plan_subject_id = primary_plan_subject.plan_subject_id;
+    insert into public.exam_table_subjects (institution_id, exam_table_id, career_id, study_plan_id, study_plan_subject_id, subject_id, is_primary, legacy_subject_id, legacy_program_id)
+    select target_institution_id, table_id, career_row.id, plan_subject.plan_id, plan_subject.id, subject_row.id,
+      plan_subject.id = primary_plan_subject.plan_subject_id, subject_row.code, career_row.name
+    from public.study_plan_subjects plan_subject
+    join public.study_plans plan on plan.institution_id = plan_subject.institution_id and plan.id = plan_subject.plan_id
+    where plan_subject.institution_id = target_institution_id
+      and plan_subject.subject_id = subject_row.id
+      and plan.career_id = career_row.id
+    on conflict (institution_id, exam_table_id, study_plan_subject_id) do nothing;
+
+    published_ids := published_ids || legacy_key;
+  end loop;
+
+  -- Mesas del motor que ya no estan publicadas: se cancelan si no tienen inscriptos.
+  for stale in
+    select exam_table.id, exam_table.legacy_snapshot_id
+    from public.exam_tables exam_table
+    where exam_table.institution_id = target_institution_id
+      and exam_table.workspace_key = clean_workspace_key
+      and exam_table.source = 'exam_engine_v21'
+      and exam_table.status in ('draft', 'teacher_review', 'confirmed', 'open')
+      and not (exam_table.legacy_exam_table_id = any(published_ids))
+    for update
+  loop
+    if exists (
+      select 1 from public.exam_enrollments enrollment
+      where enrollment.institution_id = target_institution_id and enrollment.exam_table_id = stale.id and enrollment.status = 'registered'
+    ) then
+      kept := kept || jsonb_build_object('id', stale.legacy_snapshot_id, 'motivo', 'Tiene alumnos inscriptos: no se cancela automaticamente.');
+    else
+      update public.exam_tables
+      set status = 'cancelled', closed_at = timezone('utc', now()), updated_by = (select auth.uid()),
+          updated_at = timezone('utc', now()), lock_version = lock_version + 1
+      where id = stale.id and institution_id = target_institution_id;
+      cancelled_count := cancelled_count + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object(
+    'publicadas', created_count + updated_count,
+    'nuevas', created_count,
+    'actualizadas', updated_count,
+    'omitidas', skipped,
+    'canceladas', cancelled_count,
+    'conservadas_con_inscriptos', kept
+  );
+end;
+$$;
+
+revoke execute on function public.publish_exam_tables_from_schedule(uuid, text, jsonb, timestamptz, integer) from public, anon;
+grant execute on function public.publish_exam_tables_from_schedule(uuid, text, jsonb, timestamptz, integer) to authenticated;

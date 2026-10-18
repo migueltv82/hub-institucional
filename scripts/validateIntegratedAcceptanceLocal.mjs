@@ -192,9 +192,14 @@ export async function main() {
       phase = `student exam ${mode}: not regular, UI`;
       stack.sql(`update public.student_grades set academic_status='libre' where ${gradeFilter} and academic_status <> 'pending';`);
       await page.reload({ waitUntil: 'networkidle' });
-      const blockedButton = page.getByRole('button', { name: 'Inscribirme', exact: true }).first();
-      await blockedButton.waitFor();
-      result.uiBlocked = await blockedButton.isDisabled() && await page.locator('p.border-amber-200').count() > 0;
+      // EX.1: el portal ya no lista la mesa a un alumno no regular (misma regla que la RPC). Si la
+      // listara, el boton tiene que estar deshabilitado con su motivo. Ningun boton habilitado.
+      const enrollButtons = page.getByRole('button', { name: 'Inscribirme', exact: true });
+      const buttonCount = await enrollButtons.count();
+      const enabledButtons = [];
+      for (let index = 0; index < buttonCount; index += 1) if (await enrollButtons.nth(index).isEnabled()) enabledButtons.push(index);
+      result.uiHidden = buttonCount === 0;
+      result.uiBlocked = enabledButtons.length === 0 && (result.uiHidden || await page.locator('p.border-amber-200').count() > 0);
       assert.ok(result.uiBlocked, `UI must block a non-regular student (${mode})`);
       // Negativos adversariales desde la pagina: el token se usa dentro del navegador y nunca vuelve al harness.
       phase = `adversarial ${mode}: Edge replay`;

@@ -199,6 +199,38 @@ begin
       and latest.regularity_valid is distinct from false
       and scp.career_id = any(career_ids)
   ),
+  -- EX.1: que mesas ve el alumno sale de la MISMA regla que decide la inscripcion
+  -- (upsert_exam_enrollment_from_portal): la ultima condicion no-pending cargada por el docente en
+  -- student_grades para esa materia y carrera es 'regular'. Match exacto de subject_id/program_id.
+  exam_eligible_subjects as (
+    select distinct
+      subject.id as subject_uuid,
+      upper(btrim(subject.code)) as subject_code,
+      career.id as career_id,
+      career.name as career_name
+    from (
+      select distinct on (grade.subject_id, grade.program_id)
+        grade.subject_id,
+        grade.program_id,
+        grade.academic_status
+      from public.student_grades grade
+      where grade.institution_id = target_institution_id
+        and grade.workspace_key = normalized_workspace_key
+        and grade.deleted_at is null
+        and grade.student_id = caller_id
+        and grade.student_record_id = any(student_record_ids)
+        and grade.academic_status <> 'pending'
+      order by grade.subject_id, grade.program_id, grade.updated_at desc nulls last, grade.created_at desc nulls last
+    ) latest
+    join public.subjects subject
+      on subject.institution_id = target_institution_id
+     and subject.code = latest.subject_id
+    join public.careers career
+      on career.institution_id = target_institution_id
+     and (career.name = latest.program_id or career.external_code = latest.program_id)
+    where latest.academic_status = 'regular'
+      and career.id = any(career_ids)
+  ),
   workspace_snapshot as (
     select snapshot.payload, snapshot.updated_at
     from public.workspace_snapshots snapshot
@@ -249,7 +281,7 @@ begin
     from schedule_subject_codes
     join schedule_rows
       on schedule_rows.schedule_order = schedule_subject_codes.schedule_order
-    join eligible_regular_subjects eligible
+    join exam_eligible_subjects eligible
       on eligible.subject_uuid = schedule_subject_codes.subject_uuid
     where (
         schedule_rows.mesa_career_key in ('', 'career', 'carrera', 'carrerageneral', 'general', 'program', 'programa')

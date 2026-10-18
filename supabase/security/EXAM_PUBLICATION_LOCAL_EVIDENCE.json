@@ -1,0 +1,79 @@
+{
+  "task": "EX.1",
+  "run": "0aa8949b932b5bef",
+  "staging": "NONE",
+  "production": "NONE",
+  "teacherPublish": "Acceso denegado: solo el personal de gestion de la institucion publica mesas.",
+  "studentPublish": "Acceso denegado: solo el personal de gestion de la institucion publica mesas.",
+  "beforePublish": {
+    "regularSees": [],
+    "regularEnroll": "EXAM_TABLE_NOT_AVAILABLE"
+  },
+  "firstPublish": {
+    "nuevas": 2,
+    "omitidas": [
+      {
+        "id": "exam-engine-v21-m3-2026-11-02",
+        "motivo": "La materia ZZZ99 no esta en el catalogo academico."
+      }
+    ],
+    "canceladas": 0,
+    "publicadas": 2,
+    "actualizadas": 0,
+    "conservadas_con_inscriptos": []
+  },
+  "tables": [
+    {
+      "legacy": "m1",
+      "snapshot": "exam-engine-v21-m1-2026-11-02",
+      "status": "open",
+      "subjects": 1,
+      "window_ok": true
+    },
+    {
+      "legacy": "m2",
+      "snapshot": "exam-engine-v21-m2-2026-11-02",
+      "status": "open",
+      "subjects": 1,
+      "window_ok": true
+    }
+  ],
+  "regularSees": [
+    "exam-engine-v21-m1-2026-11-02",
+    "exam-engine-v21-m2-2026-11-02"
+  ],
+  "libreSees": [],
+  "regularEnroll": "registered",
+  "libreEnroll": "EXAM_REGULARITY_REQUIRED",
+  "secondPublish": {
+    "nuevas": 0,
+    "omitidas": [],
+    "canceladas": 0,
+    "publicadas": 2,
+    "actualizadas": 2,
+    "conservadas_con_inscriptos": []
+  },
+  "tableCountAfterSecond": 2,
+  "emptyPublish": {
+    "nuevas": 0,
+    "omitidas": [],
+    "canceladas": 1,
+    "publicadas": 0,
+    "actualizadas": 0,
+    "conservadas_con_inscriptos": [
+      {
+        "id": "exam-engine-v21-m1-2026-11-02",
+        "motivo": "Tiene alumnos inscriptos: no se cancela automaticamente."
+      }
+    ]
+  },
+  "statusesAfterEmpty": {
+    "m1": "open",
+    "m2": "cancelled"
+  },
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "errors": []
+  }
+}

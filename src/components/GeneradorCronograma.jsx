@@ -25,6 +25,7 @@ import {
 import { applyStudentAccessResultsToRows, provisionStudentAccess } from '../services/studentAccess.js'
 import { fetchInstitutionAcademicCanonicalData } from '../services/academicCanonicalData.js'
 import { showImportantNotice } from '../services/importantNotice.js'
+import { describeExamPublication, publishExamTables } from '../services/examTablePublication.js'
 import {
   resetStudentAcademicRecords,
   resetStudentAcademicSnapshotData,
@@ -497,12 +498,27 @@ function GeneradorCronograma() {
 
     try {
       await saveSnapshotNow(nextSnapshot)
-      return true
     } catch (error) {
       toast.error(`No se pudo guardar el cronograma final: ${error.message}`)
       return false
     }
-  }, [canEditWorkspace, saveSnapshotNow, snapshotPayload])
+
+    if (!useRemoteWorkspace) return true
+
+    // EX.1: el cronograma ya quedo guardado; ahora se abren las mesas para la inscripcion de alumnos.
+    try {
+      const publication = await publishExamTables({ institutionId: activeInstitutionId, workspaceKey, cronograma: publishedCronograma })
+      showImportantNotice({
+        tone: publication.omitidas.length ? 'amber' : 'success',
+        title: 'Mesas publicadas para los alumnos',
+        message: 'Los alumnos regulares ya pueden ver estas mesas e inscribirse desde su portal.',
+        details: describeExamPublication(publication),
+      })
+    } catch (error) {
+      toast.error(`El cronograma quedo guardado, pero no se abrio la inscripcion: ${error.message}`)
+    }
+    return true
+  }, [activeInstitutionId, canEditWorkspace, saveSnapshotNow, snapshotPayload, useRemoteWorkspace, workspaceKey])
 
   const persistirEstadoMotorMesas = useCallback(async (nextState) => {
     setExamEngineV21State(nextState)

@@ -1016,3 +1016,14 @@ Hoy el colegio maneja todo con planillas y sus sistemas actuales. Este sistema s
 
 - PB.6: al re-subir la planilla de alumnos se actualizaban `nombre` y `apellido`, pero `full_name` (calculado al cargar el padrón) quedaba viejo. El padrón y la sincronización de legajos usan ese campo, así que el nombre corregido volvía a pisarse. Ahora `full_name` se recalcula cuando la planilla corrige nombre o apellido y no trae su propio `full_name`. Test de regresión: falla sin el arreglo y pasa con él.
 - Si dos guardados del workspace se cruzan (`SOURCE_FILE_WORKSPACE_BUSY`, 55P03), el guardado reintenta una vez. Si sigue ocupado, muestra un mensaje en español en lugar del código. 4 tests.
+
+## 2026-10-18 — EX.1: publicar el cronograma abre las mesas para los alumnos (Claude)
+
+Antes, publicar el cronograma no creaba `exam_tables`, así que el alumno no veía mesas. Además, el portal y la inscripción usaban fuentes distintas para decidir quién es regular.
+
+Cambios:
+- RPC nueva `publish_exam_tables_from_schedule`, solo para el personal de gestión;
+- el portal filtra mesas con la misma regla que la inscripción;
+- la app la llama al publicar y muestra un resumen.
+
+Harness local PASS (`0aa8949b932b5bef`), QA.1 PASS y 6 regresiones PASS. Pendiente: EX.2 (revisión docente) y la aplicación en Producción, con el OK de Miguel. Evidencia: `supabase/security/EXAM_PUBLICATION_LOCAL_RESULT.md`.
