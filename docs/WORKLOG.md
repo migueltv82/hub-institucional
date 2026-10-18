@@ -1111,7 +1111,7 @@ En la base:
 
 Verificación:
 - harness local PASS (`5e01b6e37c5a8d7a`);
-- regresiones 03.3, 06.3 y academic_status: PASS;
+- regresiones 03.3, 06.3, academic_status y QA.1 integral (`29507ed02f394d82`): PASS;
 - reemplazo sobre el schema de Producción: sin errores;
 - `npm run check` PASS (2570 tests).
 

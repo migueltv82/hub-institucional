@@ -118,6 +118,7 @@ Portal docente: botón "Ver inscriptos" en cada mesa, con la tabla de alumnos o 
 Regresiones después de mover las reglas a `exam_enrollment_assert_eligible`:
 - paridad de elegibilidad 03.3: PASS (`6bfbe8160b075341`);
 - suspensión 06.3: PASS (`5c50045c919a952a`);
-- escritura de `academic_status`: PASS (`cef46adb56eb8291`).
+- escritura de `academic_status`: PASS (`cef46adb56eb8291`);
+- QA.1 integral con navegador: PASS (`29507ed02f394d82`).
 
 Reemplazo sobre el schema anterior (`af29229`, el que está en Producción): sin errores; `upsert_exam_enrollment_from_portal` mantiene una sola firma de 14 parámetros y el default de horas pasa a 24.
