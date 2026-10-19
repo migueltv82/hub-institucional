@@ -32,7 +32,8 @@ export function fixtureSql() {
       statements.push(`insert into public.student_grades(institution_id,student_id,subject_id,academic_status,attempt_number,deleted_at) values ('${institution(tenant)}','${student(tenant, number)}','DIAGNOSTIC',${quote(status)},${++attempt},${deleted ? 'now()' : 'null'});`);
     }
   }
-  return `begin;\n${statements.join('\n')}\ncommit;`;
+  // Datos legacy previos a 03.5c: la base es descartable y el CHECK canonico se saca antes de sembrarlos.
+  return `begin;\nalter table public.student_grades drop constraint if exists student_grades_academic_status_check;\n${statements.join('\n')}\ncommit;`;
 }
 
 export function verifyOutput(output) {

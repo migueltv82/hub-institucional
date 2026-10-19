@@ -106,8 +106,15 @@ values ('${STUDENT.institution}', 'main', '${STUDENT.subjectId}', '${STUDENT.pro
     assert.equal(report.checks.abort.constraintPresent, false, 'el abort no debe dejar el CHECK a medias');
     assert.equal(report.checks.abort.rowUntouched, true, 'el abort no debe tocar datos');
 
+    step = 'mismatched definition';
+    // Un CHECK con el mismo nombre pero otra definicion no debe darse por bueno.
+    sql(`delete from public.student_grades where id = '${BAD_GRADE_ID}'; alter table public.student_grades add constraint ${CONSTRAINT} check (academic_status <> '');`);
+    const mismatchError = sqlError(operations);
+    report.checks.mismatch = { error: mismatchError, rejected: /ACADEMIC_STATUS_CHECK_MISMATCH/.test(mismatchError ?? '') };
+    assert.equal(report.checks.mismatch.rejected, true, 'un CHECK con otra definicion debe abortar');
+    sql(`alter table public.student_grades drop constraint ${CONSTRAINT};`);
+
     step = 'apply on clean table';
-    sql(`delete from public.student_grades where id = '${BAD_GRADE_ID}';`);
     sql(operations);
     const applied = constraintState();
     sql(operations);

@@ -415,6 +415,17 @@ do $$
 declare
   noncanonical_count bigint;
 begin
+  -- Un CHECK con el mismo nombre y otra definicion no se da por bueno.
+  if exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.student_grades'::regclass
+      and conname = 'student_grades_academic_status_check'
+      and pg_get_constraintdef(oid) <> 'CHECK ((academic_status = ANY (ARRAY[''pending''::text, ''regular''::text, ''libre''::text, ''promocionado''::text, ''approved''::text, ''failed''::text, ''absent''::text])))'
+  ) then
+    raise exception 'ACADEMIC_STATUS_CHECK_MISMATCH: student_grades_academic_status_check existe con otra definicion. Revisarla antes de aplicar 03.5c.'
+      using errcode = '23514';
+  end if;
+
   if not exists (
     select 1 from pg_constraint
     where conrelid = 'public.student_grades'::regclass
@@ -436,7 +447,7 @@ begin
     from public.student_grades
     where academic_status not in ('pending', 'regular', 'libre', 'promocionado', 'approved', 'failed', 'absent');
     if noncanonical_count > 0 then
-      raise exception 'ACADEMIC_STATUS_NONCANONICAL_ROWS: % filas de student_grades tienen academic_status fuera del conjunto canonico. Corregirlas antes de aplicar 03.5c (ver validateAcademicStatusDiagnostic.mjs).', noncanonical_count
+      raise exception 'ACADEMIC_STATUS_NONCANONICAL_ROWS: % filas de student_grades tienen academic_status fuera del conjunto canonico. Corregirlas antes de aplicar 03.5c (diagnostico: supabase/security/academic_status_canonical_diagnostic.sql).', noncanonical_count
         using errcode = '23514';
     end if;
     alter table public.student_grades validate constraint student_grades_academic_status_check;

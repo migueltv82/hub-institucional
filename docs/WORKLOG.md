@@ -1217,3 +1217,9 @@ Paridad 03.3: los 4 escenarios legacy sacan el CHECK solo dentro de su transacci
 Regresiones PASS: 03.5b, 03.3, publicación de mesas, QA.1 y 06.3. `npm run check` PASS, 2596 tests.
 
 Producción: pendiente del OK de Miguel. Evidencia: `supabase/security/ACADEMIC_STATUS_CHECK_LOCAL_RESULT.md`.
+
+Auditoría independiente de 03.5c: FAIL inicial por un P1. El harness del diagnóstico sembraba valores legacy con el CHECK activo.
+Corregido junto con dos P3:
+- un CHECK con otra definición aborta con `ACADEMIC_STATUS_CHECK_MISMATCH`;
+- el mensaje remite al diagnóstico SQL.
+Re-runs PASS: CHECK `7eb7b92844dc480b`, diagnóstico `b8bec8b6f6497b7b`, 03.5b `87b409b5ea2ac2dd`, paridad `21e0b786abdb5d69`.

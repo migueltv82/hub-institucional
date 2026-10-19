@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseTarget, TARGET, verifyOutput } from './validateAcademicStatusDiagnostic.mjs';
+import { fixtureSql, parseTarget, TARGET, verifyOutput } from './validateAcademicStatusDiagnostic.mjs';
 
 const output = () => ['READ_ONLY=on', ...[
   ['a', 'Regular', 7, 3, 2], ['a', 'regular ', 8, 2, 1], ['a', 'Pendiente', 9, 1, 1], ['a', 'cursando', 8, 2, 1],
@@ -22,3 +22,9 @@ describe('academic status diagnostic safety and exact assertions', () => {
     for (const bad of [output() + '\n' + row, output() + '\n' + row.replace('Regular', 'pending'), output().replace('READ_ONLY=on', 'READ_ONLY=off')]) expect(() => verifyOutput(bad)).toThrow();
   });
 });
+
+it('el fixture legacy saca el CHECK canonico de 03.5c antes de sembrar valores no canonicos', () => {
+  const sql = fixtureSql()
+  expect(sql.indexOf('drop constraint if exists student_grades_academic_status_check')).toBeGreaterThan(-1)
+  expect(sql.indexOf('drop constraint')).toBeLessThan(sql.indexOf("'Regular'"))
+})
