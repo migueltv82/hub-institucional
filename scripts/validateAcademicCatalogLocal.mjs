@@ -111,8 +111,8 @@ rollback;`).split('\n').filter(Boolean).pop()
 insert into public.profiles (user_id, email, account_role, is_blocked) values ('${user}', '${email}', 'alumno', false)
   on conflict (user_id) do update set account_role = 'alumno', is_blocked = false;
 insert into public.memberships (institution_id, user_id, role) values ('${INSTITUTION}', '${user}', 'viewer');
-insert into public.student_records (institution_id, workspace_key, first_name, last_name, dni, email, career, academic_year, profile_id)
-values ('${INSTITUTION}', 'main', 'Alumno', '${dni}', '${dni}', '${email}', '${CAREER_NAME.toUpperCase()}', '1', '${user}');`
+insert into public.student_records (institution_id, workspace_key, first_name, last_name, dni, email, career, academic_year, profile_id, status)
+values ('${INSTITUTION}', 'main', 'Alumno', '${dni}', '${dni}', '${email}', '${CAREER_NAME.toUpperCase()}', '1', '${user}', 'activo');`
     sql(`insert into public.institutions (id, slug, name, status) values ('${INSTITUTION}', 'cat1-${run}', '${INSTITUTION_NAME.replaceAll("'", "''")}', 'active');
 ${student(STUDENT_OLD_PLAN, 'ana@fixture.invalid', '30111222')}
 ${student(STUDENT_NO_ROW, 'beto@fixture.invalid', '40222333')}`)

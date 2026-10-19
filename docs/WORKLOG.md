@@ -1339,3 +1339,16 @@ Evidencia: `supabase/security/TENANT_CREATION_LOCAL_RESULT.md`.
 - **Pruebas:** el harness integrado suma la falla inducida de la RPC: 409 y sin drift. Con el orden anterior queda snapshot 1 / tabla 0. Regresiones PASS. `npm run check` PASS (2688).
 
 Evidencia: `supabase/security/PORTAL_EXAM_DRIFT_LOCAL_RESULT.md`.
+
+## 2026-10-19 — D1 (en curso): dos P1 del Día D encontrados en el recorrido real (Claude)
+
+El recorrido con navegador real se hace sobre un stack local con el gateway de Storage, igual que Producción (SQL del gateway + storage-api + Edge `source-file-storage`).
+
+1. **Primera carga de planillas de una institución nueva:** fallaba con "El recurso de archivo no esta registrado".
+   - **Causa:** los recursos del gateway se registraban solo al insertar el snapshot del workspace, y una institución recién creada no lo tiene.
+   - **Arreglo:** `supabase/security/source_file_storage_register_on_institution.sql` (idempotente) los registra al crear la institución y completa las existentes. El rollback de `create_tenant_with_admin` borra esos recursos antes que la institución, porque la FK no tiene cascada; sin eso el rollback falla, y el harness lo demuestra.
+2. **Publicar catálogo:** no vinculaba a ningún alumno con su plan.
+   - **Causa:** la carga de planillas guarda el estado del legajo como `activo`, y el catálogo filtraba `status = 'active'`, tanto en la RPC como en el SQL de CAT.1. Contaba "0 de 0", así que el chequeo del runbook pasaba igual.
+   - **Arreglo:** se aceptan `active`, `activo` y `activa`. Los fixtures de los harnesses ahora usan `activo`: reproducen el bug con el código anterior y pasan con el arreglo.
+
+Runbook: §4 (SQL nuevo después del gateway) y §8.1. `npm run check` PASS (2689).

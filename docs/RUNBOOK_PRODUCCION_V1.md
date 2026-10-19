@@ -100,6 +100,8 @@ Fuente de verdad: `supabase/schema/` del hash candidato. Los archivos son autoco
 
 Después del baseline: **`supabase/security/source_file_storage_gateway.sql`**, el enforcement del gateway de Storage. En Staging se aplicó el 05/10 como migration `storage_source_file_gateway_enforcement` (ver `supabase/baseline/STAGING_SECURITY_2_RESULT.md`), y el código de release/v1 (Edge `source-file-storage`) depende de sus RPC. El script **no es idempotente** (`create table` sin `if not exists`): aplicarlo una sola vez, solo si PROD0 muestra que falta (`source_file_storage_*` ausentes). Si ya está, no reaplicarlo.
 
+Después del gateway: **`supabase/security/source_file_storage_register_on_institution.sql`** (D1, 19/10). Registra los recursos de archivos al crear cada institución y completa las existentes. Sin esto, la primera carga de planillas de una institución nueva falla con "El recurso de archivo no esta registrado". Es idempotente; la consulta final tiene que dar `instituciones_incompletas = 0`.
+
 Reglas:
 
 1. Aplicar **solo** los archivos que PROD0 marcó con drift, en ese orden relativo. Si PROD0 marcó todos, aplicar los nueve.
@@ -223,7 +225,7 @@ El portal alumno lee carreras, planes y materias del **catálogo relacional**. S
    - El plan de cada alumno sale de la planilla de alumnos ya subida en el paso 1 (por DNI). Sin ese dato, solo se vincula cuando la carrera tiene un único plan activo. Nunca se adivina entre planes convivientes.
    - **Con correlativas**: viene destildado y **no se usa en el GO** (decisión de Miguel, 18/10: opción a). Se suma cuando esté cargada la historia académica. Si se cargan, el portal y el RPC de mesas exigen la nota de la correlativa. Un alumno de 2.º año en adelante sin historia académica cargada queda bloqueado.
    - Es una sola transacción: si algo falla, no escribe nada. También aborta, sin escribir, si la planilla renombra una carrera ya cargada o mueve un plan a otra carrera, porque eso rompería inscripciones y asignaciones; la pantalla lo explica.
-   - El resultado muestra los conteos. "X de Y alumnos con plan": X tiene que ser igual a Y. Si es menor, hay alumnos sin plan en la planilla o con una carrera que no está en la planilla académica.
+   - El resultado muestra los conteos. "X de Y alumnos con plan": X tiene que ser igual a Y. Desde D1 (19/10) cuentan como activos los legajos con estado `active`, `activo` o `activa` (la carga de planillas guarda `activo`); antes daba 0 de 0 y el chequeo pasaba sin vincular a nadie. Si es menor, hay alumnos sin plan en la planilla o con una carrera que no está en la planilla académica.
 3. Alternativa sin la app (soporte, o si la base todavía no tiene la RPC): en la PC de Miguel, desde `release/v1` actualizado:
    ```powershell
    node scripts/buildAcademicCatalogSql.mjs --academica "<ruta>\plantilla-academica.xlsx" --alumnos "<ruta>\plantilla-alumnos.xlsx" --institucion "<nombre exacto de la institución>" --salida catalogo.sql

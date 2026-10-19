@@ -179,7 +179,7 @@ select distinct on (student.id) i.id, student.id, plan.career_id, plan.id,
   case when btrim(coalesce(student.academic_year, '')) ~ '^[0-9]{1,2}$' then btrim(student.academic_year)::smallint end,
   'active'
 from cat1_institucion i
-join public.student_records student on student.institution_id = i.id and student.status = 'active'
+join public.student_records student on student.institution_id = i.id and lower(btrim(student.status)) in ('active', 'activo', 'activa')
 join cat1_student_plans v on v.dni = ${NORMALIZE("coalesce(nullif(btrim(student.dni), ''), student.national_id)")}
 join public.study_plans plan on plan.institution_id = i.id and plan.external_code = v.plan_code
 where not exists (
@@ -195,7 +195,7 @@ select i.id, student.id, match.career_id, match.plan_id,
   case when btrim(coalesce(student.academic_year, '')) ~ '^[0-9]{1,2}$' then btrim(student.academic_year)::smallint end,
   'active'
 from cat1_institucion i
-join public.student_records student on student.institution_id = i.id and student.status = 'active'
+join public.student_records student on student.institution_id = i.id and lower(btrim(student.status)) in ('active', 'activo', 'activa')
 join lateral (
   select min(career.id::text)::uuid as career_id, min(plan.id::text)::uuid as plan_id
   from public.careers career
@@ -219,7 +219,7 @@ select
   (select count(*) from public.study_plans p where p.institution_id = inst.id) as planes,
   (select count(*) from public.study_plan_subjects s where s.institution_id = inst.id) as materias_en_planes,
   (select count(*) from public.subject_prerequisites s where s.institution_id = inst.id) as correlativas,
-  (select count(*) from public.student_records s where s.institution_id = inst.id and s.status = 'active') as alumnos_activos,
+  (select count(*) from public.student_records s where s.institution_id = inst.id and lower(btrim(s.status)) in ('active', 'activo', 'activa')) as alumnos_activos,
   (select count(distinct sp.student_id) from public.student_career_plans sp where sp.institution_id = inst.id and sp.status = 'active') as alumnos_con_plan
 from public.institutions inst
 where inst.name = ${institution} and inst.status = 'active';

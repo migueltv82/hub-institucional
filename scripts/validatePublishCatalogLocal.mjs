@@ -78,7 +78,7 @@ insert into public.memberships (institution_id, user_id, role) values ('${INSTIT
       ...STUDENTS.map(([id, email, dni]) => `insert into auth.users (id, email) values ('${id}', '${email}');
 insert into public.profiles (user_id, email, account_role, is_blocked) values ('${id}', '${email}', 'alumno', false) on conflict (user_id) do update set account_role = 'alumno';
 insert into public.memberships (institution_id, user_id, role) values ('${INSTITUTION}', '${id}', 'viewer');
-insert into public.student_records (institution_id, workspace_key, first_name, last_name, dni, email, career, academic_year, profile_id) values ('${INSTITUTION}', 'main', 'Alumno', '${dni}', '${dni}', '${email}', '${CAREER_NAME.toUpperCase()}', '1', '${id}');`),
+insert into public.student_records (institution_id, workspace_key, first_name, last_name, dni, email, career, academic_year, profile_id, status) values ('${INSTITUTION}', 'main', 'Alumno', '${dni}', '${dni}', '${email}', '${CAREER_NAME.toUpperCase()}', '1', '${id}', 'activo');`),
     ].join('\n');
     for (const [kind, database] of Object.entries(databases)) {
       assert.equal(sql(`select count(*) from pg_database where datname='${database}';`, 'postgres'), '0');

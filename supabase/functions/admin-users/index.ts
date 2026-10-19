@@ -785,6 +785,9 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
     }
   } catch (error) {
     const rollbackErrors: string[] = []
+    // D1: los recursos del gateway de Storage se registran al crear la institucion y su FK no tiene cascada.
+    const { error: resourcesDeleteError } = await adminClient.from('source_file_storage_resources').delete().eq('institution_id', institution.id)
+    if (resourcesDeleteError && !isMissingRelationError(resourcesDeleteError, 'source_file_storage_resources')) rollbackErrors.push('recursos de archivos')
     const { error: institutionDeleteError } = await adminClient.from('institutions').delete().eq('id', institution.id)
     if (institutionDeleteError) rollbackErrors.push('institucion')
     if (createdUserId) {

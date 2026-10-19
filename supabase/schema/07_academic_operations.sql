@@ -2307,7 +2307,8 @@ begin
   on conflict (institution_id, target_plan_subject_id, prerequisite_plan_subject_id, prerequisite_type, applies_to) do update
   set required_condition = excluded.required_condition, status = 'active';
 
-  -- Alumnos activos sin plan activo. 1) El plan que trae la planilla de alumnos, por DNI.
+  -- Alumnos activos sin plan activo. D1: la carga de planillas guarda el estado en castellano ('activo'),
+  -- asi que se aceptan active/activo/activa. 1) El plan que trae la planilla de alumnos, por DNI.
   insert into public.student_career_plans (institution_id, student_id, career_id, plan_id, current_year, status)
   select distinct on (student.id) p_institution_id, student.id, plan.career_id, plan.id,
     case when btrim(coalesce(student.academic_year, '')) ~ '^[0-9]{1,2}$' then btrim(student.academic_year)::smallint end,
@@ -2315,7 +2316,7 @@ begin
   from public.student_records student
   join cat_student_plans v on v.dni = public.academic_normalize_identity(coalesce(nullif(btrim(student.dni), ''), student.national_id))
   join public.study_plans plan on plan.institution_id = p_institution_id and plan.external_code = v.plan_code
-  where student.institution_id = p_institution_id and student.status = 'active'
+  where student.institution_id = p_institution_id and lower(btrim(student.status)) in ('active', 'activo', 'activa')
     and not exists (
       select 1 from public.student_career_plans existing
       where existing.institution_id = p_institution_id and existing.student_id = student.id and existing.status = 'active'
@@ -2338,7 +2339,7 @@ begin
       and public.academic_normalize_identity(student.career) in (public.academic_normalize_identity(career.name), public.academic_normalize_identity(career.external_code))
     having count(distinct career.id) = 1 and count(distinct plan.id) = 1
   ) match on true
-  where student.institution_id = p_institution_id and student.status = 'active'
+  where student.institution_id = p_institution_id and lower(btrim(student.status)) in ('active', 'activo', 'activa')
     and not exists (
       select 1 from public.student_career_plans existing
       where existing.institution_id = p_institution_id and existing.student_id = student.id and existing.status = 'active'
@@ -2351,7 +2352,7 @@ begin
       'planes', (select count(*) from public.study_plans p where p.institution_id = p_institution_id),
       'materias_en_planes', (select count(*) from public.study_plan_subjects s where s.institution_id = p_institution_id),
       'correlativas', (select count(*) from public.subject_prerequisites s where s.institution_id = p_institution_id),
-      'alumnos_activos', (select count(*) from public.student_records s where s.institution_id = p_institution_id and s.status = 'active'),
+      'alumnos_activos', (select count(*) from public.student_records s where s.institution_id = p_institution_id and lower(btrim(s.status)) in ('active', 'activo', 'activa')),
       'alumnos_con_plan', (select count(distinct sp.student_id) from public.student_career_plans sp where sp.institution_id = p_institution_id and sp.status = 'active')
     )
   );

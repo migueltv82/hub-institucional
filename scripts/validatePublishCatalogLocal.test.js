@@ -33,4 +33,14 @@ describe('validatePublishCatalogLocal', () => {
     expect(operations).toContain('revoke execute on function public.academic_admin_publish_catalog(uuid, jsonb) from public, anon;')
     expect(operations).toContain('grant execute on function public.academic_admin_publish_catalog(uuid, jsonb) to authenticated;')
   })
+
+  it('D1: un legajo cargado desde planilla (status "activo") cuenta como activo, en la RPC y en el SQL de CAT.1', () => {
+    const generator = readFileSync(resolve('scripts/buildAcademicCatalogSql.mjs'), 'utf8')
+    for (const source of [block.slice(0, block.indexOf('$$;')), generator]) {
+      expect(source).not.toMatch(/\b(student|s)\.status = 'active'/)
+      expect(source).toContain("lower(btrim(student.status)) in ('active', 'activo', 'activa')")
+      expect(source).toContain("lower(btrim(s.status)) in ('active', 'activo', 'activa')")
+    }
+    expect(harness).toContain("'${CAREER_NAME.toUpperCase()}', '1', '${id}', 'activo');")
+  })
 })
