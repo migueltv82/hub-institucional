@@ -34,5 +34,9 @@ export async function fetchExamTableRoster({ institutionId, workspaceKey = 'main
   return {
     estado: clean(data?.estado),
     alumnos: Array.isArray(data?.alumnos) ? data.alumnos : [],
+    // F1a: el acta se carga desde el dia del examen y, cerrada, solo la corrige secretaria.
+    actaCerrada: Boolean(data?.acta_cerrada),
+    puedeCargarNotas: Boolean(data?.puede_cargar_notas),
+    fechaExamen: data?.fecha_examen ?? null,
   }
 }

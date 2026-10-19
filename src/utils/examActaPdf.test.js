@@ -69,3 +69,20 @@ describe('examActaPdf', () => {
     expect(doc.output()).toContain('Instituto')
   })
 })
+
+describe('F1a: notas en el acta', () => {
+  it('imprime escrito, oral y promedio con coma, y el ausente en la columna del promedio', async () => {
+    const { actaGradeColumns, actaTotals } = await import('./examActaPdf.js')
+    expect(actaGradeColumns({ resultado: 'approved', escrito: 7, oral: 8.5, nota: 7.75 })).toEqual({ escrito: '7', oral: '8,5', promedio: '7,75' })
+    expect(actaGradeColumns({ resultado: 'absent' })).toEqual({ escrito: '', oral: '', promedio: 'Ausente' })
+    expect(actaGradeColumns({})).toEqual({ escrito: '', oral: '', promedio: '' })
+    expect(actaTotals([{ resultado: 'approved' }, { resultado: 'failed' }, { resultado: 'absent' }, { resultado: 'approved' }]))
+      .toEqual({ total: 4, aprobados: 2, desaprobados: 1, ausentes: 1 })
+    expect(actaTotals([{}, {}])).toBeNull()
+  })
+
+  it('el PDF se genera con notas cargadas', async () => {
+    const doc = await buildExamActasPdf({ institutionName: 'Instituto', actas: [{ mesa: { materia: 'Ingles I' }, alumnos: [{ apellido: 'Perez', nombres: 'Ana', dni: '1', resultado: 'approved', nota: 8 }] }] })
+    expect(doc.getNumberOfPages()).toBe(1)
+  })
+})

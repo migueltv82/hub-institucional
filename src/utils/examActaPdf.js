@@ -36,11 +36,32 @@ export function splitStudentName(alumno = {}) {
   return { apellido: clean(alumno.nombre).toUpperCase(), nombres: '' }
 }
 
+function formatActaGrade(value) {
+  if (value === null || value === undefined || clean(value) === '') return ''
+  const number = Number(value)
+  return Number.isFinite(number) ? String(Math.round(number * 100) / 100).replace('.', ',') : ''
+}
+
+// F1a: calificaciones cargadas en el acta. El ausente va escrito en la columna del promedio.
+export function actaGradeColumns(alumno = {}) {
+  if (alumno.resultado === 'absent') return { escrito: '', oral: '', promedio: 'Ausente' }
+  return { escrito: formatActaGrade(alumno.escrito), oral: formatActaGrade(alumno.oral), promedio: formatActaGrade(alumno.nota) }
+}
+
+// Totales del pie: solo si el acta tiene resultados cargados.
+export function actaTotals(alumnos = []) {
+  const list = Array.isArray(alumnos) ? alumnos : []
+  if (!list.some((alumno) => alumno.resultado)) return null
+  const count = (result) => list.filter((alumno) => alumno.resultado === result).length
+  return { total: list.length, aprobados: count('approved'), desaprobados: count('failed'), ausentes: count('absent') }
+}
+
 export function buildActaPages(alumnos = [], rowsPerPage = ACTA_ROWS_PER_PAGE) {
   const rows = (Array.isArray(alumnos) ? alumnos : []).map((alumno, index) => ({
     numero: index + 1,
     dni: clean(alumno.dni),
     ...splitStudentName(alumno),
+    ...actaGradeColumns(alumno),
   }))
   const pages = []
   for (let start = 0; start < Math.max(rows.length, 1); start += rowsPerPage) {
@@ -88,7 +109,7 @@ function drawActaHeader(doc, { institutionName, logo }) {
   return 32
 }
 
-function drawActaPage(doc, { institutionName, logo, mesa, rows, pageLabel }) {
+function drawActaPage(doc, { institutionName, logo, mesa, rows, pageLabel, totals }) {
   const left = 15
   const right = 195
   let y = drawActaHeader(doc, { institutionName, logo })
@@ -156,6 +177,9 @@ function drawActaPage(doc, { institutionName, logo, mesa, rows, pageLabel }) {
       doc.text(row.dni, columns[1] + 2, y + 4.5)
       doc.text(row.apellido, columns[2] + 2, y + 4.5, { maxWidth: columns[3] - columns[2] - 3 })
       doc.text(row.nombres, columns[3] + 2, y + 4.5, { maxWidth: columns[4] - columns[3] - 3 })
+      if (row.escrito) doc.text(row.escrito, (columns[4] + columns[5]) / 2, y + 4.5, { align: 'center' })
+      if (row.oral) doc.text(row.oral, (columns[5] + columns[6]) / 2, y + 4.5, { align: 'center' })
+      if (row.promedio) doc.text(row.promedio, (columns[6] + right) / 2, y + 4.5, { align: 'center' })
     }
     y += rowHeight
   }
@@ -167,8 +191,9 @@ function drawActaPage(doc, { institutionName, logo, mesa, rows, pageLabel }) {
   doc.text('Observaciones:', left + 2, footerTop + 5)
   y = footerTop + 14
   doc.rect(left, y, right - left, 26)
-  doc.text('Se hace constar que sobre un total de __________ alumnos, resultaron __________ aprobados, __________ desaprobados', left + 2, y + 6)
-  doc.text('y __________ ausentes.', left + 2, y + 11)
+  const blank = (value) => (totals ? `   ${value}   ` : '__________')
+  doc.text(`Se hace constar que sobre un total de ${blank(totals?.total)} alumnos, resultaron ${blank(totals?.aprobados)} aprobados, ${blank(totals?.desaprobados)} desaprobados`, left + 2, y + 6)
+  doc.text(`y ${blank(totals?.ausentes)} ausentes.`, left + 2, y + 11)
   const tribunal = mesa.tribunal ?? {}
   const signature = (label, name, x, yy, align) => {
     doc.setFontSize(8.5)
@@ -191,6 +216,7 @@ export async function buildExamActasPdf({ institutionName, institutionLogo = '',
   let first = true
   actas.forEach(({ mesa, alumnos }) => {
     const pages = buildActaPages(alumnos)
+    const totals = actaTotals(alumnos)
     pages.forEach((rows, index) => {
       if (!first) doc.addPage()
       first = false
@@ -199,6 +225,7 @@ export async function buildExamActasPdf({ institutionName, institutionLogo = '',
         logo,
         mesa,
         rows,
+        totals,
         pageLabel: pages.length > 1 ? `Hoja ${index + 1} de ${pages.length}` : '',
       })
     })

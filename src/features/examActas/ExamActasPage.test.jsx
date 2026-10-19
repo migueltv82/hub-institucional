@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const services = vi.hoisted(() => ({
   fetchExamTablesOverview: vi.fn(),
+  fetchExamActaDetail: vi.fn(),
   fetchExamActaRoster: vi.fn(),
   enrollStudentAsAdmin: vi.fn(),
 }))
@@ -121,12 +122,29 @@ describe('ExamActasPage', () => {
 
   it('muestra los inscriptos de una mesa', async () => {
     services.fetchExamTablesOverview.mockResolvedValue([mesa('uat01', 'MATERIA DE PRUEBA UAT', 1)])
-    services.fetchExamActaRoster.mockResolvedValue([{ apellido: 'Regular', nombres: 'Ana', dni: '11111111', inscripcion_especial: true }])
+    services.fetchExamActaDetail.mockResolvedValue({ alumnos: [{ apellido: 'Regular', nombres: 'Ana', dni: '11111111', inscripcion_especial: true }], actaCerrada: false, puedeCargarNotas: false })
     render(<ExamActasPage institutionId="inst-1" />)
 
     fireEvent.click(await screen.findByRole('button', { name: /ver inscriptos/i }))
     expect(await screen.findByText('Regular')).toBeInTheDocument()
     expect(screen.getByText('Especial (admin)')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cargar notas' })).not.toBeInTheDocument()
+  })
+
+  it('F1a: desde el dia del examen secretaria carga notas y ve el resultado de cada alumno', async () => {
+    services.fetchExamTablesOverview.mockResolvedValue([mesa('uat01', 'MATERIA DE PRUEBA UAT', 1)])
+    services.fetchExamActaDetail.mockResolvedValue({
+      alumnos: [{ inscripcion_id: 'e1', apellido: 'Regular', nombres: 'Ana', nombre: 'Ana Regular', dni: '11111111', resultado: 'approved', nota: 8 }],
+      actaCerrada: true,
+      puedeCargarNotas: false,
+    })
+    render(<ExamActasPage institutionId="inst-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /ver inscriptos/i }))
+    expect(await screen.findByText('Aprobado (8)')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Corregir acta (cerrada)' }))
+    expect(screen.getByLabelText('Motivo de la correccion')).toBeInTheDocument()
+    expect(screen.getByLabelText('Nota final de Ana Regular')).not.toBeDisabled()
   })
 
   it('sin permiso de gestion no muestra la inscripcion especial', async () => {

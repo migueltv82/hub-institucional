@@ -18,7 +18,7 @@ describe('fetchExamTableRoster', () => {
       target_workspace_key: 'main',
       target_exam_key: 'exam-engine-v21-m1-2026-11-02',
     })
-    expect(result).toEqual({ estado: 'open', alumnos: [{ nombre: 'Ana Regular', dni: '11111111' }] })
+    expect(result).toEqual({ estado: 'open', alumnos: [{ nombre: 'Ana Regular', dni: '11111111' }], actaCerrada: false, puedeCargarNotas: false, fechaExamen: null })
   })
 
   it('traduce el rechazo de permisos sin mostrar el error tecnico', async () => {

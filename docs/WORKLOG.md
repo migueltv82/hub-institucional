@@ -1254,3 +1254,11 @@ Veredicto FAIL: P1 reproducido por concurrencia entre la RPC docente y la import
 
 Pruebas solicitadas: 3 archivos/13 tests PASS; harness original 8 casos PASS, run 90f0954ada500c50. Runner adversarial propio: 14 escenarios, run 730d292018b6e2b3, dos fallos funcionales confirmados; limpieza 0 bases en ambos. Permisos owner/admin/editor/superadmin y bloqueos verificados. Sin escrituras remotas, deploy, credenciales ni PR nuevo.
 Gate automatizado npm run check PASS: audit:repo, lint, 334 archivos/2615 tests, build/audit:prod (117 archivos). Aviso de chunks preexistente. QUALITY GATE: FAIL por el P1 de la implementacion auditada; pruebas verdes no implican aprobacion de I2a. Typecheck no disponible; Browser no ejecutado. Solo evidencia y WORKLOG en este commit.
+
+## 2026-10-19 — F1a: acta de examen final, carga de notas y cierre (Claude)
+
+Pedido de Miguel, con estas reglas: carga el titular, se aprueba con 4, y desaprobado o ausente no quitan la regularidad.
+- **Base:** tabla `exam_results` y RPC `exam_save_acta_results`. Se carga desde el día del examen, se cierra con todos cargados y, una vez cerrada, solo secretaría corrige, con motivo. El aprobado pasa a `student_grades` (correlativas).
+- **App:** el titular carga el acta desde el portal docente; en Mesas y actas, secretaría carga y corrige. El PDF imprime notas y totales.
+
+Harness `validateExamActaResultsLocal.mjs` PASS (16 pasos). F1b pendiente: el ausente pierde el próximo llamado. Evidencia: `supabase/security/EXAM_ACTA_RESULTS_LOCAL_RESULT.md`.

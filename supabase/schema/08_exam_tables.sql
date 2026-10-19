@@ -1604,7 +1604,7 @@ begin
     raise exception 'Acceso denegado: solo el titular de la mesa puede ver los inscriptos.' using errcode = '42501';
   end if;
 
-  select exam_table.id, exam_table.legacy_snapshot_id, exam_table.status, exam_table.metadata into table_row
+  select exam_table.id, exam_table.legacy_snapshot_id, exam_table.status, exam_table.metadata, exam_table.scheduled_starts_at into table_row
   from public.exam_tables exam_table
   where exam_table.institution_id = target_institution_id
     and exam_table.workspace_key = clean_workspace_key
@@ -1648,8 +1648,18 @@ begin
   return jsonb_build_object(
     'mesa_id', table_row.legacy_snapshot_id,
     'estado', table_row.status,
+    -- F1a: estado del acta y si ya se puede cargar (desde el dia del examen, hora argentina).
+    'acta_cerrada', table_row.status = 'completed',
+    'fecha_examen', table_row.scheduled_starts_at,
+    'puede_cargar_notas', table_row.status not in ('completed', 'cancelled')
+      and (timezone('America/Argentina/Buenos_Aires', now()))::date >= (timezone('America/Argentina/Buenos_Aires', table_row.scheduled_starts_at))::date,
     'alumnos', coalesce((
       select jsonb_agg(jsonb_build_object(
+        'inscripcion_id', enrollment.id,
+        'resultado', exam_result.result,
+        'escrito', exam_result.written_grade,
+        'oral', exam_result.oral_grade,
+        'nota', exam_result.final_grade,
         'nombre', coalesce(nullif(btrim(student.full_name), ''), btrim(concat_ws(' ', student.first_name, student.last_name))),
         'apellido', nullif(btrim(coalesce(student.last_name, '')), ''),
         'nombres', nullif(btrim(coalesce(student.first_name, '')), ''),
@@ -1664,6 +1674,9 @@ begin
       join public.student_records student
         on student.institution_id = enrollment.institution_id
        and student.id = enrollment.student_record_id
+      left join public.exam_results exam_result
+        on exam_result.institution_id = enrollment.institution_id
+       and exam_result.exam_enrollment_id = enrollment.id
       where enrollment.institution_id = target_institution_id
         and enrollment.exam_table_id = table_row.id
         and enrollment.status = 'registered'
@@ -1706,6 +1719,7 @@ begin
       select jsonb_build_object(
         'mesa_id', exam_table.legacy_snapshot_id,
         'estado', exam_table.status,
+        'acta_cerrada', exam_table.status = 'completed',
         'tipo', exam_table.exam_type,
         'llamado', exam_table.exam_call_label,
         'inicio', exam_table.scheduled_starts_at,
@@ -1874,3 +1888,339 @@ $$;
 
 revoke execute on function public.admin_enroll_student_in_exam_table(uuid, text, text, uuid, text) from public, anon;
 grant execute on function public.admin_enroll_student_in_exam_table(uuid, text, text, uuid, text) to authenticated;
+
+-- ============================================================
+-- F1a: acta de examen final. El titular carga escrito, oral, nota final o ausente de cada inscripto y
+-- cierra el acta. Decisiones de Miguel (18/10): carga solo el titular (el personal de gestion tambien, y
+-- es el unico que corrige un acta cerrada, con motivo); se aprueba con 4 o mas; desaprobar o estar
+-- ausente no quita la regularidad (el castigo por ausencia va en F1b).
+-- Solo el aprobado pasa a student_grades (grade_type 'final_exam', academic_status 'approved'): asi
+-- cuenta para correlativas y cierra la materia. Desaprobado y ausente quedan en exam_results y la
+-- ultima condicion del alumno sigue siendo 'regular', que es lo que lee la inscripcion a mesas.
+-- ============================================================
+
+create table if not exists public.exam_results (
+  id uuid primary key default gen_random_uuid(),
+  institution_id uuid not null references public.institutions(id) on delete cascade,
+  workspace_key text not null default 'main',
+  exam_table_id uuid not null,
+  exam_enrollment_id uuid not null,
+  student_id uuid not null references public.profiles(user_id) on delete cascade,
+  student_record_id uuid not null,
+  subject_id text not null,
+  program_id text not null,
+  written_grade numeric(4,2),
+  oral_grade numeric(4,2),
+  final_grade numeric(4,2),
+  result text not null,
+  student_grade_id uuid references public.student_grades(id) on delete set null,
+  recorded_by uuid references public.profiles(user_id) on delete set null,
+  corrected_by uuid references public.profiles(user_id) on delete set null,
+  correction_reason text,
+  lock_version integer not null default 1,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (institution_id, exam_enrollment_id),
+  foreign key (institution_id, exam_table_id) references public.exam_tables(institution_id, id) on delete restrict,
+  foreign key (institution_id, exam_enrollment_id) references public.exam_enrollments(institution_id, id) on delete restrict,
+  foreign key (institution_id, student_record_id) references public.student_records(institution_id, id) on delete restrict,
+  check (result in ('approved', 'failed', 'absent')),
+  check (written_grade is null or written_grade between 0 and 10),
+  check (oral_grade is null or oral_grade between 0 and 10),
+  check (final_grade is null or final_grade between 0 and 10),
+  check (result <> 'absent' or (written_grade is null and oral_grade is null and final_grade is null)),
+  check (result = 'absent' or final_grade is not null),
+  check (result <> 'approved' or final_grade >= 4),
+  check (result <> 'failed' or final_grade < 4),
+  check (lock_version >= 1)
+);
+
+create index if not exists idx_exam_results_table
+  on public.exam_results (institution_id, exam_table_id);
+
+alter table public.exam_results enable row level security;
+revoke all on public.exam_results from public, anon, authenticated;
+
+-- Titular de la mesa: el DNI del titular publicado en la mesa o una titularidad activa de la materia.
+-- Misma regla que get_exam_table_roster. Interna: sin EXECUTE para roles de la API.
+create or replace function public.exam_table_caller_is_titular(
+  p_institution_id uuid,
+  p_workspace_key text,
+  p_exam_table_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.exam_tables exam_table
+    join public.teacher_records teacher
+      on teacher.institution_id = exam_table.institution_id
+     and teacher.workspace_key = p_workspace_key
+     and teacher.profile_id = (select auth.uid())
+    where exam_table.institution_id = p_institution_id
+      and exam_table.id = p_exam_table_id
+      and regexp_replace(coalesce(teacher.dni, ''), '[^0-9]', '', 'g') <> ''
+      and regexp_replace(coalesce(teacher.dni, ''), '[^0-9]', '', 'g') = coalesce(exam_table.metadata ->> 'titular_dni', '')
+  )
+  or exists (
+    select 1
+    from public.exam_table_subjects exam_subject
+    join public.subject_teacher_assignments assignment
+      on assignment.institution_id = exam_subject.institution_id
+     and assignment.subject_id = exam_subject.legacy_subject_id
+     and assignment.program_id = exam_subject.legacy_program_id
+    where exam_subject.institution_id = p_institution_id
+      and exam_subject.exam_table_id = p_exam_table_id
+      and assignment.workspace_key = p_workspace_key
+      and assignment.teacher_id = (select auth.uid())
+      and assignment.role = 'titular'
+      and assignment.status = 'active'
+      and assignment.deleted_at is null
+  );
+$$;
+
+revoke all on function public.exam_table_caller_is_titular(uuid, text, uuid) from public, anon, authenticated;
+
+-- Guarda resultados del acta y, si target_close, la cierra. Una fila por inscripto:
+-- { inscripcion_id, ausente, escrito, oral, nota }. Sin nota final se toma el promedio de escrito y oral.
+-- Filas sin datos se ignoran (todavia no cargadas). Cerrar exige un resultado por cada inscripto.
+create or replace function public.exam_save_acta_results(
+  target_institution_id uuid,
+  target_workspace_key text,
+  target_exam_key text,
+  target_results jsonb,
+  target_close boolean default false,
+  target_reason text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_id uuid := (select auth.uid());
+  clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+  clean_exam_key text := lower(btrim(coalesce(target_exam_key, '')));
+  clean_reason text := btrim(coalesce(target_reason, ''));
+  is_staff boolean;
+  table_row record;
+  enrollment_row record;
+  item jsonb;
+  item_index integer := 0;
+  raw_written text;
+  raw_oral text;
+  raw_final text;
+  v_written numeric;
+  v_oral numeric;
+  v_final numeric;
+  v_absent boolean;
+  v_result text;
+  existing_result public.exam_results%rowtype;
+  v_grade_id uuid;
+  v_attempt integer;
+  saved_count integer := 0;
+  pending_count integer;
+  is_closed boolean;
+begin
+  if caller_id is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+  if target_institution_id is null then
+    raise exception 'Acceso denegado: solo el titular de la mesa carga el acta.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(coalesce(target_results, '[]'::jsonb)) <> 'array' or jsonb_array_length(coalesce(target_results, '[]'::jsonb)) > 500 then
+    raise exception 'EXAM_ACTA_RESULTS_INVALID' using errcode = '22023';
+  end if;
+
+  is_staff := public.is_super_admin()
+    or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor']);
+
+  select exam_table.* into table_row
+  from public.exam_tables exam_table
+  where exam_table.institution_id = target_institution_id
+    and exam_table.workspace_key = clean_workspace_key
+    and exam_table.legacy_exam_table_id = clean_exam_key
+  for update;
+
+  -- Mismo error si la mesa no existe: no se revela que mesas hay.
+  if table_row.id is null
+    or not (is_staff or (public.is_member_of_institution(target_institution_id)
+      and public.exam_table_caller_is_titular(target_institution_id, clean_workspace_key, table_row.id))) then
+    raise exception 'Acceso denegado: solo el titular de la mesa carga el acta.' using errcode = '42501';
+  end if;
+  if table_row.status = 'cancelled' then
+    raise exception 'EXAM_TABLE_NOT_AVAILABLE' using errcode = '22023';
+  end if;
+  -- Se carga desde el dia del examen (hora argentina).
+  if (timezone('America/Argentina/Buenos_Aires', now()))::date < (timezone('America/Argentina/Buenos_Aires', table_row.scheduled_starts_at))::date then
+    raise exception 'EXAM_NOT_TAKEN_YET' using errcode = '22023';
+  end if;
+
+  is_closed := table_row.status = 'completed';
+  if is_closed and not is_staff then
+    raise exception 'EXAM_ACTA_CLOSED' using errcode = '22023';
+  end if;
+  if is_closed and length(clean_reason) < 5 then
+    raise exception 'EXAM_ACTA_CORRECTION_REASON_REQUIRED' using errcode = '22023';
+  end if;
+
+  for item in select value from jsonb_array_elements(coalesce(target_results, '[]'::jsonb)) loop
+    item_index := item_index + 1;
+    if jsonb_typeof(item) <> 'object' then
+      raise exception 'EXAM_ACTA_RESULTS_INVALID' using errcode = '22023';
+    end if;
+
+    select enrollment.* into enrollment_row
+    from public.exam_enrollments enrollment
+    where enrollment.institution_id = target_institution_id
+      and enrollment.exam_table_id = table_row.id
+      and enrollment.status = 'registered'
+      and enrollment.id::text = btrim(coalesce(item ->> 'inscripcion_id', ''))
+    for update;
+    if enrollment_row.id is null then
+      raise exception 'EXAM_ACTA_ENROLLMENT_NOT_FOUND' using errcode = '22023';
+    end if;
+
+    v_absent := coalesce((item ->> 'ausente')::boolean, false);
+    raw_written := replace(btrim(coalesce(item ->> 'escrito', '')), ',', '.');
+    raw_oral := replace(btrim(coalesce(item ->> 'oral', '')), ',', '.');
+    raw_final := replace(btrim(coalesce(item ->> 'nota', '')), ',', '.');
+    if (raw_written <> '' and raw_written !~ '^[0-9]{1,2}(\.[0-9]{1,2})?$')
+      or (raw_oral <> '' and raw_oral !~ '^[0-9]{1,2}(\.[0-9]{1,2})?$')
+      or (raw_final <> '' and raw_final !~ '^[0-9]{1,2}(\.[0-9]{1,2})?$') then
+      raise exception 'EXAM_ACTA_GRADE_INVALID' using errcode = '22023';
+    end if;
+    v_written := nullif(raw_written, '')::numeric;
+    v_oral := nullif(raw_oral, '')::numeric;
+    v_final := nullif(raw_final, '')::numeric;
+    if greatest(coalesce(v_written, 0), coalesce(v_oral, 0), coalesce(v_final, 0)) > 10 then
+      raise exception 'EXAM_ACTA_GRADE_INVALID' using errcode = '22023';
+    end if;
+    if v_absent and (v_written is not null or v_oral is not null or v_final is not null) then
+      raise exception 'EXAM_ACTA_ABSENT_WITH_GRADE' using errcode = '22023';
+    end if;
+
+    if v_absent then
+      v_result := 'absent';
+    else
+      if v_final is null and (v_written is not null or v_oral is not null) then
+        v_final := round((coalesce(v_written, 0) + coalesce(v_oral, 0)) / ((v_written is not null)::int + (v_oral is not null)::int), 2);
+      end if;
+      if v_final is null then
+        -- Fila sin datos: todavia no cargada.
+        continue;
+      end if;
+      v_result := case when v_final >= 4 then 'approved' else 'failed' end;
+    end if;
+
+    select * into existing_result
+    from public.exam_results result
+    where result.institution_id = target_institution_id
+      and result.exam_enrollment_id = enrollment_row.id
+    for update;
+
+    -- Solo el aprobado vive en student_grades: es lo que leen correlativas y el estado de la materia.
+    v_grade_id := existing_result.student_grade_id;
+    if v_result = 'approved' then
+      if v_grade_id is not null and exists (
+        select 1 from public.student_grades grade where grade.id = v_grade_id and grade.deleted_at is null
+      ) then
+        update public.student_grades grade
+        set grade_value = v_final,
+            grade_label = v_final::text,
+            academic_status = 'approved',
+            teacher_id = caller_id,
+            lock_version = grade.lock_version + 1
+        where grade.id = v_grade_id;
+      else
+        select coalesce(max(grade.attempt_number), 0) + 1 into v_attempt
+        from public.student_grades grade
+        where grade.institution_id = target_institution_id
+          and grade.workspace_key = clean_workspace_key
+          and grade.student_id = enrollment_row.student_id
+          and grade.subject_id = enrollment_row.subject_id
+          and grade.program_id = enrollment_row.program_id
+          and grade.grade_type = 'final_exam'
+          and grade.deleted_at is null;
+        insert into public.student_grades (
+          institution_id, workspace_key, student_id, student_record_id, exam_enrollment_id, subject_id, program_id,
+          teacher_id, grade_type, attempt_number, grade_value, grade_label, grade_scale, academic_status,
+          observations, grading_period
+        ) values (
+          target_institution_id, clean_workspace_key, enrollment_row.student_id, enrollment_row.student_record_id, enrollment_row.id,
+          enrollment_row.subject_id, enrollment_row.program_id, caller_id, 'final_exam', v_attempt, v_final, v_final::text,
+          'numeric_0_10', 'approved', coalesce(table_row.exam_call_label, ''),
+          to_char(timezone('America/Argentina/Buenos_Aires', table_row.scheduled_starts_at), 'YYYY-MM-DD')
+        )
+        returning id into v_grade_id;
+      end if;
+    elsif v_grade_id is not null then
+      -- Corregido de aprobado a desaprobado o ausente: la aprobacion deja de valer.
+      update public.student_grades grade
+      set deleted_at = timezone('utc', now()), lock_version = grade.lock_version + 1
+      where grade.id = v_grade_id and grade.deleted_at is null;
+      v_grade_id := null;
+    end if;
+
+    insert into public.exam_results (
+      institution_id, workspace_key, exam_table_id, exam_enrollment_id, student_id, student_record_id, subject_id, program_id,
+      written_grade, oral_grade, final_grade, result, student_grade_id, recorded_by, corrected_by, correction_reason
+    ) values (
+      target_institution_id, clean_workspace_key, table_row.id, enrollment_row.id, enrollment_row.student_id, enrollment_row.student_record_id,
+      enrollment_row.subject_id, enrollment_row.program_id, v_written, v_oral, v_final, v_result, v_grade_id, caller_id,
+      case when is_closed then caller_id end, case when is_closed then clean_reason end
+    )
+    on conflict (institution_id, exam_enrollment_id) do update set
+      written_grade = excluded.written_grade,
+      oral_grade = excluded.oral_grade,
+      final_grade = excluded.final_grade,
+      result = excluded.result,
+      student_grade_id = excluded.student_grade_id,
+      recorded_by = case when is_closed then public.exam_results.recorded_by else excluded.recorded_by end,
+      corrected_by = excluded.corrected_by,
+      correction_reason = excluded.correction_reason,
+      lock_version = public.exam_results.lock_version + 1,
+      updated_at = timezone('utc', now());
+    saved_count := saved_count + 1;
+  end loop;
+
+  if is_closed and saved_count > 0 then
+    insert into public.exam_table_events (institution_id, exam_table_id, event_type, actor_user_id, reason_code, metadata)
+    values (target_institution_id, table_row.id, 'corrected', caller_id, 'acta_correction', jsonb_build_object('reason', clean_reason, 'results', saved_count));
+  end if;
+
+  if coalesce(target_close, false) and not is_closed then
+    select count(*) into pending_count
+    from public.exam_enrollments enrollment
+    where enrollment.institution_id = target_institution_id
+      and enrollment.exam_table_id = table_row.id
+      and enrollment.status = 'registered'
+      and not exists (
+        select 1 from public.exam_results result
+        where result.institution_id = enrollment.institution_id and result.exam_enrollment_id = enrollment.id
+      );
+    if pending_count > 0 then
+      raise exception 'EXAM_ACTA_INCOMPLETE' using errcode = '22023', detail = pending_count::text;
+    end if;
+    update public.exam_tables exam_table
+    set status = 'completed',
+        metadata = exam_table.metadata || jsonb_build_object('acta_closed_at', timezone('utc', now()), 'acta_closed_by', caller_id),
+        updated_by = caller_id,
+        updated_at = timezone('utc', now()),
+        lock_version = exam_table.lock_version + 1
+    where exam_table.id = table_row.id;
+    insert into public.exam_table_events (institution_id, exam_table_id, event_type, actor_user_id, reason_code, metadata)
+    values (target_institution_id, table_row.id, 'completed', caller_id, 'acta_closed', jsonb_build_object('results', saved_count));
+    is_closed := true;
+  end if;
+
+  return jsonb_build_object('guardados', saved_count, 'acta_cerrada', is_closed);
+end;
+$$;
+
+revoke execute on function public.exam_save_acta_results(uuid, text, text, jsonb, boolean, text) from public, anon;
+grant execute on function public.exam_save_acta_results(uuid, text, text, jsonb, boolean, text) to authenticated;

@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, ClipboardCheck, Download, ImageUp, Printer, 
 import {
   canPrintActa,
   enrollStudentAsAdmin,
+  fetchExamActaDetail,
   fetchExamActaRoster,
   fetchExamTablesOverview,
   formatArgentinaTime,
@@ -15,6 +16,8 @@ import {
   summarizeMesas,
 } from '../../services/examActas.js'
 import { buildExamActasPdf, formatActaDate } from '../../utils/examActaPdf.js'
+import { EXAM_RESULT_LABELS } from '../../services/examActaResults.js'
+import ExamActaEditor from './ExamActaEditor.jsx'
 import { prepareLogoDataUrl, saveInstitutionLogo } from '../../services/institutionLogo.js'
 
 const EMPTY_ARRAY = []
@@ -83,44 +86,79 @@ function openForPrinting(doc, fileName) {
 }
 
 function MesaRoster({ institutionId, workspaceKey, examKey }) {
-  const [state, setState] = useState({ loading: true, error: '', alumnos: EMPTY_ARRAY })
+  const [state, setState] = useState({ loading: true, error: '', detail: null })
+  const [reloadKey, setReloadKey] = useState(0)
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
     let active = true
-    fetchExamActaRoster({ institutionId, workspaceKey, examKey })
-      .then((alumnos) => { if (active) setState({ loading: false, error: '', alumnos }) })
-      .catch((error) => { if (active) setState({ loading: false, error: error.message, alumnos: EMPTY_ARRAY }) })
+    fetchExamActaDetail({ institutionId, workspaceKey, examKey })
+      .then((detail) => { if (active) setState({ loading: false, error: '', detail }) })
+      .catch((error) => { if (active) setState({ loading: false, error: error.message, detail: null }) })
     return () => { active = false }
-  }, [examKey, institutionId, workspaceKey])
+  }, [examKey, institutionId, workspaceKey, reloadKey])
 
+  const alumnos = state.detail?.alumnos ?? EMPTY_ARRAY
   if (state.loading) return <p className="text-sm text-slate-500">Cargando inscriptos...</p>
   if (state.error) return <p className="text-sm text-red-700">{state.error}</p>
-  if (!state.alumnos.length) return <p className="text-sm text-slate-500">No hay alumnos inscriptos.</p>
+  if (!alumnos.length) return <p className="text-sm text-slate-500">No hay alumnos inscriptos.</p>
+  const canEditActa = state.detail.puedeCargarNotas || state.detail.actaCerrada
+
+  if (editing) {
+    return (
+      <div>
+        <button className="btn-secondary" onClick={() => setEditing(false)} type="button">Volver a la lista</button>
+        <ExamActaEditor
+          examKey={examKey}
+          institutionId={institutionId}
+          isStaff
+          key={reloadKey}
+          onSaved={() => {
+            setState((current) => ({ ...current, loading: true }))
+            setReloadKey((value) => value + 1)
+          }}
+          roster={state.detail}
+          workspaceKey={workspaceKey}
+        />
+      </div>
+    )
+  }
 
   return (
-    <div className="overflow-x-auto rounded-md border border-slate-200">
-      <table className="min-w-full text-left text-sm">
-        <thead className="bg-slate-100 text-xs font-bold uppercase text-slate-600">
-          <tr>
-            <th className="px-3 py-2">Nº</th>
-            <th className="px-3 py-2">DNI</th>
-            <th className="px-3 py-2">Apellido</th>
-            <th className="px-3 py-2">Nombre</th>
-            <th className="px-3 py-2">Inscripcion</th>
-          </tr>
-        </thead>
-        <tbody>
-          {state.alumnos.map((alumno, index) => (
-            <tr className="border-t border-slate-100" key={`${alumno.dni}-${index}`}>
-              <td className="px-3 py-2 text-slate-500">{index + 1}</td>
-              <td className="px-3 py-2">{alumno.dni || '-'}</td>
-              <td className="px-3 py-2 font-semibold text-slate-900">{alumno.apellido || alumno.nombre || '-'}</td>
-              <td className="px-3 py-2">{alumno.nombres || ''}</td>
-              <td className="px-3 py-2 text-xs text-slate-500">{alumno.inscripcion_especial ? 'Especial (admin)' : 'Portal'}</td>
+    <div className="space-y-2">
+      <div className="overflow-x-auto rounded-md border border-slate-200">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-100 text-xs font-bold uppercase text-slate-600">
+            <tr>
+              <th className="px-3 py-2">Nº</th>
+              <th className="px-3 py-2">DNI</th>
+              <th className="px-3 py-2">Apellido</th>
+              <th className="px-3 py-2">Nombre</th>
+              <th className="px-3 py-2">Inscripcion</th>
+              <th className="px-3 py-2">Resultado</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {alumnos.map((alumno, index) => (
+              <tr className="border-t border-slate-100" key={`${alumno.dni}-${index}`}>
+                <td className="px-3 py-2 text-slate-500">{index + 1}</td>
+                <td className="px-3 py-2">{alumno.dni || '-'}</td>
+                <td className="px-3 py-2 font-semibold text-slate-900">{alumno.apellido || alumno.nombre || '-'}</td>
+                <td className="px-3 py-2">{alumno.nombres || ''}</td>
+                <td className="px-3 py-2 text-xs text-slate-500">{alumno.inscripcion_especial ? 'Especial (admin)' : 'Portal'}</td>
+                <td className="px-3 py-2 text-xs font-bold text-slate-700">
+                  {alumno.resultado ? `${EXAM_RESULT_LABELS[alumno.resultado]}${alumno.nota !== null && alumno.nota !== undefined ? ` (${alumno.nota})` : ''}` : '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {canEditActa && (
+        <button className="btn-secondary" onClick={() => setEditing(true)} type="button">
+          {state.detail.actaCerrada ? 'Corregir acta (cerrada)' : 'Cargar notas'}
+        </button>
+      )}
     </div>
   )
 }

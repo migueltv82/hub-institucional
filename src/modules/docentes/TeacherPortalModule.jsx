@@ -28,6 +28,7 @@ import SubjectsView from './pages/SubjectsView.jsx'
 import { buildSubjectDisplayIndex, buildSubjectKey, fetchTeacherSubjects } from './services/teacherSubjects.js'
 import { fetchTeacherExamAssignments } from './services/teacherExamAssignments.js'
 import { fetchExamTableRoster } from './services/teacherExamRoster.js'
+import ExamActaEditor from '../../features/examActas/ExamActaEditor.jsx'
 import {
   buildTeacherScheduleGrids,
   buildTeacherWeeklyOverviewGrid,
@@ -569,19 +570,36 @@ function ExamAssignmentCard({ assignment }) {
 }
 
 function ExamRosterPanel({ institutionId, examKey }) {
-  const [state, setState] = useState({ loading: true, error: '', alumnos: EMPTY_ARRAY })
+  const [state, setState] = useState({ loading: true, error: '', roster: null })
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let active = true
     fetchExamTableRoster({ institutionId, examKey })
-      .then((result) => { if (active) setState({ loading: false, error: '', alumnos: result.alumnos }) })
-      .catch((error) => { if (active) setState({ loading: false, error: error.message, alumnos: EMPTY_ARRAY }) })
+      .then((roster) => { if (active) setState({ loading: false, error: '', roster }) })
+      .catch((error) => { if (active) setState({ loading: false, error: error.message, roster: null }) })
     return () => { active = false }
-  }, [institutionId, examKey])
+  }, [institutionId, examKey, reloadKey])
 
+  const alumnos = state.roster?.alumnos ?? EMPTY_ARRAY
   if (state.loading) return <p className="mt-3 text-sm text-slate-500">Cargando inscriptos...</p>
   if (state.error) return <p className="mt-3 text-sm text-red-700">{state.error}</p>
-  if (!state.alumnos.length) return <p className="mt-3 text-sm text-slate-500">Todavia no hay alumnos inscriptos.</p>
+  if (!alumnos.length) return <p className="mt-3 text-sm text-slate-500">Todavia no hay alumnos inscriptos.</p>
+  // F1a: desde el dia del examen el titular carga el acta; cerrada queda en solo lectura.
+  if (state.roster.puedeCargarNotas || state.roster.actaCerrada) {
+    return (
+      <ExamActaEditor
+        examKey={examKey}
+        institutionId={institutionId}
+        key={reloadKey}
+        onSaved={() => {
+          setState((current) => ({ ...current, loading: true }))
+          setReloadKey((value) => value + 1)
+        }}
+        roster={state.roster}
+      />
+    )
+  }
 
   return (
     <div className="mt-3 overflow-x-auto rounded-md border border-slate-200 bg-white">
@@ -595,7 +613,7 @@ function ExamRosterPanel({ institutionId, examKey }) {
           </tr>
         </thead>
         <tbody>
-          {state.alumnos.map((alumno, index) => (
+          {alumnos.map((alumno, index) => (
             <tr key={`${alumno.dni}-${index}`} className="border-t border-slate-100">
               <td className="px-3 py-2 text-slate-500">{index + 1}</td>
               <td className="px-3 py-2 font-semibold text-slate-900">{alumno.nombre || '-'}</td>
@@ -606,7 +624,7 @@ function ExamRosterPanel({ institutionId, examKey }) {
         </tbody>
       </table>
       <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
-        {state.alumnos.length} {state.alumnos.length === 1 ? 'alumno inscripto' : 'alumnos inscriptos'}
+        {alumnos.length} {alumnos.length === 1 ? 'alumno inscripto' : 'alumnos inscriptos'}
       </p>
     </div>
   )

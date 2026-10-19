@@ -57,6 +57,22 @@ export async function fetchExamActaRoster({ institutionId, workspaceKey = 'main'
   return Array.isArray(data?.alumnos) ? data.alumnos : []
 }
 
+// F1a: inscriptos con sus notas y el estado del acta, para cargarla o corregirla desde secretaria.
+export async function fetchExamActaDetail({ institutionId, workspaceKey = 'main', examKey }) {
+  assertRemote(institutionId)
+  const { data, error } = await supabase.rpc('get_exam_table_roster', {
+    target_institution_id: institutionId,
+    target_workspace_key: workspaceKey,
+    target_exam_key: clean(examKey),
+  })
+  if (error) throw new Error(translateError(error, 'No se pudo cargar la lista de inscriptos.'))
+  return {
+    alumnos: Array.isArray(data?.alumnos) ? data.alumnos : [],
+    actaCerrada: Boolean(data?.acta_cerrada),
+    puedeCargarNotas: Boolean(data?.puede_cargar_notas),
+  }
+}
+
 export async function enrollStudentAsAdmin({ institutionId, workspaceKey = 'main', examKey, studentRecordId, reason }) {
   assertRemote(institutionId)
   if (!clean(studentRecordId)) throw new Error('Elegi el alumno a inscribir.')
