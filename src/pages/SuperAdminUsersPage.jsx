@@ -26,6 +26,7 @@ import {
   updateUserInstitutionRole,
 } from '../services/superAdmin.js'
 import ResetUserPasswordModal from '../components/ResetUserPasswordModal.jsx'
+import { canCreateUserForCatalog, institutionCatalogState } from '../utils/institutionCatalogState.js'
 
 const CreateInstitutionUserModal = lazy(() => import('../components/CreateInstitutionUserModal.jsx'))
 
@@ -99,6 +100,10 @@ function SuperAdminUsersPage() {
 
   const {
     data: institutionsCatalog,
+    isPending: isCatalogPending,
+    isError: isCatalogError,
+    error: catalogError,
+    refetch: refetchCatalog,
   } = useQuery({
     queryKey: ['super-admin', 'institutions-catalog', isRemoteSession],
     queryFn: () => getAllInstitutions({ useRemote: isRemoteSession }),
@@ -106,6 +111,7 @@ function SuperAdminUsersPage() {
 
   const users = usersPage?.users ?? EMPTY_USERS
   const institutions = institutionsCatalog?.institutions ?? []
+  const catalogState = institutionCatalogState({ isPending: isCatalogPending, isError: isCatalogError, institutions })
   const roleSummary = useMemo(() => usersPage?.roleSummary ?? EMPTY_ROLE_SUMMARY, [usersPage?.roleSummary])
   const currentPage = usersPage?.page ?? page
   const total = usersPage?.total ?? 0
@@ -274,7 +280,7 @@ function SuperAdminUsersPage() {
               setIsModalOpen(true)
             }}
             type="button"
-            disabled={institutions.length === 0}
+            disabled={!canCreateUserForCatalog(catalogState)}
           >
             <PlusCircle className="h-4 w-4" />
             Nuevo usuario
@@ -310,7 +316,18 @@ function SuperAdminUsersPage() {
         })}
       </section>
 
-      {institutions.length === 0 && (
+      {catalogState === 'loading' && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600" role="status">
+          Cargando instituciones...
+        </div>
+      )}
+      {catalogState === 'error' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+          <span>No se pudieron cargar las instituciones. {catalogError?.message ?? ''}</span>
+          <button className="btn-secondary" onClick={() => refetchCatalog()} type="button">Reintentar</button>
+        </div>
+      )}
+      {catalogState === 'empty' && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           No hay instituciones cargadas todavia. Crea una institucion antes de dar de alta usuarios.
         </div>

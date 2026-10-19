@@ -1314,3 +1314,10 @@ Evidencia: `supabase/security/INITIAL_PASSWORD_LOCAL_RESULT.md`.
 - **Pendiente:** redeploy de la Edge (Miguel). El mismo patrón en `create_or_assign_institution_user` quedó como tarjeta I2g.
 
 Evidencia: `supabase/security/TENANT_CREATION_LOCAL_RESULT.md`.
+
+## 2026-10-19 — D1b: "No hay instituciones" en Usuarios y accesos (Claude)
+
+- **Causa:** la página mostraba "No hay instituciones cargadas" y deshabilitaba "Nuevo usuario" siempre que la lista estuviera vacía, también mientras cargaba y cuando la consulta fallaba. El error además se tragaba, así que una falla dejaba el mensaje fijo. En el recorrido de D1 la captura lo agarró en plena carga. Reproducido con navegador real sobre el stack local de la demo.
+- **Arreglo:** `src/utils/institutionCatalogState.js` decide el estado (cargando / error / vacío / listo). La página muestra "Cargando instituciones…", o el error con el botón "Reintentar", y dice "No hay instituciones" solo si la consulta terminó bien sin filas.
+- **Verificación con navegador real:** con la consulta demorada 2,5 s muestra "cargando" (no "vacío"); con 500 muestra el error y "Reintentar" lo recupera; con datos, "Nuevo usuario" queda habilitado.
+- `npm run check` PASS (2681).
