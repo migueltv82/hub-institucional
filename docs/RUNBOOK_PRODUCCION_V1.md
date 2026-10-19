@@ -53,7 +53,7 @@ Contexto que hace obligatorio P7: el último discovery de Producción (2026-09-2
 
 ## 3. T-0 — Backup previo (obligatorio, aunque el plan tenga backups automáticos)
 
-El método es el mismo que se ensayó localmente en tq01D3Bz (rollback DB + bytes) y to6OoXZC (recuperación integrada DB + Auth + Storage): archive custom de PostgreSQL más los bytes de Storage, y restore sobre una base **vacía**. El método `pg_restore --clean` sobre una base existente falló en el ensayo y está retirado: no usarlo.
+El método es el mismo que se ensayó localmente en tq01D3Bz (rollback DB + bytes) y to6OoXZC (recuperación integrada DB + Auth + Storage): archive custom de PostgreSQL más los bytes de Storage. En un proyecto hosted ese archive **no** se restaura completo (RB.1: el rol `postgres` no es superusuario y `auth`/`storage` pertenecen a `supabase_admin`); sirve para verificar el restore gestionado y para la reparación puntual R4b. El restore completo es el gestionado por Supabase (R4, P10). El método `pg_restore --clean` sobre una base existente falló en el ensayo y está retirado: no usarlo.
 
 1. **Base de datos** (desde la máquina del operador, con la cadena de conexión de Producción cargada en una variable de sesión, nunca en un archivo del repo):
 
@@ -79,7 +79,7 @@ El método es el mismo que se ensayó localmente en tq01D3Bz (rollback DB + byte
    rollback;
    ```
 
-4. Si P10 indica backups diarios o PITR, anotar además la hora del último backup automático. **Es complemento, no reemplazo** del archive propio.
+4. Si P10 indica backups diarios o PITR, anotar además la hora del último backup automático. Ese backup gestionado es el único camino de restore completo (R4); el archive propio es el complemento para verificar y para R4b.
 5. Criterio para seguir: archive legible, conteo de objetos Storage igual al listado y SHA256 registrados. Si falla: **NO-GO, fin de la ventana**.
 
 ## 4. Aplicación de SQL
@@ -237,7 +237,7 @@ Decide Miguel. El Verificador propone el nivel según qué falló. Se revierte *
 | R1 Frontend | Falla de UI o config Vercel, con DB y Edge sanas | Vercel → Deployments → promover el deployment anterior (registrado en 2.4) | Ninguna |
 | R2 Edge | Falla de `admin-users` o `source-file-storage` | Redeploy de la versión anterior de la función, desde el commit anterior. Si no existía, borrar la función nueva | Ninguna |
 | R3 SQL de funciones | Falla de una RPC sin cambio de tablas ni datos | Re-aplicar el archivo SQL correspondiente **del commit anterior** (son idempotentes). Revisar con el Verificador antes | Ninguna |
-| R4 Restore completo | Daño de datos, migración a medias que cambió tablas, o fallo de seguridad (RLS) que no se corrige en minutos | Ver abajo | Todo lo escrito después del backup del paso 3 |
+| R4 Restore completo | Daño de datos, migración a medias que cambió tablas, o fallo de seguridad (RLS) que no se corrige en minutos | Ver abajo | Con PITR: lo escrito después del punto elegido. Con backup diario sin PITR: todo lo escrito después del último backup diario, que puede ser hasta ~24 h anterior al paso 3 (anotar su hora en §3.4) |
 
 Procedimiento R4:
 
@@ -251,7 +251,7 @@ Procedimiento R4:
    - El archive sirve para dos cosas: verificar el restore gestionado (conteos y catálogo) y la reparación puntual de filas de `public` (**R4b**, abajo), con el Verificador y aprobación de Miguel.
    - Si el restore gestionado no está disponible: abrir un ticket a soporte de Supabase con el archive. No improvisar un restore manual sobre Producción.
 3. Restaurar los bytes de Storage desde `BACKUP_DIR` y verificar los SHA256 contra los registrados en el paso 3.2.
-4. Verificar: conteos de filas iguales a los del backup; logins de una cuenta por rol; catálogo (funciones y policies) igual al snapshot del paso 3.3.
+4. Verificar: conteos de filas iguales a los del backup gestionado restaurado (si se usó un backup diario anterior al paso 3, los del archive del §3.1 pueden ser mayores: la diferencia es la pérdida a reparar con R4b); logins de una cuenta por rol; catálogo (funciones y policies) igual al snapshot del paso 3.3.
 5. Volver a R1 con el frontend anterior.
 
 Procedimiento R4b — reparación puntual de filas de `public` de UNA institución desde el archive del §3.1. Ensayado en RB.2b: `supabase/security/PUBLIC_REPAIR_LOCAL_RESULT.md`, con auditoría independiente.

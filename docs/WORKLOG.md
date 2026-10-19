@@ -1169,3 +1169,33 @@ Con el OK de Miguel se creó `set_institution_logo` en Producción. Verificado:
 - el admin puede y el docente no (en transacción revertida).
 
 Miguel carga el logo desde Mesas y actas.
+
+## 2026-10-18 — DOC.2: guía de demo con mesas y actas (Claude)
+
+Se actualizaron `docs/DEMO_GUIDE.md` y `docs/PRE_DEMO_CHECKLIST.md` con lo que se sumó en EX.7–EX.9:
+- **Mesas y actas:** elegir el día, filtrar, ver los inscriptos, e imprimir o descargar las actas. Las mesas sin inscriptos no generan acta.
+- **Logo del colegio:** cómo cargarlo y quién puede hacerlo.
+- **Inscripción especial:** exige un motivo y se permite hasta el final del día del examen.
+- **Portal docente:** solo el titular ve los inscriptos.
+- **Portal alumno:** muestra el titular, los vocales e "Inscripcion hasta"; la inscripción cierra 24 h antes.
+
+Solo documentación; no cambia código.
+
+## 2026-10-18 — RB.1: auditoría independiente PASS y ajuste del runbook (Claude)
+
+Un agente auditor en contexto separado revisó RB.1 y RB.1a y dio **PASS**, sin P0 ni P1. Verificó:
+- que el parser da el mismo resultado con LF y con CRLF;
+- que falla de entrada si no hay bloques SQL;
+- 6/6 tests focales;
+- la coherencia de la evidencia del run `26684363bed76de0`;
+- que no hay secretos en los archivos.
+
+Se corrigieron los P2/P3 de texto en `docs/RUNBOOK_PRODUCCION_V1.md`:
+- §3 ya no dice que el archive se restaura sobre una base vacía;
+- §3.4 deja el backup gestionado como el camino de restore completo;
+- la pérdida de datos de R4 diferencia PITR de un backup diario;
+- el paso 4 de R4 aclara contra qué se comparan los conteos.
+
+P3 pendientes, sin impacto en la demo:
+- el harness ensaya solo el primer bloque SQL de cada sección;
+- un detalle de la evidencia se editó a mano (sacaba un UUID sintético).
