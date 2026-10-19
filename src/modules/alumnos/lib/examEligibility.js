@@ -44,8 +44,13 @@ function isAbsentRecord(row) {
   return ['1', 'si', 'sí', 'true', 'x'].includes(normalizeText(value))
 }
 
-function getExamCallKey(exam) {
-  return clean(exam?.exam_call || exam?.call_label || exam?.llamado || exam?.llamadoNumero || exam?.call_number)
+// F1b: espejo de exam_enrollment_assert_eligible. Un llamado es (periodo, llamado): periodo = anio-mes de la
+// fecha de la mesa (exam_period_key) y llamado = exam_call de la mesa publicada, 'first' si falta
+// (exam_call_key). Mismo criterio que publish_exam_tables_from_schedule.
+function getExamCallSlot(exam) {
+  const rawDate = clean(exam?.exam_date || exam?.exam_session?.exam_date || exam?.date)
+  const period = /^\d{4}-\d{2}/.test(rawDate) ? rawDate.slice(0, 7) : ''
+  return `${period}|${clean(exam?.exam_call) || 'first'}`
 }
 
 function getExamDateTimestamp(exam) {
@@ -76,11 +81,7 @@ export function getAbsencePenaltyForExam({ exam, exams = [], grades = [] }) {
   const nextExam = followingExams[0]
   if (!nextExam) return { blocked: false, absenceDate: '', reason: '' }
 
-  const nextCallKey = getExamCallKey(nextExam)
-  const currentCallKey = getExamCallKey(exam)
-  const blocked = nextCallKey
-    ? currentCallKey === nextCallKey
-    : getExamDateTimestamp(exam) === getExamDateTimestamp(nextExam)
+  const blocked = getExamCallSlot(exam) === getExamCallSlot(nextExam)
   const absenceDate = clean(latestAbsence.grade.fecha_ausencia || latestAbsence.grade.absence_date || latestAbsence.grade.absent_at)
 
   return {

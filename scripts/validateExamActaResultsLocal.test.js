@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ACTORS, STEPS, evaluateStep, rosterSql, saveSql } from './validateExamActaResultsLocal.mjs'
+import { ACTORS, NEXT_CALLS, STEPS, evaluateStep, nextCallsSetupSql, portalEnrollSql, rosterSql, saveSql } from './validateExamActaResultsLocal.mjs'
 
 const exams = readFileSync(resolve('supabase/schema/08_exam_tables.sql'), 'utf8')
 const block = exams.slice(exams.indexOf('create or replace function public.exam_save_acta_results('))
@@ -29,6 +29,16 @@ describe('validateExamActaResultsLocal', () => {
     expect(evaluateStep(denied, { result: { guardados: 1 }, changed: true })).toHaveLength(2)
     const approved = STEPS.find((step) => step.expect?.result === 'approved')
     expect(evaluateStep(approved, { result: { guardados: 1 }, state: { result: 'approved', final: '8.00', approvedGrades: 1, latestStatus: 'approved' } })).toEqual([])
+  })
+
+  it('F1b: el llamado siguiente al ausente se bloquea y el posterior no; servidor y espejo se comparan', () => {
+    expect(NEXT_CALLS.map((call) => call.expect)).toEqual(['BLOCKED_BY_ABSENCE_PENALTY', 'registered'])
+    expect(NEXT_CALLS[1].daysAhead - NEXT_CALLS[0].daysAhead).toBeGreaterThan(31)
+    expect(nextCallsSetupSql()).toContain("'open'")
+    expect(portalEnrollSql('x').trim().endsWith('rollback;')).toBe(true)
+    expect(exams).toMatch(/F1b \(decision de Miguel[\s\S]*raise exception 'BLOCKED_BY_ABSENCE_PENALTY'/)
+    expect(exams).toContain('grant execute on function public.get_student_exam_absences(uuid, text) to authenticated;')
+    expect(exams).toContain("and exam_result.student_id = (select auth.uid())")
   })
 
   it('la RPC es security definer, el helper del titular es interno y exam_results es default-deny', () => {

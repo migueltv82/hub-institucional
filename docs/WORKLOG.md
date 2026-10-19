@@ -1270,3 +1270,11 @@ Harness `validateExamActaResultsLocal.mjs` PASS (16 pasos). F1b pendiente: el au
 - **Pruebas:** el harness prueba los dos órdenes de la carrera con procesos concurrentes. Contra el SQL anterior reproduce el bug; con la corrección, PASS. Regresiones PASS (el harness de publicación ahora inserta en orden cronológico).
 
 Detalle en `supabase/security/STUDENT_HISTORY_IMPORT_AUDIT.md`. Pendiente: re-auditoría liviana.
+
+## 2026-10-19 — F1b: el ausente pierde el próximo llamado (Claude)
+
+Regla de Miguel. Si el alumno queda ausente en el acta, el primer llamado posterior de esa materia queda bloqueado; el siguiente ya no.
+- **Servidor:** la regla está en `exam_enrollment_assert_eligible`, así que vale para el portal y para la inscripción especial.
+- **Portal:** el espejo compara período + llamado y recibe los ausentes por la RPC nueva `get_student_exam_absences` (solo los propios).
+
+Harness: servidor y espejo coinciden en los dos llamados. Regresiones PASS.

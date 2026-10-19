@@ -605,6 +605,9 @@ set search_path = ''
 as $$
 declare
   latest_academic_status text;
+  last_absence_at timestamptz;
+  next_period_key text;
+  next_call_key text;
 begin
   select grade.academic_status
   into latest_academic_status
@@ -672,6 +675,50 @@ begin
       )
   ) then
     raise exception 'BLOCKED_BY_ABSENCE_PENALTY';
+  end if;
+
+  -- F1b (decision de Miguel, 18/10): ausente en el acta de una materia -> pierde el proximo llamado de esa
+  -- materia y carrera. El proximo llamado es el (periodo, llamado) de la primera mesa publicada de la materia
+  -- posterior al examen en que falto. Espejo: getAbsencePenaltyForExam en src/modules/alumnos/lib/examEligibility.js.
+  select max(absent_table.scheduled_starts_at)
+  into last_absence_at
+  from public.exam_results exam_result
+  join public.exam_tables absent_table
+    on absent_table.institution_id = exam_result.institution_id
+   and absent_table.id = exam_result.exam_table_id
+  where exam_result.institution_id = p_institution_id
+    and exam_result.workspace_key = p_workspace_key
+    and exam_result.student_record_id = p_student_record_id
+    and exam_result.subject_id = p_subject_id
+    and exam_result.program_id = p_program_id
+    and exam_result.result = 'absent'
+    and absent_table.scheduled_starts_at < p_scheduled_starts_at;
+
+  if last_absence_at is not null then
+    select next_table.exam_period_key, next_table.exam_call_key
+    into next_period_key, next_call_key
+    from public.exam_tables next_table
+    join public.exam_table_subjects next_subject
+      on next_subject.institution_id = next_table.institution_id
+     and next_subject.exam_table_id = next_table.id
+    join public.subjects subject
+      on subject.institution_id = next_subject.institution_id
+     and subject.id = next_subject.subject_id
+    join public.careers career
+      on career.institution_id = next_subject.institution_id
+     and career.id = next_subject.career_id
+    where next_table.institution_id = p_institution_id
+      and next_table.workspace_key = p_workspace_key
+      and next_table.status in ('confirmed', 'open', 'closed', 'completed')
+      and next_table.scheduled_starts_at > last_absence_at
+      and subject.code = p_subject_id
+      and (career.name = p_program_id or career.external_code = p_program_id)
+    order by next_table.scheduled_starts_at, next_table.id
+    limit 1;
+
+    if next_period_key = p_exam_period_key and next_call_key = p_exam_call_key then
+      raise exception 'BLOCKED_BY_ABSENCE_PENALTY';
+    end if;
   end if;
 
   if exists (
@@ -2226,3 +2273,39 @@ $$;
 
 revoke execute on function public.exam_save_acta_results(uuid, text, text, jsonb, boolean, text) from public, anon;
 grant execute on function public.exam_save_acta_results(uuid, text, text, jsonb, boolean, text) to authenticated;
+
+-- F1b: ausentes del propio alumno en actas de examen, para que el portal explique la mesa castigo antes
+-- de que intente inscribirse (espejo de exam_enrollment_assert_eligible). Solo filas del que llama.
+create or replace function public.get_student_exam_absences(
+  target_institution_id uuid,
+  target_workspace_key text
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', exam_result.id,
+    'subject_id', exam_result.subject_id,
+    'program_id', exam_result.program_id,
+    'student_record_id', exam_result.student_record_id,
+    'absent_at', absent_table.scheduled_starts_at,
+    'exam_period_key', absent_table.exam_period_key,
+    'exam_call_key', absent_table.exam_call_key
+  ) order by absent_table.scheduled_starts_at), '[]'::jsonb)
+  from public.exam_results exam_result
+  join public.exam_tables absent_table
+    on absent_table.institution_id = exam_result.institution_id
+   and absent_table.id = exam_result.exam_table_id
+  where (select auth.uid()) is not null
+    and exam_result.institution_id = target_institution_id
+    and exam_result.workspace_key = coalesce(nullif(btrim(target_workspace_key), ''), 'main')
+    and exam_result.student_id = (select auth.uid())
+    and exam_result.result = 'absent'
+    and public.is_member_of_institution(target_institution_id);
+$$;
+
+revoke execute on function public.get_student_exam_absences(uuid, text) from public, anon;
+grant execute on function public.get_student_exam_absences(uuid, text) to authenticated;

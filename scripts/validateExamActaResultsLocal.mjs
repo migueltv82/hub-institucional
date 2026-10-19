@@ -7,6 +7,8 @@ import { pathToFileURL } from 'node:url';
 import { BASELINE } from './validateGoTrueLocalHarness.mjs';
 import { disposableDatabase } from './validateLocalDbAuthRecovery.mjs';
 import { STUDENT, fixtureSql } from './validateExamEligibilityParityLocal.mjs';
+import { getAbsencePenaltyForExam } from '../src/modules/alumnos/lib/examEligibility.js';
+import { mapExamAbsenceRow } from '../src/modules/alumnos/lib/examAbsences.js';
 
 // F1a: acta de examen final. Permisos (solo titular o gestion), dia del examen, validaciones, aprobado ->
 // student_grades, desaprobado/ausente -> el alumno sigue regular, cierre, correccion solo de gestion con motivo.
@@ -72,6 +74,30 @@ export const STEPS = Object.freeze([
   { name: 'el roster del titular muestra la nota y el acta cerrada', actor: 'titular', roster: true, expect: { rosterResult: 'approved', rosterGrade: 7, rosterClosed: true } },
   { name: 'gestion corrige a ausente: se anula la aprobacion', actor: 'adminA', results: [{ ausente: true }], reason: 'El alumno no se presento', expect: { result: 'absent', final: null, approvedGrades: 0, latestStatus: 'regular', correctionEvents: 2 } },
 ]);
+
+// F1b: despues del acta, el alumno quedo ausente. Dos mesas posteriores de la misma materia: el llamado
+// siguiente (pierde) y uno mas adelante (puede). Servidor y espejo del portal tienen que coincidir.
+export const NEXT_CALLS = Object.freeze([
+  { key: 'mesa-f1b-next', id: 'af1b0000-0000-4000-8000-000000000001', subjectRowId: 'af1b0000-0000-4000-8000-0000000000a1', daysAhead: 10, call: 'first', expect: 'BLOCKED_BY_ABSENCE_PENALTY' },
+  { key: 'mesa-f1b-later', id: 'af1b0000-0000-4000-8000-000000000002', subjectRowId: 'af1b0000-0000-4000-8000-0000000000a2', daysAhead: 45, call: 'first', expect: 'registered' },
+]);
+
+export function nextCallsSetupSql() {
+  return NEXT_CALLS.map((call) => `insert into public.exam_tables (id, institution_id, workspace_key, exam_period_key, exam_call_key, exam_call_label, scheduled_starts_at, enrollment_opens_at, enrollment_closes_at, status, legacy_exam_table_id, legacy_snapshot_id)
+values ('${call.id}', '${STUDENT.institution}', 'main', to_char(timezone('America/Argentina/Buenos_Aires', now() + interval '${call.daysAhead} days'), 'YYYY-MM'), '${call.call}', 'Llamado', now() + interval '${call.daysAhead} days', now() - interval '1 day', now() + interval '${call.daysAhead - 2} days', 'open', '${call.key}', '${call.key}');
+insert into public.exam_table_subjects (id, institution_id, exam_table_id, career_id, study_plan_id, study_plan_subject_id, subject_id, legacy_subject_id, legacy_program_id)
+values ('${call.subjectRowId}', '${STUDENT.institution}', '${call.id}', 'a3000000-0000-4000-8000-000000000001', 'a4000000-0000-4000-8000-000000000001', 'a6000000-0000-4000-8000-000000000001', 'a5000000-0000-4000-8000-000000000001', '${STUDENT.subjectId}', '${STUDENT.programId}');`).join('\n');
+}
+
+export function portalEnrollSql(examTableId) {
+  return asActor(STUDENT.userId, `do $$ begin
+  perform public.upsert_exam_enrollment_from_portal('${STUDENT.institution}', 'main', '${STUDENT.userId}', '${STUDENT.userId}', '${STUDENT.recordId}', '${examTableId}', '${STUDENT.subjectId}', '${STUDENT.programId}');
+  perform set_config('acta.next', 'registered', true);
+exception when others then
+  perform set_config('acta.next', sqlerrm, true);
+end $$;
+select current_setting('acta.next');`).replace(/commit;$/, 'rollback;');
+}
 
 export function evaluateStep(step, output) {
   const failures = [];
@@ -170,7 +196,24 @@ select to_json(current_setting('acta.enroll'));`)));
       output.changed = JSON.stringify(output.state) !== before;
       report.steps.push({ name: item.name, result: output.result ?? { roster: output.roster?.alumnos?.[0] }, state: output.state, failures: evaluateStep(item, output) });
     }
-    report.failed = report.steps.filter(item => item.failures.length).map(item => item.name);
+    step = 'F1b next call';
+    sql(nextCallsSetupSql());
+    const absences = JSON.parse(lastJson(sql(asActor(ACTORS.student, `select to_json(public.get_student_exam_absences('${STUDENT.institution}', 'main')::text);`))));
+    const foreignAbsences = JSON.parse(lastJson(sql(asActor(ACTORS.titular, `select to_json(public.get_student_exam_absences('${STUDENT.institution}', 'main')::text);`))));
+    const mirrorGrades = absences.map(mapExamAbsenceRow);
+    const examRows = JSON.parse(sql(`select json_agg(json_build_object('id', t.id, 'subject_id', '${STUDENT.subjectId}', 'program_id', '${STUDENT.programId}', 'exam_call', t.exam_call_key, 'exam_date', to_char(timezone('America/Argentina/Buenos_Aires', t.scheduled_starts_at), 'YYYY-MM-DD"T"HH24:MI:SS')) order by t.scheduled_starts_at) from public.exam_tables t where t.legacy_exam_table_id like 'mesa-f1b-%';`));
+    report.nextCalls = NEXT_CALLS.map((call) => {
+      const server = sql(portalEnrollSql(call.id)).split('\n').filter(Boolean).pop();
+      const mirror = getAbsencePenaltyForExam({ exam: examRows.find((row) => row.id === call.id), exams: examRows, grades: mirrorGrades });
+      const failures = [];
+      if (server !== call.expect) failures.push(`server: expected ${call.expect}, got ${server}`);
+      if (mirror.blocked !== (call.expect === 'BLOCKED_BY_ABSENCE_PENALTY')) failures.push(`mirror blocked=${mirror.blocked} vs server ${server}`);
+      return { name: call.key, server, mirrorBlocked: mirror.blocked, failures };
+    });
+    report.absences = { own: absences.length, otherUser: foreignAbsences.length };
+    if (absences.length !== 1 || foreignAbsences.length !== 0) report.nextCalls.push({ name: 'absences visibility', failures: [`own=${absences.length} other=${foreignAbsences.length}`] });
+    report.failed = report.steps.filter(item => item.failures.length).map(item => item.name)
+      .concat(report.nextCalls.filter(item => item.failures.length).map(item => item.name));
     step = 'assertions';
     assert.deepEqual(report.failed, [], 'Exam acta steps failed');
     report.result = 'PASS';

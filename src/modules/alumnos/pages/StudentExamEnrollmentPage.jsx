@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useAuth } from '../../../auth/AuthContext.jsx'
 import { useStudentStore } from '../stores/studentStore'
+import { fetchStudentExamAbsences } from '../services/studentExamAbsences.js'
 
 const EXAM_REFRESH_INTERVAL_MS = 60_000
 import { getExamEnrollmentDeadline, getExamEnrollmentEligibility } from '../lib/examEligibility.js'
@@ -149,6 +150,14 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
     clearSuccess: state.clearSuccess
   })))
   const adeudaCuota = Boolean(accountStatus?.adeuda_cuota)
+  // F1b: ausentes en actas de examen. Con ellos el portal explica la mesa castigo antes de inscribirse.
+  const { data: examAbsences = [] } = useQuery({
+    queryKey: ['student-exam-absences', user?.id, currentInstitution?.id],
+    queryFn: () => fetchStudentExamAbsences({ institutionId: currentInstitution?.id }),
+    enabled: Boolean(isRemoteSession && currentInstitution?.id),
+    staleTime: EXAM_REFRESH_INTERVAL_MS,
+  })
+  const eligibilityGrades = useMemo(() => grades.concat(examAbsences), [grades, examAbsences])
   const portalQueryKey = useMemo(
     () => ['student-portal', user?.id, user?.email, isRemoteSession, isSuperAdmin, currentInstitution?.id],
     [currentInstitution?.id, isRemoteSession, isSuperAdmin, user?.email, user?.id],
@@ -200,7 +209,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
   const handleRegister = async exam => {
     const examId = getExamId(exam)
     if (!examId) return
-    const eligibility = getExamEnrollmentEligibility({ exam, exams, enrollments, grades, prerequisites, subjects, adeudaCuota })
+    const eligibility = getExamEnrollmentEligibility({ exam, exams, enrollments, grades: eligibilityGrades, prerequisites, subjects, adeudaCuota })
 
     if (!eligibility.canRegister) {
       setError(eligibility.reason)
@@ -333,7 +342,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
               const subject = getExamSubject(exam)
               const registeredEnrollment = registeredByExamId.get(examId)
               const isRegistered = Boolean(registeredEnrollment)
-              const eligibility = getExamEnrollmentEligibility({ exam, exams, enrollments, grades, prerequisites, subjects, adeudaCuota })
+              const eligibility = getExamEnrollmentEligibility({ exam, exams, enrollments, grades: eligibilityGrades, prerequisites, subjects, adeudaCuota })
 
               return (
                 <article key={examId} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">

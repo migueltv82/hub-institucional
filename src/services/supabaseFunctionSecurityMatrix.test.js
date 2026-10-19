@@ -112,6 +112,7 @@ const invokedRpcContracts = new Set([
   'academic_admin_confirm_exam_assignment',
   'academic_admin_import_student_history',
   'exam_save_acta_results',
+  'get_student_exam_absences',
   'academic_admin_create_student_career_enrollment',
   'academic_admin_correct_student_career_enrollment',
   'academic_admin_get_student_career_enrollment_history',
