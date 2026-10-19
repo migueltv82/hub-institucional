@@ -110,6 +110,8 @@ function extractInvokedRpcContracts() {
 
 const invokedRpcContracts = new Set([
   'academic_admin_confirm_exam_assignment',
+  'academic_admin_bulk_assign_teachers',
+  'academic_admin_bulk_enroll_students',
   'academic_admin_import_student_history',
   'exam_save_acta_results',
   'get_student_exam_absences',

@@ -224,7 +224,11 @@ El portal alumno lee carreras, planes y materias del **catálogo relacional**. S
    - `--con-correlativas`: **no se usa en el GO** (decisión de Miguel, 18/10: opción a). Se suma cuando esté cargada la historia académica. Si se cargan, el portal y el RPC de mesas exigen la nota de la correlativa. Un alumno de 2.º año en adelante sin historia académica cargada queda bloqueado.
 3. Supabase → SQL Editor: pegar **todo** `catalogo.sql` y apretar Run. Es una sola transacción: si la institución no existe o algo falla, no escribe nada. También aborta, sin escribir, si la planilla renombra una carrera ya cargada o mueve un plan a otra carrera, porque eso rompería inscripciones y asignaciones. La tabla final muestra los conteos. `alumnos_con_plan` tiene que ser igual a `alumnos_activos`. Si es menor, hay alumnos sin plan en la planilla o con una carrera que no está en la planilla académica.
 4. En la app: **Crear accesos** de docentes y de alumnos.
-5. En la app: asignar cada docente a sus materias (panel de asignaciones). Sin asignación, el docente no ve a sus alumnos.
+5. En la app: **Alumnos → Cursadas y titulares** (I2b).
+   - **Aplicar titularidades:** asigna cada docente a sus materias desde la hoja `docente_materia`. El docente se busca por DNI y tiene que tener acceso creado.
+   - **Inscribir cursadas:** inscribe a cada alumno en sus materias desde `alumnos_inscripciones`.
+   - Se puede repetir: no duplica ni borra. Una cursada dada de baja no se reactiva sola.
+   - Sin titularidad, el docente no ve a sus alumnos; sin cursada, no les puede cargar notas. Las asignaciones sueltas siguen disponibles en la ficha del docente.
 6. En la app: **Alumnos → Historia académica**. Descargar la plantilla, completar una fila por alumno y materia ya cursada o rendida (DNI, carrera, materia, condición; nota, fecha, libro y folio son opcionales) e **Importar historia** (I2a).
    - Va después de "Crear accesos": una fila de un alumno sin cuenta se rechaza con el motivo "todavía no tiene acceso".
    - Sin este paso, los regulares de años anteriores no se pueden inscribir a mesas y las correlativas quedan sin aprobar.

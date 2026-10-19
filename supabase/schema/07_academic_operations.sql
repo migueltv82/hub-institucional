@@ -1624,6 +1624,119 @@ begin
 end;
 $$;
 
+-- Resolucion compartida por las cargas masivas (I2a historia, I2b cursadas). Internas: sin EXECUTE para
+-- roles de la API; las llaman RPC security definer que ya validaron que quien llama es personal de gestion.
+-- Carrera por nombre o codigo externo dentro de la institucion; materia por codigo dentro de un plan de esa
+-- carrera. Devuelve el nombre canonico de la carrera y el codigo canonico de la materia.
+create or replace function public.academic_resolve_catalog_subject(
+  p_institution_id uuid,
+  p_career text,
+  p_subject text
+)
+returns table (outcome text, career_name text, subject_code text)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_matches integer;
+  v_career_id uuid;
+  v_career_name text;
+  v_subject_code text;
+begin
+  select count(*), min(career.id::text)::uuid, min(career.name)
+  into v_matches, v_career_id, v_career_name
+  from public.careers career
+  where career.institution_id = p_institution_id
+    and (lower(btrim(career.name)) = lower(btrim(coalesce(p_career, '')))
+      or lower(btrim(coalesce(career.external_code, ''))) = lower(btrim(coalesce(p_career, ''))));
+  if v_matches <> 1 then
+    return query select case when v_matches = 0 then 'CARRERA_NO_ENCONTRADA' else 'CARRERA_AMBIGUA' end, null::text, null::text;
+    return;
+  end if;
+
+  select min(subject.code)
+  into v_subject_code
+  from public.subjects subject
+  join public.study_plan_subjects plan_subject
+    on plan_subject.institution_id = subject.institution_id and plan_subject.subject_id = subject.id
+  join public.study_plans plan
+    on plan.institution_id = plan_subject.institution_id and plan.id = plan_subject.plan_id
+  where subject.institution_id = p_institution_id
+    and plan.career_id = v_career_id
+    and lower(btrim(subject.code)) = lower(btrim(coalesce(p_subject, '')));
+  if v_subject_code is null then
+    return query select 'MATERIA_NO_ESTA_EN_EL_PLAN'::text, v_career_name, null::text;
+    return;
+  end if;
+
+  return query select 'ok'::text, v_career_name, v_subject_code;
+end;
+$$;
+
+revoke all on function public.academic_resolve_catalog_subject(uuid, text, text) from public, anon, authenticated;
+
+-- Legajo por DNI (solo digitos) dentro del workspace: el de esa carrera; si no hay, uno sin carrera cargada.
+-- Un legajo de otra carrera no se reutiliza (AUD.I2a P2). Exige cuenta (profile_id).
+create or replace function public.academic_resolve_student_record_by_dni(
+  p_institution_id uuid,
+  p_workspace_key text,
+  p_dni text,
+  p_career_name text
+)
+returns table (outcome text, record_id uuid, profile_id uuid)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_dni text := regexp_replace(coalesce(p_dni, ''), '[^0-9]', '', 'g');
+  v_matches integer;
+  v_record_id uuid;
+  v_profile_id uuid;
+begin
+  select count(*), min(sr.id::text)::uuid, min(sr.profile_id::text)::uuid
+  into v_matches, v_record_id, v_profile_id
+  from public.student_records sr
+  where sr.institution_id = p_institution_id
+    and sr.workspace_key = p_workspace_key
+    and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = v_dni
+    and lower(btrim(coalesce(sr.career, ''))) = lower(btrim(coalesce(p_career_name, '')));
+  if v_matches = 0 then
+    select count(*), min(sr.id::text)::uuid, min(sr.profile_id::text)::uuid
+    into v_matches, v_record_id, v_profile_id
+    from public.student_records sr
+    where sr.institution_id = p_institution_id
+      and sr.workspace_key = p_workspace_key
+      and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = v_dni
+      and btrim(coalesce(sr.career, '')) = '';
+    if v_matches = 0 and exists (
+      select 1
+      from public.student_records sr
+      where sr.institution_id = p_institution_id
+        and sr.workspace_key = p_workspace_key
+        and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = v_dni
+    ) then
+      return query select 'ALUMNO_DE_OTRA_CARRERA'::text, null::uuid, null::uuid;
+      return;
+    end if;
+  end if;
+  if v_matches <> 1 then
+    return query select case when v_matches = 0 then 'ALUMNO_NO_ENCONTRADO' else 'ALUMNO_AMBIGUO' end, null::uuid, null::uuid;
+    return;
+  end if;
+  if v_profile_id is null then
+    return query select 'ALUMNO_SIN_CUENTA'::text, v_record_id, null::uuid;
+    return;
+  end if;
+  return query select 'ok'::text, v_record_id, v_profile_id;
+end;
+$$;
+
+revoke all on function public.academic_resolve_student_record_by_dni(uuid, text, text, text) from public, anon, authenticated;
+
 -- I2a: historia academica previa (aprobadas, regulares, libres, promocionadas, desaprobadas) cargada por el
 -- personal de gestion desde una planilla. La inscripcion a mesas, las correlativas y el portal leen
 -- student_grades: cada fila va en canonico (subject_id = subjects.code, program_id = careers.name), con el
@@ -1655,13 +1768,11 @@ declare
   clean_status text;
   clean_grade numeric;
   clean_date date;
-  v_career_id uuid;
+  v_outcome text;
   v_career_name text;
-  v_career_matches integer;
   v_subject_code text;
   v_record_id uuid;
   v_record_profile_id uuid;
-  v_record_matches integer;
   inserted boolean;
   imported_count integer := 0;
   updated_count integer := 0;
@@ -1745,72 +1856,21 @@ begin
       end if;
     end if;
 
-    -- Carrera por nombre o por codigo externo, siempre dentro de la institucion.
-    select count(*), min(career.id::text)::uuid, min(career.name)
-    into v_career_matches, v_career_id, v_career_name
-    from public.careers career
-    where career.institution_id = p_institution_id
-      and (lower(btrim(career.name)) = lower(raw_career) or lower(btrim(coalesce(career.external_code, ''))) = lower(raw_career));
-    if v_career_matches <> 1 then
-      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', case when v_career_matches = 0 then 'CARRERA_NO_ENCONTRADA' else 'CARRERA_AMBIGUA' end, 'dni', raw_dni, 'materia', raw_subject));
+    -- Carrera y materia del plan dentro de la institucion; legajo por DNI de esa carrera (helpers compartidos con I2b).
+    select resolved.outcome, resolved.career_name, resolved.subject_code
+    into v_outcome, v_career_name, v_subject_code
+    from public.academic_resolve_catalog_subject(p_institution_id, raw_career, raw_subject) resolved;
+    if v_outcome <> 'ok' then
+      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', v_outcome, 'dni', raw_dni, 'materia', raw_subject));
       rejected_count := rejected_count + 1;
       continue;
     end if;
 
-    -- Materia por codigo, solo si pertenece a un plan de esa carrera.
-    select min(subject.code)
-    into v_subject_code
-    from public.subjects subject
-    join public.study_plan_subjects plan_subject
-      on plan_subject.institution_id = subject.institution_id and plan_subject.subject_id = subject.id
-    join public.study_plans plan
-      on plan.institution_id = plan_subject.institution_id and plan.id = plan_subject.plan_id
-    where subject.institution_id = p_institution_id
-      and plan.career_id = v_career_id
-      and lower(btrim(subject.code)) = lower(raw_subject);
-    if v_subject_code is null then
-      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', 'MATERIA_NO_ESTA_EN_EL_PLAN', 'dni', raw_dni, 'materia', raw_subject));
-      rejected_count := rejected_count + 1;
-      continue;
-    end if;
-
-    -- Legajo por DNI dentro del workspace; si el alumno tiene varios legajos, el de esa carrera.
-    select count(*), min(sr.id::text)::uuid, min(sr.profile_id::text)::uuid
-    into v_record_matches, v_record_id, v_record_profile_id
-    from public.student_records sr
-    where sr.institution_id = p_institution_id
-      and sr.workspace_key = clean_workspace_key
-      and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = raw_dni
-      and lower(btrim(coalesce(sr.career, ''))) = lower(v_career_name);
-    if v_record_matches = 0 then
-      -- AUD.I2a P2: sin legajo de esa carrera solo sirve un legajo sin carrera cargada. Un legajo de otra
-      -- carrera no se reutiliza: se informa para que se cargue el legajo correcto.
-      select count(*), min(sr.id::text)::uuid, min(sr.profile_id::text)::uuid
-      into v_record_matches, v_record_id, v_record_profile_id
-      from public.student_records sr
-      where sr.institution_id = p_institution_id
-        and sr.workspace_key = clean_workspace_key
-        and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = raw_dni
-        and btrim(coalesce(sr.career, '')) = '';
-      if v_record_matches = 0 and exists (
-        select 1
-        from public.student_records sr
-        where sr.institution_id = p_institution_id
-          and sr.workspace_key = clean_workspace_key
-          and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = raw_dni
-      ) then
-        issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', 'ALUMNO_DE_OTRA_CARRERA', 'dni', raw_dni, 'materia', raw_subject));
-        rejected_count := rejected_count + 1;
-        continue;
-      end if;
-    end if;
-    if v_record_matches <> 1 then
-      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', case when v_record_matches = 0 then 'ALUMNO_NO_ENCONTRADO' else 'ALUMNO_AMBIGUO' end, 'dni', raw_dni, 'materia', raw_subject));
-      rejected_count := rejected_count + 1;
-      continue;
-    end if;
-    if v_record_profile_id is null then
-      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', 'ALUMNO_SIN_CUENTA', 'dni', raw_dni, 'materia', raw_subject));
+    select resolved.outcome, resolved.record_id, resolved.profile_id
+    into v_outcome, v_record_id, v_record_profile_id
+    from public.academic_resolve_student_record_by_dni(p_institution_id, clean_workspace_key, raw_dni, v_career_name) resolved;
+    if v_outcome <> 'ok' then
+      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', v_outcome, 'dni', raw_dni, 'materia', raw_subject));
       rejected_count := rejected_count + 1;
       continue;
     end if;
@@ -1875,6 +1935,238 @@ begin
 end;
 $$;
 
+-- I2b: titularidades desde la hoja docente_materia. Docente por DNI (teacher_records, unico por workspace)
+-- con cuenta; carrera y materia del plan. Rol: titular (por defecto), suplente o licencia. Crea la asignacion
+-- activa o actualiza su rol; nunca borra asignaciones que no vinieron en la planilla.
+create or replace function public.academic_admin_bulk_assign_teachers(
+  p_institution_id uuid,
+  p_workspace_key text,
+  p_rows jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  clean_workspace_key text := coalesce(nullif(btrim(p_workspace_key), ''), 'main');
+  item jsonb;
+  item_index integer := 0;
+  row_label text;
+  raw_dni text;
+  raw_role text;
+  clean_role text;
+  v_outcome text;
+  v_career_name text;
+  v_subject_code text;
+  v_teacher_record_id uuid;
+  v_teacher_profile_id uuid;
+  v_teacher_matches integer;
+  v_existing_role text;
+  created_count integer := 0;
+  updated_count integer := 0;
+  unchanged_count integer := 0;
+  rejected_count integer := 0;
+  issues jsonb := '[]'::jsonb;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+  if p_institution_id is null or not (
+    public.is_super_admin()
+    or public.is_member_of_institution(p_institution_id, array['owner', 'admin', 'editor'])
+  ) then
+    raise exception 'Acceso denegado: solo el personal de gestion asigna docentes.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_rows) is distinct from 'array' or jsonb_array_length(p_rows) > 1000 then
+    raise exception 'ROSTER_ROWS_INVALID' using errcode = '22023';
+  end if;
+
+  for item in select value from jsonb_array_elements(p_rows) loop
+    item_index := item_index + 1;
+    row_label := coalesce(nullif(btrim(item ->> 'fila'), ''), item_index::text);
+    raw_dni := regexp_replace(coalesce(item ->> 'dni', ''), '[^0-9]', '', 'g');
+    raw_role := lower(btrim(coalesce(item ->> 'rol', '')));
+    clean_role := case
+      when raw_role in ('', 'titular') then 'titular'
+      when raw_role in ('suplente', 'reemplazo') then 'suplente'
+      when raw_role = 'licencia' then 'licencia'
+      else null
+    end;
+    if raw_dni = '' or btrim(coalesce(item ->> 'carrera', '')) = '' or btrim(coalesce(item ->> 'materia', '')) = '' then
+      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', 'FALTAN_DATOS', 'dni', raw_dni, 'materia', item ->> 'materia'));
+      rejected_count := rejected_count + 1;
+      continue;
+    end if;
+    if clean_role is null then
+      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', 'ROL_INVALIDO', 'dni', raw_dni, 'materia', item ->> 'materia'));
+      rejected_count := rejected_count + 1;
+      continue;
+    end if;
+
+    select resolved.outcome, resolved.career_name, resolved.subject_code
+    into v_outcome, v_career_name, v_subject_code
+    from public.academic_resolve_catalog_subject(p_institution_id, item ->> 'carrera', item ->> 'materia') resolved;
+    if v_outcome <> 'ok' then
+      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', v_outcome, 'dni', raw_dni, 'materia', item ->> 'materia'));
+      rejected_count := rejected_count + 1;
+      continue;
+    end if;
+
+    select count(*), min(teacher.id::text)::uuid, min(teacher.profile_id::text)::uuid
+    into v_teacher_matches, v_teacher_record_id, v_teacher_profile_id
+    from public.teacher_records teacher
+    where teacher.institution_id = p_institution_id
+      and teacher.workspace_key = clean_workspace_key
+      and regexp_replace(coalesce(teacher.dni, ''), '[^0-9]', '', 'g') = raw_dni;
+    if v_teacher_matches <> 1 or v_teacher_profile_id is null then
+      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada',
+        'motivo', case when v_teacher_matches = 0 then 'DOCENTE_NO_ENCONTRADO' when v_teacher_matches > 1 then 'DOCENTE_AMBIGUO' else 'DOCENTE_SIN_CUENTA' end,
+        'dni', raw_dni, 'materia', v_subject_code));
+      rejected_count := rejected_count + 1;
+      continue;
+    end if;
+
+    select assignment.role
+    into v_existing_role
+    from public.subject_teacher_assignments assignment
+    where assignment.institution_id = p_institution_id
+      and assignment.workspace_key = clean_workspace_key
+      and assignment.subject_id = v_subject_code
+      and assignment.program_id = v_career_name
+      and assignment.teacher_id = v_teacher_profile_id
+      and assignment.deleted_at is null
+      and assignment.status = 'active'
+    for update;
+
+    if not found then
+      insert into public.subject_teacher_assignments (
+        institution_id, workspace_key, subject_id, program_id, teacher_id, teacher_record_id, source, status, role, metadata
+      ) values (
+        p_institution_id, clean_workspace_key, v_subject_code, v_career_name, v_teacher_profile_id, v_teacher_record_id,
+        'planilla', 'active', clean_role, jsonb_build_object('imported_by', (select auth.uid()))
+      );
+      created_count := created_count + 1;
+    elsif v_existing_role is distinct from clean_role then
+      update public.subject_teacher_assignments assignment
+      set role = clean_role, teacher_record_id = coalesce(assignment.teacher_record_id, v_teacher_record_id)
+      where assignment.institution_id = p_institution_id
+        and assignment.workspace_key = clean_workspace_key
+        and assignment.subject_id = v_subject_code
+        and assignment.program_id = v_career_name
+        and assignment.teacher_id = v_teacher_profile_id
+        and assignment.deleted_at is null
+        and assignment.status = 'active';
+      updated_count := updated_count + 1;
+    else
+      unchanged_count := unchanged_count + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object('procesadas', item_index, 'creadas', created_count, 'actualizadas', updated_count,
+    'sin_cambios', unchanged_count, 'omitidas', 0, 'rechazadas', rejected_count, 'problemas', issues);
+end;
+$$;
+
+-- I2b: cursadas (subject_enrollments) desde alumnos_inscripciones. Alumno por DNI y carrera (mismo helper que
+-- la historia), con cuenta; materia del plan. Crea la cursada activa; si ya estaba activa no cambia nada.
+-- Una cursada dada de baja o borrada no se reactiva desde la planilla: se informa para que lo decida gestion.
+create or replace function public.academic_admin_bulk_enroll_students(
+  p_institution_id uuid,
+  p_workspace_key text,
+  p_rows jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  clean_workspace_key text := coalesce(nullif(btrim(p_workspace_key), ''), 'main');
+  item jsonb;
+  item_index integer := 0;
+  row_label text;
+  raw_dni text;
+  v_outcome text;
+  v_career_name text;
+  v_subject_code text;
+  v_record_id uuid;
+  v_profile_id uuid;
+  existing_row record;
+  created_count integer := 0;
+  unchanged_count integer := 0;
+  skipped_count integer := 0;
+  rejected_count integer := 0;
+  issues jsonb := '[]'::jsonb;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+  if p_institution_id is null or not (
+    public.is_super_admin()
+    or public.is_member_of_institution(p_institution_id, array['owner', 'admin', 'editor'])
+  ) then
+    raise exception 'Acceso denegado: solo el personal de gestion inscribe cursadas.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_rows) is distinct from 'array' or jsonb_array_length(p_rows) > 1000 then
+    raise exception 'ROSTER_ROWS_INVALID' using errcode = '22023';
+  end if;
+
+  for item in select value from jsonb_array_elements(p_rows) loop
+    item_index := item_index + 1;
+    row_label := coalesce(nullif(btrim(item ->> 'fila'), ''), item_index::text);
+    raw_dni := regexp_replace(coalesce(item ->> 'dni', ''), '[^0-9]', '', 'g');
+    if raw_dni = '' or btrim(coalesce(item ->> 'carrera', '')) = '' or btrim(coalesce(item ->> 'materia', '')) = '' then
+      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', 'FALTAN_DATOS', 'dni', raw_dni, 'materia', item ->> 'materia'));
+      rejected_count := rejected_count + 1;
+      continue;
+    end if;
+
+    select resolved.outcome, resolved.career_name, resolved.subject_code
+    into v_outcome, v_career_name, v_subject_code
+    from public.academic_resolve_catalog_subject(p_institution_id, item ->> 'carrera', item ->> 'materia') resolved;
+    if v_outcome = 'ok' then
+      select resolved.outcome, resolved.record_id, resolved.profile_id
+      into v_outcome, v_record_id, v_profile_id
+      from public.academic_resolve_student_record_by_dni(p_institution_id, clean_workspace_key, raw_dni, v_career_name) resolved;
+    end if;
+    if v_outcome <> 'ok' then
+      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', v_outcome, 'dni', raw_dni, 'materia', coalesce(v_subject_code, item ->> 'materia')));
+      rejected_count := rejected_count + 1;
+      continue;
+    end if;
+
+    select enrollment.id, enrollment.status, enrollment.deleted_at
+    into existing_row
+    from public.subject_enrollments enrollment
+    where enrollment.institution_id = p_institution_id
+      and enrollment.workspace_key = clean_workspace_key
+      and enrollment.subject_id = v_subject_code
+      and enrollment.program_id = v_career_name
+      and enrollment.student_id = v_profile_id
+    for update;
+
+    if existing_row.id is null then
+      insert into public.subject_enrollments (
+        institution_id, workspace_key, subject_id, program_id, student_id, student_record_id, status, metadata
+      ) values (
+        p_institution_id, clean_workspace_key, v_subject_code, v_career_name, v_profile_id, v_record_id, 'active',
+        jsonb_build_object('source', 'planilla', 'imported_by', (select auth.uid()))
+      );
+      created_count := created_count + 1;
+    elsif existing_row.deleted_at is null and existing_row.status in ('active', 'enrolled') then
+      unchanged_count := unchanged_count + 1;
+    else
+      issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'omitida', 'motivo', 'CURSADA_DADA_DE_BAJA', 'dni', raw_dni, 'materia', v_subject_code));
+      skipped_count := skipped_count + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object('procesadas', item_index, 'creadas', created_count, 'actualizadas', 0,
+    'sin_cambios', unchanged_count, 'omitidas', skipped_count, 'rechazadas', rejected_count, 'problemas', issues);
+end;
+$$;
+
 revoke execute on function public.academic_can_manage_subject(uuid, text, text, text) from public, anon;
 revoke execute on function public.academic_resolve_subject_enrollment(uuid, text, uuid, text, text) from public, anon;
 revoke execute on function public.upsert_subject_enrollment_from_portal(uuid, text, uuid, uuid, text, text, uuid, text, timestamptz, timestamptz, text, text, jsonb) from public, anon;
@@ -1885,6 +2177,8 @@ revoke execute on function public.academic_get_teacher_subject_rosters(uuid, tex
 revoke execute on function public.academic_get_student_subject_teacher_notices(uuid, text) from public, anon;
 revoke execute on function public.academic_get_student_portal_grades(uuid, text) from public, anon;
 revoke execute on function public.academic_admin_import_student_history(uuid, text, jsonb) from public, anon;
+revoke execute on function public.academic_admin_bulk_assign_teachers(uuid, text, jsonb) from public, anon;
+revoke execute on function public.academic_admin_bulk_enroll_students(uuid, text, jsonb) from public, anon;
 revoke execute on function public.teacher_reset_student_subject_academic_records(uuid, text, uuid, uuid, text, text) from public, anon, authenticated;
 revoke execute on function public.teacher_remove_student_subject_records(uuid, text, uuid, uuid, text, text) from public, anon, authenticated;
 
@@ -1898,6 +2192,8 @@ grant execute on function public.academic_get_teacher_subject_rosters(uuid, text
 grant execute on function public.academic_get_student_subject_teacher_notices(uuid, text) to authenticated;
 grant execute on function public.academic_get_student_portal_grades(uuid, text) to authenticated;
 grant execute on function public.academic_admin_import_student_history(uuid, text, jsonb) to authenticated;
+grant execute on function public.academic_admin_bulk_assign_teachers(uuid, text, jsonb) to authenticated;
+grant execute on function public.academic_admin_bulk_enroll_students(uuid, text, jsonb) to authenticated;
 grant execute on function public.teacher_reset_student_subject_academic_records(uuid, text, uuid, uuid, text, text) to service_role;
 grant execute on function public.teacher_remove_student_subject_records(uuid, text, uuid, uuid, text, text) to service_role;
 

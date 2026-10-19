@@ -1278,3 +1278,11 @@ Regla de Miguel. Si el alumno queda ausente en el acta, el primer llamado poster
 - **Portal:** el espejo compara período + llamado y recibe los ausentes por la RPC nueva `get_student_exam_absences` (solo los propios).
 
 Harness: servidor y espejo coinciden en los dos llamados. Regresiones PASS.
+
+## 2026-10-19 — I2b: titularidades y cursadas desde las planillas (Claude)
+
+- **Base:** dos RPC staff-only por lotes, con reporte por fila. No borran, no duplican y no reactivan bajas. Usan helpers internos compartidos con I2a.
+- **App:** Alumnos → Cursadas y titulares.
+- **Runbook:** §8.1 paso 5 actualizado.
+
+Harness PASS, con prueba de punta a punta: el docente asignado por planilla le carga la nota al alumno inscripto por planilla. Regresiones PASS. `npm run check` PASS (2645). Evidencia: `supabase/security/BULK_ROSTER_LOCAL_RESULT.md`.
