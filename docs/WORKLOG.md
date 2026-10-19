@@ -1295,3 +1295,13 @@ Harness PASS, con prueba de punta a punta: el docente asignado por planilla le c
 - **Runbook:** §8.1 pasos 2 y 3. El SQL Editor queda como alternativa.
 
 Harness: SQL y RPC dejan catálogos idénticos, y el payload de la app es igual al del script. Regresiones PASS. `npm run check` PASS (2658). Evidencia: `supabase/security/PUBLISH_CATALOG_LOCAL_RESULT.md`.
+
+## 2026-10-19 — I2d: accesos sin pisar contraseñas y cambio obligatorio de la inicial (Claude)
+
+- **Bugs:** volver a "Crear accesos" de docentes ya no resetea la contraseña al DNI ni desbloquea al docente.
+- **Alta con DNI:** alumnos y docentes quedan con `app_metadata.must_change_password`. En el primer ingreso la app solo muestra el cambio de contraseña. La acción nueva `complete_initial_password_change` de `admin-users` verifica la actual, cambia la contraseña y limpia la marca juntas.
+- **Pruebas:** harness con GoTrue y Edge reales en PASS. Con el código anterior reproduce los dos bugs. Regresiones PASS. `npm run check` PASS (2674).
+- **Documentación:** runbook §8.1 paso 4 y riesgo residual en `docs/SECURITY.md`.
+- **Pendiente:** redeploy de la Edge, a cargo de Miguel.
+
+Evidencia: `supabase/security/INITIAL_PASSWORD_LOCAL_RESULT.md`.

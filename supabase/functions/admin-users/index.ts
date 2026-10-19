@@ -67,6 +67,8 @@ const fallbackCorsHeaders = {
 const membershipRoles = new Set(['owner', 'admin', 'editor', 'viewer'])
 const planTypes = new Set(['free', 'pro', 'business'])
 const institutionStatuses = new Set(['active', 'suspended'])
+// I2d: marca de cambio obligatorio de la contrasena inicial (DNI), en app_metadata.
+const MUST_CHANGE_PASSWORD_FLAG = 'must_change_password'
 
 class HttpError extends Error {
   status: number
@@ -854,6 +856,7 @@ async function createOrReuseStudentAuthUser({
     app_metadata: {
       provider: 'email',
       providers: ['email'],
+      [MUST_CHANGE_PASSWORD_FLAG]: true,
     },
     user_metadata: {
       full_name: displayName || email,
@@ -914,8 +917,8 @@ async function createOrReuseTeacherAuthUser({
       throw badRequest(`El DNI ${dni} ya pertenece a un usuario con otro rol. No se modifico ese acceso.`)
     }
 
+    // I2d: volver a crear accesos no pisa la contrasena de quien ya la cambio; solo actualiza datos.
     const { error: updateError } = await adminClient.auth.admin.updateUserById(existingUser.id, {
-      password,
       email_confirm: true,
       user_metadata: {
         ...existingUser.user_metadata,
@@ -936,6 +939,7 @@ async function createOrReuseTeacherAuthUser({
     app_metadata: {
       provider: 'email',
       providers: ['email'],
+      [MUST_CHANGE_PASSWORD_FLAG]: true,
     },
     user_metadata: {
       full_name: displayName || email,
@@ -1347,6 +1351,7 @@ async function handleBulkCreateTeachers(adminClient: ReturnType<typeof getClient
       })
       authUsersByEmail.set(email, user)
 
+      // I2d: un docente existente conserva su bloqueo; solo el alta nueva arranca desbloqueada.
       const { error: profileError } = await adminClient
         .from('profiles')
         .upsert({
@@ -1355,7 +1360,7 @@ async function handleBulkCreateTeachers(adminClient: ReturnType<typeof getClient
           display_name: displayName,
           account_role: 'docente',
           is_global_admin: false,
-          is_blocked: false,
+          ...(status === 'created' ? { is_blocked: false } : {}),
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' })
 
@@ -3602,6 +3607,31 @@ async function handleTeacherProfileUpdate(
   return { success: true, user_id: context.caller.id, email, telefono: phone }
 }
 
+// I2d: cambio de la contrasena inicial (DNI). Verifica la actual y cambia contrasena y marca en una sola
+// llamada de Auth Admin; la marca vive en app_metadata, que el usuario no puede editar por su cuenta.
+async function handleCompleteInitialPasswordChange(
+  adminClient: ReturnType<typeof getClients>['adminClient'],
+  payload: Record<string, unknown>,
+  context?: Awaited<ReturnType<typeof getAuthenticatedContext>>,
+) {
+  if (!context?.caller?.id) throw new HttpError('Sesion invalida. Inicia sesion nuevamente.', 401)
+  const currentPassword = requireString(payload.current_password, 'La contrasena actual')
+  const newPassword = requireString(payload.new_password, 'La nueva contrasena')
+  if (newPassword.length < 8) throw badRequest('La nueva contrasena debe tener al menos 8 caracteres.')
+  if (newPassword === currentPassword) throw badRequest('La nueva contrasena debe ser distinta de la actual.')
+  const dni = getOptionalString(context.caller.user_metadata?.dni).replace(/\D/g, '')
+  if (dni && newPassword.includes(dni)) throw badRequest('La nueva contrasena no puede contener el DNI.')
+  await assertCallerPassword(context.caller, currentPassword)
+
+  const appMetadata = isRecord(context.caller.app_metadata) ? context.caller.app_metadata : {}
+  const { error } = await adminClient.auth.admin.updateUserById(context.caller.id, {
+    password: newPassword,
+    app_metadata: { ...appMetadata, [MUST_CHANGE_PASSWORD_FLAG]: false },
+  })
+  if (error) throw error
+  return { success: true, user_id: context.caller.id }
+}
+
 async function handleSetUserPassword(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
   const userId = requireString(payload.target_user_id, 'El usuario')
   const password = requireString(payload.new_password, 'La nueva contrasena')
@@ -4045,6 +4075,7 @@ const actionHandlers: Record<string, (
   teacher_remove_student_subject_records: handleTeacherRemoveStudentSubjectRecords,
   teacher_reset_student_subject_academic_records: handleTeacherResetStudentSubjectAcademicRecords,
   set_user_password: handleSetUserPassword,
+  complete_initial_password_change: handleCompleteInitialPasswordChange,
 }
 
 Deno.serve(async (req) => {
@@ -4100,6 +4131,8 @@ Deno.serve(async (req) => {
         ? await requireTeacherPortalMember(req, typeof payload.institution_id === 'string' ? payload.institution_id : '')
       : action === 'bulk_create_students' || action === 'bulk_create_teachers' || action === 'reset_student_academic_records'
         ? await requireInstitutionAdmin(req, typeof payload.institution_id === 'string' ? payload.institution_id : '')
+      : action === 'complete_initial_password_change'
+        ? await getAuthenticatedContext(req)
         : await requireSuperAdmin(req)
     const { adminClient, caller } = authContext
     auditClient = adminClient

@@ -121,6 +121,26 @@ describe('admin-users edge function security posture', () => {
     expect(edgeFunction).toContain('mapSnapshotEnrollmentToTeacherRosterEnrollment')
   })
 
+  it('I2d: re-crear accesos docentes no pisa contrasena ni bloqueo, y el alta con DNI exige cambiarla', () => {
+    const teacherReuse = edgeFunction.slice(edgeFunction.indexOf('async function createOrReuseTeacherAuthUser('), edgeFunction.indexOf('async function linkStudentRecordsToProfile('))
+    const existingBranch = teacherReuse.slice(teacherReuse.indexOf('if (existingUser) {'), teacherReuse.indexOf('const { data, error } = await adminClient.auth.admin.createUser({'))
+    expect(existingBranch).toContain('updateUserById(existingUser.id, {')
+    expect(existingBranch).not.toMatch(/\bpassword\b,/)
+    expect(edgeFunction).toContain("...(status === 'created' ? { is_blocked: false } : {}),")
+    expect(edgeFunction.match(/\[MUST_CHANGE_PASSWORD_FLAG\]: true,/g)).toHaveLength(2)
+  })
+
+  it('I2d: solo complete_initial_password_change limpia la marca, verificando la contrasena actual', () => {
+    const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleCompleteInitialPasswordChange('), edgeFunction.indexOf('async function handleSetUserPassword('))
+    expect(edgeFunction).toContain('complete_initial_password_change: handleCompleteInitialPasswordChange')
+    expect(edgeFunction).toContain("action === 'complete_initial_password_change'\n        ? await getAuthenticatedContext(req)")
+    expect(handler).toContain('await assertCallerPassword(context.caller, currentPassword)')
+    expect(handler.indexOf('assertCallerPassword')).toBeLessThan(handler.indexOf('updateUserById'))
+    expect(handler).toContain('updateUserById(context.caller.id, {')
+    expect(handler).toContain('[MUST_CHANGE_PASSWORD_FLAG]: false')
+    expect(edgeFunction.match(/\[MUST_CHANGE_PASSWORD_FLAG\]: false/g)).toHaveLength(1)
+  })
+
   it('protege el reset academico total con permisos admin y contrasena actual', () => {
     expect(edgeFunction).toContain('reset_student_academic_records: handleResetStudentAcademicRecords')
     expect(edgeFunction).toContain("action === 'bulk_create_students' || action === 'bulk_create_teachers' || action === 'reset_student_academic_records'")

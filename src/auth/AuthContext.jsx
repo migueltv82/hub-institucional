@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 import { clearLegacySupabaseAuthStorage } from '../lib/authStorage.js'
+import { requiresInitialPasswordChange } from '../services/initialPasswordChange.js'
 import {
   fetchAccessibleInstitutions,
   persistActiveInstitutionId,
@@ -267,6 +268,8 @@ export function AuthProvider({ children }) {
     isRemoteSession,
     isAuthBypassed: isLocalSession,
     isSuperAdmin,
+    // I2d: alta con DNI como contrasena; hasta cambiarla, la app solo muestra el cambio obligatorio.
+    mustChangePassword: isRemoteSession && requiresInitialPasswordChange(session?.user),
     async requestMagicLink(email) {
       if (AUTH_DISABLED_TEMPORARILY) {
         throw new Error('El inicio de sesion esta desactivado temporalmente.')

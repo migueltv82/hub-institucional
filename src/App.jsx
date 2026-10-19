@@ -12,6 +12,7 @@ import { useAppTheme } from './hooks/useAppTheme.js'
 
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'))
+const ForcePasswordChangePage = lazy(() => import('./pages/ForcePasswordChangePage.jsx'))
 const StudentPortalModule = lazy(() => import('./modules/alumnos/StudentPortalModule.jsx'))
 const TeacherPortalModule = lazy(() => import('./modules/docentes/TeacherPortalModule.jsx'))
 const PrimariaPortalModule = lazy(() => import('./modules/primaria/PrimariaPortalModule.jsx'))
@@ -48,7 +49,7 @@ function AppStatusPanel({ title, message }) {
 
 // La app corre en modo local persistido; toda la navegacion relevante entra al workspace.
 function App() {
-  const { isLoading, isAuthenticated, isSuperAdmin } = useAuth()
+  const { isLoading, isAuthenticated, isSuperAdmin, mustChangePassword } = useAuth()
   const { theme, toggleTheme } = useAppTheme()
   const {
     data: appStatus,
@@ -123,6 +124,7 @@ function App() {
         </main>
       )}
       >
+        {mustChangePassword ? <ForcePasswordChangePage /> : (
         <Routes>
           <Route path="/login" element={isAuthenticated ? <Navigate to={isSuperAdmin ? "/super-admin" : "/app"} /> : <LoginPage />} />
           <Route path="/app/*" element={isAuthenticated ? <AppWorkspaceRouter /> : <Navigate to="/login" />} />
@@ -139,6 +141,7 @@ function App() {
           </Route>
           <Route path="*" element={<Navigate replace to="/" />} />
         </Routes>
+        )}
       </Suspense>
     </div>
   )

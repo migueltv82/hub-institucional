@@ -44,7 +44,7 @@ vi.mock('../services/institutions.js', () => ({
 }))
 
 function AuthProbe() {
-  const { activeInstitution, isAuthenticated, isLoading, isSuperAdmin, user } = useAuth()
+  const { activeInstitution, isAuthenticated, isLoading, isSuperAdmin, mustChangePassword, user } = useAuth()
 
   return (
     <div>
@@ -54,6 +54,7 @@ function AuthProbe() {
       <p data-testid="role">{user?.accountRole ?? 'none'}</p>
       <p data-testid="email">{user?.email ?? 'none'}</p>
       <p data-testid="institution">{activeInstitution?.name ?? 'none'}</p>
+      <p data-testid="must-change">{String(mustChangePassword)}</p>
     </div>
   )
 }
@@ -261,5 +262,27 @@ describe('AuthContext', () => {
       expect(screen.getByTestId('loading')).toHaveTextContent('false')
       expect(screen.getByTestId('institution')).toHaveTextContent('Instituto Uno')
     })
+  })
+
+  it.each([
+    [{ must_change_password: true }, 'true'],
+    [{ must_change_password: false }, 'false'],
+    [{}, 'false'],
+  ])('I2d: exige cambiar la contrasena solo con la marca en app_metadata (%o)', async (appMetadata, expected) => {
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: 'teacher-2', email: 'dni@docentes.local', app_metadata: appMetadata, user_metadata: { must_change_password: true } } } },
+      error: null,
+    })
+    maybeSingle.mockResolvedValue({
+      data: { user_id: 'teacher-2', email: 'dni@docentes.local', display_name: 'Docente Dos', account_role: 'docente', is_global_admin: false, is_blocked: false },
+      error: null,
+    })
+    fetchAccessibleInstitutions.mockResolvedValue({ institutions: [{ id: 'inst-1', name: 'Instituto Uno', role: 'teacher' }] })
+    onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } })
+
+    render(<AuthProvider><AuthProbe /></AuthProvider>)
+
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
+    expect(screen.getByTestId('must-change')).toHaveTextContent(expected)
   })
 })

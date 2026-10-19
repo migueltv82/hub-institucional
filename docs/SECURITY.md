@@ -204,6 +204,7 @@ Estas pruebas verifican:
 ## Riesgos residuales
 
 - No hay MFA obligatorio para superadmins. Antes de vender como SaaS conviene exigir MFA o al menos una politica fuerte de cuentas administrativas.
+- **Contraseña inicial = DNI (I2d).** Las cuentas de alumnos y docentes creadas por `admin-users` llevan `app_metadata.must_change_password`, que el usuario no puede editar. La app no muestra nada hasta que la cambia, y la marca solo la limpia la acción `complete_initial_password_change`: verifica la contraseña actual y cambia contraseña y marca en una sola llamada de Auth Admin, lo que además revoca la sesión abierta con el DNI. La marca la hace cumplir la interfaz, no la base: mientras no la cambie, quien conozca el DNI puede entrar y leer por la API lo mismo que el titular de la cuenta. Las cuentas creadas antes de I2d no tienen la marca. Mitigación pendiente (v1.1): exigir la marca también en RLS/RPC, o crear las cuentas con una contraseña aleatoria y un enlace de activación.
 - No hay rate limiting propio en `admin-users`. Para exposicion publica, agregar control en la capa de hosting/API o reglas de Supabase.
 - Los archivos academicos se procesan en navegador. HISTÓRICO / SUPERADO: límite anterior de 10 MB. El enforcement vigente limita a 25 MiB; esto no reemplaza una politica operativa de origen confiable.
 - El modo local usa `localStorage` y datos demo. No debe considerarse seguro ni usarse para informacion real.

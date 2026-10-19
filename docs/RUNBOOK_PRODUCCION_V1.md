@@ -230,6 +230,8 @@ El portal alumno lee carreras, planes y materias del **catálogo relacional**. S
    ```
    Luego, en Supabase → SQL Editor, pegar **todo** `catalogo.sql` y apretar Run. Deja exactamente el mismo catálogo que el botón de la app (`--con-correlativas` equivale a la casilla). Si lista `errores`, no genera el SQL. Si la institución no existe, no escribe nada. La tabla final muestra los mismos conteos (`alumnos_con_plan` contra `alumnos_activos`).
 4. En la app: **Crear accesos** de docentes y de alumnos.
+   - La contraseña inicial es el DNI. En el primer ingreso la app pide cambiarla y no muestra nada más hasta hacerlo (I2d). La nueva tiene que tener 8 caracteres o más y no puede contener el DNI.
+   - Se puede repetir: a una cuenta que ya existe no le pisa la contraseña ni le saca el bloqueo; solo actualiza nombre y datos. Para blanquear una contraseña olvidada, usar el reset de Super Admin.
 5. En la app: **Alumnos → Cursadas y titulares** (I2b).
    - **Aplicar titularidades:** asigna cada docente a sus materias desde la hoja `docente_materia`. El docente se busca por DNI y tiene que tener acceso creado.
    - **Inscribir cursadas:** inscribe a cada alumno en sus materias desde `alumnos_inscripciones`.
