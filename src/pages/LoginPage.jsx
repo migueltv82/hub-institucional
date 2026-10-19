@@ -164,7 +164,7 @@ export default function LoginPage() {
     <main className="login-shell">
       <section className="login-form-surface">
         <div className="login-panel">
-          <header className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <header className="grid gap-4 2xl:grid-cols-[1fr_auto] 2xl:items-end">
             <div>
               <ProductBrand className="mb-4" />
               <p className="soft-title">Acceso academico seguro</p>
@@ -255,7 +255,7 @@ export default function LoginPage() {
                     Administra instituciones, usuarios, roles, auditoria operativa y estado de cada cuenta.
                   </p>
                 </div>
-                <span className="status-chip border-cyan-200 bg-cyan-50 text-cyan-900">
+                <span className="status-chip shrink-0 whitespace-nowrap border-cyan-200 bg-cyan-50 text-cyan-900">
                   Control
                 </span>
               </div>
@@ -370,7 +370,7 @@ export default function LoginPage() {
                       : 'Selecciona la institucion, valida tu cuenta y trabaja sobre su espacio academico.'}
                   </p>
                 </div>
-                <span className="status-chip border-blue-200 bg-blue-50 text-blue-900">
+                <span className="status-chip shrink-0 whitespace-nowrap border-blue-200 bg-blue-50 text-blue-900">
                   {accessMode === 'student' ? 'Alumno' : accessMode === 'teacher' ? 'Docente' : 'Workspace'}
                 </span>
               </div>

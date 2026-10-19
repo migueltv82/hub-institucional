@@ -2394,7 +2394,7 @@ html[data-theme="dark"] .student-portal .border-slate-300 {
 }
 
 .login-form-surface {
-  @apply flex h-dvh min-h-0 items-center justify-center overflow-hidden px-4 py-4 md:px-8 lg:px-10;
+  @apply flex h-dvh min-h-0 justify-center overflow-y-auto px-4 py-4 md:px-8 lg:px-10;
   background:
     linear-gradient(135deg, rgba(6, 182, 212, 0.08), transparent 28%),
     linear-gradient(225deg, rgba(249, 115, 22, 0.08), transparent 30%),
@@ -2402,11 +2402,11 @@ html[data-theme="dark"] .student-portal .border-slate-300 {
 }
 
 .login-panel {
-  @apply flex h-full max-h-[860px] w-full max-w-5xl flex-col justify-center gap-4;
+  @apply my-auto flex w-full max-w-5xl flex-col justify-center gap-4;
 }
 
 .login-card-grid {
-  @apply grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px];
+  @apply grid min-h-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_300px];
 }
 
 .login-admin-entry {
@@ -2462,7 +2462,7 @@ html[data-theme="dark"] .student-portal .border-slate-300 {
 }
 
 .login-insight-card {
-  @apply hidden flex-col justify-center gap-4 rounded-lg border border-slate-200 bg-white/78 p-4 shadow-sm backdrop-blur md:flex;
+  @apply hidden flex-col justify-center gap-4 rounded-lg border border-slate-200 bg-white/78 p-4 shadow-sm backdrop-blur 2xl:flex;
 }
 
 .login-insight-dot {
