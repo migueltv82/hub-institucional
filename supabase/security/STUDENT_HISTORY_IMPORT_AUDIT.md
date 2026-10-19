@@ -1,0 +1,127 @@
+# AUD.I2a — Auditoría independiente de importación de historia académica
+
+Fecha: 2026-10-19 (America/Buenos_Aires). Auditor: Codex, CHIEF CODE AUDITOR, revisión propia independiente del implementador.
+Tarjeta: https://trello.com/c/pah2RK2z
+Commit auditado: `e761829f455d1cb9fa591fd68f018bce537b2fd4`.
+
+**VEREDICTO: FAIL.** Hallazgos reproducidos: 1 P1 y 1 P2. Sin P0 ni P3 identificados. No se corrigió la implementación.
+
+## Alcance y entorno
+
+- RPC `academic_admin_import_student_history(uuid,text,jsonb)` y sus grants en `07_academic_operations.sql`.
+- `studentHistoryImport.js`, `StudentHistoryImportSection.jsx`, `mapStudentPortalGrade`, harness y tests de I2a.
+- Lectura del contrato de elegibilidad de `08_exam_tables.sql:609–625`; no se modificó ese archivo ni los archivos de F1.
+- Copia aislada de `release/v1`, sincronizada con `git pull --rebase`, HEAD exactamente `e761829`. El checkout compartido tenía cambios sin commit de 03.5c y HEAD separado: se preservó íntegro.
+- Docker local `supabase_db_codex-baseline-local-7725bdda`. Cada harness creó una base con nombre y marcador aleatorios y comprobó su eliminación.
+- Sin lecturas de `.env`, credenciales de producción, SQL remoto, deploy, PR nuevo ni cambios en `main`.
+
+## P1 — Una importación concurrente puede prevalecer sobre la nota docente y habilitar una mesa
+
+Ubicación: `supabase/schema/07_academic_operations.sql:1779–1796` (comprobación separada del INSERT), y `:1806–1815` (upsert sin coordinación con la escritura docente).
+Consumidor afectado: `supabase/schema/08_exam_tables.sql:609–625`, que decide por la última condición no-pending ordenada por `updated_at`, luego `created_at`.
+
+La RPC comprueba que no exista una nota no-pending de otro tipo, pero no serializa esa comprobación con `academic_teacher_upsert_student_grade`. Las claves únicas difieren por `grade_type`, de modo que `final` e `historia` pueden insertarse simultáneamente. Los timestamps de los triggers provienen de `now()`, es decir, del comienzo de la transacción, no del orden de confirmación de las escrituras.
+
+### Reproducción ejecutada
+
+Usar el fixture A/B y los identificadores exportados por `validateStudentHistoryImportLocal.mjs` y `validateExamEligibilityParityLocal.mjs` en una base descartable. Borrar solo las notas del alumno sintético y asegurar su cursada y la asignación titular del docente. Para hacer determinista la ventana entre comprobación e INSERT, instalar **solo en esa base descartable**:
+
+```sql
+create function public.audit_history_delay() returns trigger
+language plpgsql as $delay$
+begin
+  if new.grade_type = 'historia' then perform pg_sleep(3); end if;
+  return new;
+end $delay$;
+create trigger audit_history_delay before insert on public.student_grades
+for each row execute function public.audit_history_delay();
+```
+
+1. Sesión T: `BEGIN; SELECT pg_sleep(1.5);` y luego, como el docente autenticado y asignado, llamar a `academic_teacher_upsert_student_grade` con `grade_type='final'`, intento 1, condición `libre`; `COMMIT`.
+2. A los 300 ms del comienzo de T, sesión H: como admin A, importar una fila `regular` de la misma materia/carrera/legajo con fecha histórica `15/12/2024`; confirmar.
+3. H pasa la comprobación antes de que T haya escrito y queda esperando en el trigger. T escribe y confirma `libre`. H inserta después la historia.
+4. Ejecutar `enrollSql()` del harness como el alumno: devuelve **`registered`**.
+
+Resultado observado en el run independiente `730d292018b6e2b3`:
+
+| grade_type | condición | updated_at (UTC) |
+|---|---|---|
+| historia | regular | 2026-10-19T16:25:54.210587+00:00 |
+| final | libre | 2026-10-19T16:25:53.878737+00:00 |
+
+La fila docente no se sobrescribe físicamente, pero pierde autoridad funcional ante la historia. Se viola la promesa de que la importación nunca gana a la operación docente y se permite una inscripción que debería quedar bloqueada por `libre`.
+
+Recomendación para Claude: coordinar importación y escritura docente sobre la misma identidad académica y volver a comprobar bajo esa coordinación; cubrir ambas intercalaciones y el re-import. No alcanza con bloquear únicamente la fila `historia`, porque la fila docente usa otra clave. Mantener la regla de última condición no-pending y su espejo; no corregir este hallazgo debilitando la elegibilidad.
+
+## P2 — El fallback por DNI vincula una historia al legajo de otra carrera
+
+Ubicación: `supabase/schema/07_academic_operations.sql:1759–1765`, posterior persistencia en `:1802`.
+
+La primera búsqueda filtra carrera; si no encuentra coincidencias, la segunda elimina ese filtro. Un único DNI encontrado en el workspace se acepta aunque su legajo tenga una carrera distinta y explícita.
+
+### Reproducción ejecutada
+
+1. En una transacción sobre el fixture A/B, sin notas del alumno sintético, cambiar `student_records.career` del legajo A a `OTHER CAREER`.
+2. Como admin A, importar DNI `30111222`, carrera `FIX-A`, materia `FIX-A-01`, condición `regular`.
+3. La RPC responde `importadas=1`, `rechazadas=0`.
+4. El JOIN de la nota importada con su legajo devuelve:
+
+```json
+{"grade_program":"Fixture Career A","record_career":"OTHER CAREER"}
+```
+
+Impacto: asociación académica incorrecta entre carrera y legajo; no es una fuga entre instituciones. La ambigüedad entre dos legajos de la misma carrera sí se rechaza correctamente.
+
+Recomendación para Claude: distinguir un legajo sin carrera de uno que contradice expresamente la carrera importada y rechazar la contradicción; si se desea permitir legajos multicarrera, definir y verificar su vínculo canónico antes de reutilizarlos.
+
+## Qué se verificó
+
+### Pruebas solicitadas
+
+```text
+npx vitest run scripts/validateStudentHistoryImportLocal.test.js src/services/studentHistoryImport.test.js src/components/generadorCronograma/StudentHistoryImportSection.test.jsx
+3 archivos / 13 tests: PASS.
+
+node scripts/validateStudentHistoryImportLocal.mjs
+Run 90f0954ada500c50: 8 casos PASS; cleanup databases=0, errors=[].
+```
+
+### Escenarios propios, base descartable
+
+Run `730d292018b6e2b3`; 14 escenarios adicionales. La finalización técnica del runner y los casos originales resultaron PASS; **esto no convierte los resultados adversariales en aprobación funcional**. Los dos resultados incorrectos anteriores determinan el FAIL de esta auditoría.
+
+| Escenario | Resultado observado |
+|---|---|
+| null, número, string y array como elementos | 4 rechazos por fila, `FALTAN_DATOS` |
+| 1001 filas en una llamada | `22023`, `STUDENT_HISTORY_TOO_MANY_ROWS` |
+| DNI `30.111.222`, nota `8,50` | Importación aceptada |
+| Institución suspendida, actor staff | `42501`, sin importación |
+| Workspace sin el legajo | `ALUMNO_NO_ENCONTRADO` |
+| Dos legajos con mismo DNI y carrera | `ALUMNO_AMBIGUO` |
+| Nota docente pending | Historia aceptada; pending no bloquea por diseño |
+| owner, admin, editor (tres casos) | Una fila importada por cada rol |
+| Staff bloqueado | `42501` |
+| Superadmin sin membresía | Importación aceptada |
+| Legajo de otra carrera | FAIL, hallazgo P2 |
+| Docente/importación concurrentes | FAIL, hallazgo P1; inscripción `registered` |
+
+Ambos runs finalizaron con `cleanup.databases=0`, `cleanup.errors=[]`. El trigger y los fixtures adversariales existieron solo en la base eliminada.
+
+### Revisión del contrato y del frontend
+
+- SECURITY DEFINER con `search_path=""`; `anon` sin EXECUTE y `authenticated` con EXECUTE, verificados en catálogo local.
+- El cuerpo exige `auth.uid()` y gestión por owner/admin/editor o superadmin. Las consultas de catálogo se acotan por institución y las de legajo por institución y workspace. No se identificó acceso entre tenants en los casos ejecutados.
+- La suspensión y el bloqueo de staff se hacen efectivos por `is_member_of_institution`; superadmin conserva la excepción explícita de la arquitectura existente.
+- Harness original: condición inválida, nota fuera de rango, fecha imposible/futura, catálogo ajeno, alumno ausente y legajo sin cuenta se rechazan. Re-import secuencial no duplica; notas docentes no-pending preexistentes se omiten.
+- `03.5c` está en el baseline auditado. Los estados escritos por la RPC son canónicos; `pending` no es una condición admitida para importar historia.
+- Componente sin cliente Supabase directo: acceso por `services/`. Lotes secuenciales de 500; error de RPC devuelto como objeto informa reporte parcial. Tests incluyen 1201 filas y error de segundo lote. No se ejecutó un fallo real de red entre lotes.
+- `mapStudentPortalGrade` transforma `historia` en `final` con `origin='historia'` en el adaptador del alumno, conservando los demás campos; no modifica el mapeo docente compartido.
+- No se ejecutó recorrido de navegador ni carga de un XLSX contra una base remota; los tests de componente y servicio no sustituyen esos recorridos.
+
+## Cierre
+
+`npm run check`: PASS (auditoría del repo, lint, 334 archivos / 2615 tests, build y auditoría de producción de 117 archivos). Aviso preexistente de chunks >500 kB. No hay typecheck en el proyecto JS. Browser/E2E no ejecutado en esta auditoría; revisión de componente mediante tests. Seguridad y corrección funcional auditadas: FAIL por P1 abierto; no se confunde el gate automatizado verde con aprobación de I2a.
+
+**QUALITY GATE: FAIL** por el hallazgo funcional P1 de la implementación auditada. El commit de esta auditoría contiene solo evidencia y WORKLOG.
+
+Hallazgos sin corregir y entregados para corrección por Claude. No aprobar I2a mientras siga abierto el P1. Esta auditoría no autoriza deploy ni escritura remota y no habilita I2f.

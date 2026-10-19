@@ -1245,3 +1245,12 @@ Bloqueante del Día D. Sin historia académica, los regulares de años anteriore
 - **Documentación:** runbook §8.1 paso 6 y matriz de seguridad.
 
 Harness PASS `f9d1b68e6b0b51c1`; regresiones de base PASS. Evidencia: `supabase/security/STUDENT_HISTORY_IMPORT_LOCAL_RESULT.md`.
+
+## 2026-10-19 — AUD.I2a: auditoria independiente de historia academica (Codex)
+
+Commit auditado: e761829. Copia aislada de release/v1; se preservaron los cambios sin commit del checkout compartido. Plan de tres fases leido; no se tomo I2f ni se tocaron archivos de F1.
+
+Veredicto FAIL: P1 reproducido por concurrencia entre la RPC docente y la importacion; historia regular gana a final libre y el RPC de mesas devuelve registered. P2 reproducido: fallback por DNI enlaza historia con legajo de otra carrera. Sin correcciones de implementacion. Evidencia, lineas y reproduccion en supabase/security/STUDENT_HISTORY_IMPORT_AUDIT.md.
+
+Pruebas solicitadas: 3 archivos/13 tests PASS; harness original 8 casos PASS, run 90f0954ada500c50. Runner adversarial propio: 14 escenarios, run 730d292018b6e2b3, dos fallos funcionales confirmados; limpieza 0 bases en ambos. Permisos owner/admin/editor/superadmin y bloqueos verificados. Sin escrituras remotas, deploy, credenciales ni PR nuevo.
+Gate automatizado npm run check PASS: audit:repo, lint, 334 archivos/2615 tests, build/audit:prod (117 archivos). Aviso de chunks preexistente. QUALITY GATE: FAIL por el P1 de la implementacion auditada; pruebas verdes no implican aprobacion de I2a. Typecheck no disponible; Browser no ejecutado. Solo evidencia y WORKLOG en este commit.
