@@ -1286,3 +1286,12 @@ Harness: servidor y espejo coinciden en los dos llamados. Regresiones PASS.
 - **Runbook:** §8.1 paso 5 actualizado.
 
 Harness PASS, con prueba de punta a punta: el docente asignado por planilla le carga la nota al alumno inscripto por planilla. Regresiones PASS. `npm run check` PASS (2645). Evidencia: `supabase/security/BULK_ROSTER_LOCAL_RESULT.md`.
+
+## 2026-10-19 — I2c: publicar el catálogo académico desde la app (Claude)
+
+- **Base:** RPC `academic_admin_publish_catalog`, solo owner/admin. Hace las mismas sentencias que el SQL de CAT.1, aborta sin escribir ante un renombre o un plan movido, y nunca borra.
+- **App:** Alumnos → Catálogo académico. Muestra una vista previa con errores y advertencias antes de publicar; "Con correlativas" viene destildado.
+- **Código:** la lógica pura pasó a `src/utils/academicCatalog.js`, compartida con el script.
+- **Runbook:** §8.1 pasos 2 y 3. El SQL Editor queda como alternativa.
+
+Harness: SQL y RPC dejan catálogos idénticos, y el payload de la app es igual al del script. Regresiones PASS. `npm run check` PASS (2658). Evidencia: `supabase/security/PUBLISH_CATALOG_LOCAL_RESULT.md`.

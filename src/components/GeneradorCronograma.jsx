@@ -42,6 +42,7 @@ import { isDevAuditSnapshotRoleAuthorized } from './generadorCronograma/devAudit
 import StudentAccessSection from './generadorCronograma/StudentAccessSection.jsx'
 import StudentHistoryImportSection from './generadorCronograma/StudentHistoryImportSection.jsx'
 import BulkRosterSection from './generadorCronograma/BulkRosterSection.jsx'
+import AcademicCatalogPublishSection from './generadorCronograma/AcademicCatalogPublishSection.jsx'
 import StudentCareerDashboard from './generadorCronograma/StudentCareerDashboard.jsx'
 import StudentSubjectEnrollmentSection from './generadorCronograma/StudentSubjectEnrollmentSection.jsx'
 import TribunalMatrixDiagnosis from './generadorCronograma/TribunalMatrixDiagnosis.jsx'
@@ -1847,6 +1848,12 @@ function GeneradorCronograma() {
                         isLoading={isProvisioningStudents}
                         lastResult={studentAccessResult}
                         onProvisionStudents={crearAccesosAlumnos}
+                        useRemoteWorkspace={useRemoteWorkspace}
+                      />
+                      <AcademicCatalogPublishSection
+                        canPublish={Boolean(isSuperAdmin || ['owner', 'admin'].includes(activeInstitution?.role))}
+                        inscripcionesAlumnos={academicSnapshotData.inscripcionesAlumnos}
+                        institutionId={activeInstitutionId}
                         useRemoteWorkspace={useRemoteWorkspace}
                       />
                       <BulkRosterSection

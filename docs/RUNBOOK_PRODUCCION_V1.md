@@ -215,14 +215,20 @@ Criterio: todos los checks PASS → **deploy cerrado**; avisar a la institución
 El portal alumno lee carreras, planes y materias del **catálogo relacional**. Subir las planillas en la app **no** lo llena. Sin este paso, el alumno no ve ninguna materia. Va una vez por institución y otra vez cada vez que cambie la planilla académica.
 
 1. El admin de la institución sube las tres planillas en la app, en orden: académica, docentes, alumnos.
-2. En la PC de Miguel, desde `release/v1` actualizado:
+2. En la app, con usuario owner o admin: **Alumnos → Catálogo académico → Elegir planilla académica** (I2c). La app arma el catálogo con el mismo lector que el importador y muestra una vista previa:
+   - **errores**: no deja publicar; hay que corregir la planilla y volver a elegirla;
+   - **advertencias** (fechas o estados no reconocidos): no frenan, pero hay que leerlas.
+
+   Después, **Publicar catálogo**. Publicar de nuevo actualiza sin duplicar.
+   - El plan de cada alumno sale de la planilla de alumnos ya subida en el paso 1 (por DNI). Sin ese dato, solo se vincula cuando la carrera tiene un único plan activo. Nunca se adivina entre planes convivientes.
+   - **Con correlativas**: viene destildado y **no se usa en el GO** (decisión de Miguel, 18/10: opción a). Se suma cuando esté cargada la historia académica. Si se cargan, el portal y el RPC de mesas exigen la nota de la correlativa. Un alumno de 2.º año en adelante sin historia académica cargada queda bloqueado.
+   - Es una sola transacción: si algo falla, no escribe nada. También aborta, sin escribir, si la planilla renombra una carrera ya cargada o mueve un plan a otra carrera, porque eso rompería inscripciones y asignaciones; la pantalla lo explica.
+   - El resultado muestra los conteos. "X de Y alumnos con plan": X tiene que ser igual a Y. Si es menor, hay alumnos sin plan en la planilla o con una carrera que no está en la planilla académica.
+3. Alternativa sin la app (soporte, o si la base todavía no tiene la RPC): en la PC de Miguel, desde `release/v1` actualizado:
    ```powershell
    node scripts/buildAcademicCatalogSql.mjs --academica "<ruta>\plantilla-academica.xlsx" --alumnos "<ruta>\plantilla-alumnos.xlsx" --institucion "<nombre exacto de la institución>" --salida catalogo.sql
    ```
-   Si lista `errores`, no genera el SQL: hay que corregir la planilla y volver a correrlo. Las `advertencias` (fechas o estados no reconocidos) no frenan, pero hay que leerlas. Usa el mismo lector que la app, así que carrera y materia quedan escritas igual que en el snapshot.
-   - `--alumnos`: vincula a cada alumno con el plan que dice su planilla (por DNI). Sin ese dato, solo se vincula cuando la carrera tiene un único plan activo. Nunca se adivina entre planes convivientes.
-   - `--con-correlativas`: **no se usa en el GO** (decisión de Miguel, 18/10: opción a). Se suma cuando esté cargada la historia académica. Si se cargan, el portal y el RPC de mesas exigen la nota de la correlativa. Un alumno de 2.º año en adelante sin historia académica cargada queda bloqueado.
-3. Supabase → SQL Editor: pegar **todo** `catalogo.sql` y apretar Run. Es una sola transacción: si la institución no existe o algo falla, no escribe nada. También aborta, sin escribir, si la planilla renombra una carrera ya cargada o mueve un plan a otra carrera, porque eso rompería inscripciones y asignaciones. La tabla final muestra los conteos. `alumnos_con_plan` tiene que ser igual a `alumnos_activos`. Si es menor, hay alumnos sin plan en la planilla o con una carrera que no está en la planilla académica.
+   Luego, en Supabase → SQL Editor, pegar **todo** `catalogo.sql` y apretar Run. Deja exactamente el mismo catálogo que el botón de la app (`--con-correlativas` equivale a la casilla). Si lista `errores`, no genera el SQL. Si la institución no existe, no escribe nada. La tabla final muestra los mismos conteos (`alumnos_con_plan` contra `alumnos_activos`).
 4. En la app: **Crear accesos** de docentes y de alumnos.
 5. En la app: **Alumnos → Cursadas y titulares** (I2b).
    - **Aplicar titularidades:** asigna cada docente a sus materias desde la hoja `docente_materia`. El docente se busca por DNI y tiene que tener acceso creado.
@@ -235,7 +241,7 @@ El portal alumno lee carreras, planes y materias del **catálogo relacional**. S
    - Se puede repetir: actualiza, no duplica. Nunca pisa notas cargadas por un docente.
    - La pantalla lista cada fila rechazada u omitida con su motivo, para corregirla en la planilla y volver a importar.
 
-Límites: no borra nada; una materia que se saca de la planilla queda en el catálogo. Para renombrar una carrera hay que hacerlo a mano junto con sus inscripciones (v1.1). No carga horarios relacionales, así que el portal alumno todavía no muestra horarios. El portal lista las materias de todos los planes de la carrera, incluidos los cerrados. Evidencia: `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md`.
+Límites: no borra nada; una materia que se saca de la planilla queda en el catálogo. Para renombrar una carrera hay que hacerlo a mano junto con sus inscripciones (v1.1). No carga horarios relacionales, así que el portal alumno todavía no muestra horarios. El portal lista las materias de todos los planes de la carrera, incluidos los cerrados. Evidencia: `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md` y `supabase/security/PUBLISH_CATALOG_LOCAL_RESULT.md` (I2c).
 
 ## 9. Rollback
 

@@ -2167,6 +2167,197 @@ begin
 end;
 $$;
 
+-- I2c: publicar el catalogo academico desde la app (antes: scripts/buildAcademicCatalogSql.mjs + SQL Editor).
+-- Mismo contrato que ese SQL (CAT.1): todo o nada, idempotente, no borra filas ni crea legajos, y aborta sin
+-- escribir si la planilla renombra una carrera existente, mueve un plan de carrera o repite un nombre de
+-- carrera. Vincula a cada alumno activo sin plan activo: el plan de su planilla (por DNI) o, si no vino, el
+-- unico plan activo de su unica carrera. El payload lo arma src/utils/academicCatalog.js (buildCatalogPayload).
+-- Solo owner/admin de la institucion o superadmin: cambia la estructura academica.
+create or replace function public.academic_normalize_identity(p_value text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select regexp_replace(translate(lower(coalesce(p_value, '')), 'áàâãäåéèêëíìîïóòôõöúùûüñçý', 'aaaaaaeeeeiiiiooooouuuuncy'), '[^a-z0-9]', '', 'g');
+$$;
+
+revoke all on function public.academic_normalize_identity(text) from public, anon, authenticated;
+
+create or replace function public.academic_admin_publish_catalog(
+  p_institution_id uuid,
+  p_catalog jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  conflict record;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+  if p_institution_id is null or not (
+    public.is_super_admin()
+    or public.is_member_of_institution(p_institution_id, array['owner', 'admin'])
+  ) then
+    raise exception 'Acceso denegado: solo el owner o admin de la institucion publica el catalogo.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_catalog) is distinct from 'object'
+    or jsonb_typeof(coalesce(p_catalog -> 'careers', '[]'::jsonb)) <> 'array'
+    or jsonb_array_length(coalesce(p_catalog -> 'careers', '[]'::jsonb)) = 0
+    or jsonb_array_length(coalesce(p_catalog -> 'plan_subjects', '[]'::jsonb)) = 0 then
+    raise exception 'CATALOG_PAYLOAD_INVALID' using errcode = '22023';
+  end if;
+
+  create temporary table cat_careers on commit drop as
+    select btrim(code) as code, btrim(name) as name, duration from jsonb_to_recordset(p_catalog -> 'careers') as x(code text, name text, duration smallint)
+    where btrim(coalesce(code, '')) <> '' and btrim(coalesce(name, '')) <> '';
+  create temporary table cat_plans on commit drop as
+    select btrim(code) as code, btrim(career_code) as career_code, name, plan_year, resolution, coalesce(status, 'active') as status, valid_from, valid_until
+    from jsonb_to_recordset(coalesce(p_catalog -> 'plans', '[]'::jsonb)) as x(code text, career_code text, name text, plan_year smallint, resolution text, status text, valid_from date, valid_until date)
+    where btrim(coalesce(code, '')) <> '';
+  create temporary table cat_subjects on commit drop as
+    select btrim(code) as code, name, external_id from jsonb_to_recordset(coalesce(p_catalog -> 'subjects', '[]'::jsonb)) as x(code text, name text, external_id text)
+    where btrim(coalesce(code, '')) <> '';
+  create temporary table cat_plan_subjects on commit drop as
+    select * from jsonb_to_recordset(p_catalog -> 'plan_subjects') as x(plan_code text, code text, year_number smallint, term_number smallint, regime text,
+      training_field text, format text, exam_required boolean, exam_type text, exam_group text, related_codes text, print_order integer, valid_from date, valid_until date);
+  create temporary table cat_prerequisites on commit drop as
+    select * from jsonb_to_recordset(coalesce(p_catalog -> 'prerequisites', '[]'::jsonb)) as x(plan_code text, target_code text, required_code text, applies_to text, condition text);
+  create temporary table cat_student_plans on commit drop as
+    select public.academic_normalize_identity(dni) as dni, plan_code from jsonb_to_recordset(coalesce(p_catalog -> 'student_plans', '[]'::jsonb)) as x(dni text, plan_code text);
+
+  select v.code, existing.name as before_name, v.name as after_name into conflict
+  from cat_careers v
+  join public.careers existing on existing.institution_id = p_institution_id and existing.external_code = v.code
+  where existing.name <> v.name
+  limit 1;
+  if found then
+    raise exception 'CATALOG_CAREER_RENAME: la carrera % ya existe como "%" y la planilla la llama "%". Renombrar rompe inscripciones y asignaciones.', conflict.code, conflict.before_name, conflict.after_name
+      using errcode = '22023';
+  end if;
+
+  select v.code into conflict
+  from cat_plans v
+  join public.study_plans existing on existing.institution_id = p_institution_id and existing.external_code = v.code
+  join public.careers existing_career on existing_career.id = existing.career_id
+  where existing_career.external_code <> v.career_code
+  limit 1;
+  if found then
+    raise exception 'CATALOG_PLAN_MOVED: el plan % ya existe en otra carrera.', conflict.code using errcode = '22023';
+  end if;
+
+  select v.code, existing.external_code as other_code into conflict
+  from cat_careers v
+  join public.careers existing on existing.institution_id = p_institution_id
+    and existing.external_code <> v.code
+    and public.academic_normalize_identity(existing.name) = public.academic_normalize_identity(v.name)
+  limit 1;
+  if found then
+    raise exception 'CATALOG_CAREER_NAME_TAKEN: la carrera % tiene el mismo nombre que la carrera % ya cargada.', conflict.code, conflict.other_code using errcode = '22023';
+  end if;
+
+  insert into public.careers (institution_id, external_code, name, duration_years, status)
+  select p_institution_id, v.code, v.name, v.duration, 'active'
+  from cat_careers v
+  on conflict (institution_id, external_code) do update
+  set duration_years = coalesce(excluded.duration_years, public.careers.duration_years), status = 'active';
+
+  insert into public.study_plans (institution_id, career_id, external_code, name, plan_year, resolution, status, valid_from, valid_until)
+  select p_institution_id, career.id, v.code, v.name, v.plan_year, v.resolution, v.status, v.valid_from, v.valid_until
+  from cat_plans v
+  join public.careers career on career.institution_id = p_institution_id and career.external_code = v.career_code
+  on conflict (institution_id, external_code) do update
+  set name = excluded.name, plan_year = excluded.plan_year, resolution = excluded.resolution, status = excluded.status,
+      valid_from = coalesce(excluded.valid_from, public.study_plans.valid_from),
+      valid_until = coalesce(excluded.valid_until, public.study_plans.valid_until);
+
+  insert into public.subjects (institution_id, code, name, external_id)
+  select p_institution_id, v.code, v.name, v.external_id
+  from cat_subjects v
+  on conflict (institution_id, code) do update
+  set name = excluded.name, external_id = coalesce(excluded.external_id, public.subjects.external_id);
+
+  insert into public.study_plan_subjects (institution_id, plan_id, subject_id, year_number, term_number, regime, training_field, format,
+    exam_required, exam_type, exam_group, related_subject_codes, print_order, valid_from, valid_until)
+  select p_institution_id, plan.id, subject.id, v.year_number, v.term_number, v.regime, v.training_field, v.format,
+    coalesce(v.exam_required, false), v.exam_type, v.exam_group, v.related_codes, v.print_order, v.valid_from, v.valid_until
+  from cat_plan_subjects v
+  join public.study_plans plan on plan.institution_id = p_institution_id and plan.external_code = v.plan_code
+  join public.subjects subject on subject.institution_id = p_institution_id and subject.code = v.code
+  on conflict (institution_id, plan_id, subject_id) do update
+  set year_number = excluded.year_number, term_number = excluded.term_number, regime = excluded.regime,
+      training_field = excluded.training_field, format = excluded.format, exam_required = excluded.exam_required,
+      exam_type = excluded.exam_type, exam_group = excluded.exam_group, related_subject_codes = excluded.related_subject_codes,
+      print_order = excluded.print_order,
+      valid_from = coalesce(excluded.valid_from, public.study_plan_subjects.valid_from),
+      valid_until = coalesce(excluded.valid_until, public.study_plan_subjects.valid_until);
+
+  insert into public.subject_prerequisites (institution_id, target_plan_subject_id, prerequisite_plan_subject_id, prerequisite_type, required_condition, applies_to, status)
+  select p_institution_id, target.id, required.id, 'subject', v.condition, v.applies_to, 'active'
+  from cat_prerequisites v
+  join public.study_plans plan on plan.institution_id = p_institution_id and plan.external_code = v.plan_code
+  join public.subjects target_subject on target_subject.institution_id = p_institution_id and target_subject.code = v.target_code
+  join public.subjects required_subject on required_subject.institution_id = p_institution_id and required_subject.code = v.required_code
+  join public.study_plan_subjects target on target.institution_id = p_institution_id and target.plan_id = plan.id and target.subject_id = target_subject.id
+  join public.study_plan_subjects required on required.institution_id = p_institution_id and required.plan_id = plan.id and required.subject_id = required_subject.id
+  on conflict (institution_id, target_plan_subject_id, prerequisite_plan_subject_id, prerequisite_type, applies_to) do update
+  set required_condition = excluded.required_condition, status = 'active';
+
+  -- Alumnos activos sin plan activo. 1) El plan que trae la planilla de alumnos, por DNI.
+  insert into public.student_career_plans (institution_id, student_id, career_id, plan_id, current_year, status)
+  select distinct on (student.id) p_institution_id, student.id, plan.career_id, plan.id,
+    case when btrim(coalesce(student.academic_year, '')) ~ '^[0-9]{1,2}$' then btrim(student.academic_year)::smallint end,
+    'active'
+  from public.student_records student
+  join cat_student_plans v on v.dni = public.academic_normalize_identity(coalesce(nullif(btrim(student.dni), ''), student.national_id))
+  join public.study_plans plan on plan.institution_id = p_institution_id and plan.external_code = v.plan_code
+  where student.institution_id = p_institution_id and student.status = 'active'
+    and not exists (
+      select 1 from public.student_career_plans existing
+      where existing.institution_id = p_institution_id and existing.student_id = student.id and existing.status = 'active'
+    )
+  order by student.id, plan.plan_year desc nulls last
+  on conflict (institution_id, student_id, plan_id) do nothing;
+
+  -- 2) Si no vino en la planilla: solo cuando el legajo coincide con UNA carrera y esa carrera tiene UN plan activo.
+  insert into public.student_career_plans (institution_id, student_id, career_id, plan_id, current_year, status)
+  select p_institution_id, student.id, match.career_id, match.plan_id,
+    case when btrim(coalesce(student.academic_year, '')) ~ '^[0-9]{1,2}$' then btrim(student.academic_year)::smallint end,
+    'active'
+  from public.student_records student
+  join lateral (
+    select min(career.id::text)::uuid as career_id, min(plan.id::text)::uuid as plan_id
+    from public.careers career
+    join public.study_plans plan on plan.institution_id = p_institution_id and plan.career_id = career.id and plan.status = 'active'
+    where career.institution_id = p_institution_id and career.status = 'active'
+      and public.academic_normalize_identity(student.career) <> ''
+      and public.academic_normalize_identity(student.career) in (public.academic_normalize_identity(career.name), public.academic_normalize_identity(career.external_code))
+    having count(distinct career.id) = 1 and count(distinct plan.id) = 1
+  ) match on true
+  where student.institution_id = p_institution_id and student.status = 'active'
+    and not exists (
+      select 1 from public.student_career_plans existing
+      where existing.institution_id = p_institution_id and existing.student_id = student.id and existing.status = 'active'
+    )
+  on conflict (institution_id, student_id, plan_id) do nothing;
+
+  return (
+    select jsonb_build_object(
+      'carreras', (select count(*) from public.careers c where c.institution_id = p_institution_id),
+      'planes', (select count(*) from public.study_plans p where p.institution_id = p_institution_id),
+      'materias_en_planes', (select count(*) from public.study_plan_subjects s where s.institution_id = p_institution_id),
+      'correlativas', (select count(*) from public.subject_prerequisites s where s.institution_id = p_institution_id),
+      'alumnos_activos', (select count(*) from public.student_records s where s.institution_id = p_institution_id and s.status = 'active'),
+      'alumnos_con_plan', (select count(distinct sp.student_id) from public.student_career_plans sp where sp.institution_id = p_institution_id and sp.status = 'active')
+    )
+  );
+end;
+$$;
+
 revoke execute on function public.academic_can_manage_subject(uuid, text, text, text) from public, anon;
 revoke execute on function public.academic_resolve_subject_enrollment(uuid, text, uuid, text, text) from public, anon;
 revoke execute on function public.upsert_subject_enrollment_from_portal(uuid, text, uuid, uuid, text, text, uuid, text, timestamptz, timestamptz, text, text, jsonb) from public, anon;
@@ -2177,6 +2368,7 @@ revoke execute on function public.academic_get_teacher_subject_rosters(uuid, tex
 revoke execute on function public.academic_get_student_subject_teacher_notices(uuid, text) from public, anon;
 revoke execute on function public.academic_get_student_portal_grades(uuid, text) from public, anon;
 revoke execute on function public.academic_admin_import_student_history(uuid, text, jsonb) from public, anon;
+revoke execute on function public.academic_admin_publish_catalog(uuid, jsonb) from public, anon;
 revoke execute on function public.academic_admin_bulk_assign_teachers(uuid, text, jsonb) from public, anon;
 revoke execute on function public.academic_admin_bulk_enroll_students(uuid, text, jsonb) from public, anon;
 revoke execute on function public.teacher_reset_student_subject_academic_records(uuid, text, uuid, uuid, text, text) from public, anon, authenticated;
@@ -2192,6 +2384,7 @@ grant execute on function public.academic_get_teacher_subject_rosters(uuid, text
 grant execute on function public.academic_get_student_subject_teacher_notices(uuid, text) to authenticated;
 grant execute on function public.academic_get_student_portal_grades(uuid, text) to authenticated;
 grant execute on function public.academic_admin_import_student_history(uuid, text, jsonb) to authenticated;
+grant execute on function public.academic_admin_publish_catalog(uuid, jsonb) to authenticated;
 grant execute on function public.academic_admin_bulk_assign_teachers(uuid, text, jsonb) to authenticated;
 grant execute on function public.academic_admin_bulk_enroll_students(uuid, text, jsonb) to authenticated;
 grant execute on function public.teacher_reset_student_subject_academic_records(uuid, text, uuid, uuid, text, text) to service_role;
