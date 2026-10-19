@@ -60,6 +60,7 @@ export default function CreateInstitutionUserModal({
     setIsSubmitting(true)
 
     try {
+      let reused = false
       if (isEditing) {
         await updateInstitutionUser({
           userId: initialUser.id,
@@ -70,7 +71,7 @@ export default function CreateInstitutionUserModal({
           useRemote: isRemoteSession,
         })
       } else {
-        await createOrAssignInstitutionUser({
+        const created = await createOrAssignInstitutionUser({
           email: formData.email,
           password: formData.password,
           displayName: formData.displayName,
@@ -78,9 +79,14 @@ export default function CreateInstitutionUserModal({
           role: formData.role,
           useRemote: isRemoteSession,
         })
+        reused = Boolean(created?.userReused)
       }
 
-      toast.success(isEditing ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente')
+      toast.success(isEditing
+        ? 'Usuario actualizado correctamente'
+        : reused
+          ? 'El usuario ya existia: se le asignaron las instituciones y conserva su contrasena actual.'
+          : 'Usuario creado correctamente')
       onSuccess()
       onClose()
       setFormData(buildInitialFormData())

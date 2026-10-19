@@ -145,14 +145,30 @@ describe('admin-users edge function security posture', () => {
     const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleCreateTenantWithAdmin('), edgeFunction.indexOf('async function handleCreateOrAssignInstitutionUser('))
     const insertAt = handler.indexOf(".from('institutions')\n    .insert({")
     expect(insertAt).toBeGreaterThan(0)
-    expect(handler.indexOf('await findAuthUserByEmail(adminClient, email)')).toBeLessThan(insertAt)
-    expect(handler.indexOf("existingProfile?.is_global_admin || (existingRole && existingRole !== 'admin_instituto')")).toBeLessThan(insertAt)
+    expect(handler.indexOf('await findReusableInstitutionAdmin(adminClient, email)')).toBeLessThan(insertAt)
     expect(handler.indexOf("throw badRequest('La contrasena debe tener al menos 8 caracteres.')")).toBeLessThan(insertAt)
     expect(handler).toContain("await adminClient.from('institutions').delete().eq('id', institution.id)")
     expect(handler).toContain('await adminClient.auth.admin.deleteUser(createdUserId)')
-    expect(handler).not.toContain('createOrReuseAuthUser(')
-    const reuseBranch = handler.slice(handler.indexOf('if (existingUser) {\n      // Un admin existente'), handler.indexOf('} else {\n      const { data, error } = await adminClient.auth.admin.createUser('))
-    expect(reuseBranch).not.toMatch(/password|is_global_admin|is_blocked/)
+  })
+
+  it('I2g: asignar usuario a institucion valida antes de crear el usuario y lo borra si la asignacion falla', () => {
+    const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleCreateOrAssignInstitutionUser('), edgeFunction.indexOf('async function createOrReuseStudentAuthUser({'))
+    const createAt = handler.indexOf('await createInstitutionAdminUser(')
+    expect(createAt).toBeGreaterThan(0)
+    for (const guard of ['if (!membershipRoles.has(role))', 'if (institutionIds.length === 0)', "throw badRequest('Alguna de las instituciones elegidas no existe.')", 'await findReusableInstitutionAdmin(adminClient, email)']) {
+      expect(handler.indexOf(guard)).toBeGreaterThan(-1)
+      expect(handler.indexOf(guard)).toBeLessThan(createAt)
+    }
+    expect(handler).toContain('await adminClient.auth.admin.deleteUser(createdUserId)')
+  })
+
+  it('I2f/I2g: un admin existente se reutiliza sin tocar contrasena, rol global ni bloqueo', () => {
+    const reusable = edgeFunction.slice(edgeFunction.indexOf('async function findReusableInstitutionAdmin('), edgeFunction.indexOf('async function createInstitutionAdminUser({'))
+    expect(reusable).toContain("existingProfile?.is_global_admin || (existingRole && existingRole !== 'admin_instituto')")
+    expect(reusable).toContain('if (existingProfile?.is_blocked)')
+    const markReused = edgeFunction.slice(edgeFunction.indexOf('async function markReusedInstitutionAdmin('), edgeFunction.indexOf('async function upsertProfile({'))
+    expect(markReused).not.toMatch(/password|is_global_admin|is_blocked/)
+    expect(edgeFunction).not.toContain('createOrReuseAuthUser(')
   })
 
   it('protege el reset academico total con permisos admin y contrasena actual', () => {

@@ -1321,3 +1321,12 @@ Evidencia: `supabase/security/TENANT_CREATION_LOCAL_RESULT.md`.
 - **Arreglo:** `src/utils/institutionCatalogState.js` decide el estado (cargando / error / vacío / listo). La página muestra "Cargando instituciones…", o el error con el botón "Reintentar", y dice "No hay instituciones" solo si la consulta terminó bien sin filas.
 - **Verificación con navegador real:** con la consulta demorada 2,5 s muestra "cargando" (no "vacío"); con 500 muestra el error y "Reintentar" lo recupera; con datos, "Nuevo usuario" queda habilitado.
 - `npm run check` PASS (2681).
+
+## 2026-10-19 — I2g: "Asignar usuario a institución" sin pisar identidades (Claude)
+
+- **Identidades existentes:** `create_or_assign_institution_user` aplica el criterio de I2f. Un email de Super Admin, de otro rol o de un admin bloqueado se rechaza con 409, sin tocar nada. Un admin existente conserva su contraseña.
+- **Validación previa:** rol, instituciones y contraseña se validan antes de crear el usuario. Si la asignación falla, el usuario creado se borra.
+- **Código:** helpers compartidos con I2f; `createOrReuseAuthUser` retirado.
+- **Pruebas:** harness ampliado (`validateTenantCreationLocal`) PASS. Con el código anterior reproduce el usuario huérfano. Regresiones Edge PASS. `npm run check` PASS (2684).
+
+Evidencia: `supabase/security/TENANT_CREATION_LOCAL_RESULT.md`.

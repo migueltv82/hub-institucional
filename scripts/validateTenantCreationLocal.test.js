@@ -27,4 +27,11 @@ describe('validateTenantCreationLocal', () => {
     expect(payload.admin_password).toHaveLength(32)
     expect(() => tenantPayload('bad', 'ok')).toThrow()
   })
+
+  it('I2g: cubre validaciones previas, identidades existentes y rollback de asignar usuario', () => {
+    for (const label of ["'bad-role'", "'no-institution'", "'missing-institution'", "'short'"]) expect(harness).toContain(label)
+    for (const message of ['created an Auth user`', 'memberships changed`', "'Assign changed the password'", "'Assign failure left an orphan Auth user'", "'Assign rollback deleted a pre-existing user'"]) {
+      expect(harness).toContain(message)
+    }
+  })
 })

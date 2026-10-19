@@ -604,7 +604,28 @@ async function assertStudentProvisioningIdentity(
   return records
 }
 
-async function createOrReuseAuthUser({
+// I2f/I2g: un email existente solo se reutiliza como admin si ya es admin_instituto y no esta bloqueado.
+// Nunca se le cambia la contrasena, el rol global ni el bloqueo. Se valida antes de escribir nada.
+async function findReusableInstitutionAdmin(adminClient: ReturnType<typeof getClients>['adminClient'], email: string) {
+  const existingUser = await findAuthUserByEmail(adminClient, email)
+  if (!existingUser) return null
+  const { data: existingProfile, error: profileLookupError } = await adminClient
+    .from('profiles')
+    .select('account_role, is_global_admin, is_blocked')
+    .eq('user_id', existingUser.id)
+    .maybeSingle()
+  if (profileLookupError) throw profileLookupError
+  const existingRole = String(existingProfile?.account_role ?? '').toLowerCase()
+  if (existingProfile?.is_global_admin || (existingRole && existingRole !== 'admin_instituto')) {
+    throw new HttpError('El email ya pertenece a un usuario con otro rol. Usa otro email para el administrador.', 409)
+  }
+  if (existingProfile?.is_blocked) {
+    throw new HttpError('El email pertenece a un administrador bloqueado. Desbloquealo antes de asignarle otra institucion.', 409)
+  }
+  return existingUser
+}
+
+async function createInstitutionAdminUser({
   adminClient,
   email,
   password,
@@ -615,48 +636,26 @@ async function createOrReuseAuthUser({
   password: string
   displayName: string
 }) {
-  const existingUser = await findAuthUserByEmail(adminClient, email)
-
-  if (existingUser) {
-    // Si el email ya existe, actualizamos metadata y opcionalmente la contrasena.
-    // Esto permite reutilizar admins existentes sin duplicar cuentas Auth.
-    const { error: updateError } = await adminClient.auth.admin.updateUserById(existingUser.id, {
-      ...(password?.trim() ? { password: password.trim() } : {}),
-      email_confirm: true,
-      user_metadata: {
-        ...existingUser.user_metadata,
-        full_name: displayName || existingUser.user_metadata?.full_name || email,
-        account_role: existingUser.user_metadata?.account_role ?? 'admin_instituto',
-      },
-    })
-
-    if (updateError) throw updateError
-    return existingUser
-  }
-
   // La creacion real de credenciales debe hacerse con Auth Admin API.
   // Evitamos insertar directo en auth.users porque genera usuarios que pueden no loguear.
-  if (!password || password.trim().length < 8) {
-    throw badRequest('La contrasena debe tener al menos 8 caracteres.')
-  }
-
   const { data, error } = await adminClient.auth.admin.createUser({
     email,
     password: password.trim(),
     email_confirm: true,
-    app_metadata: {
-      provider: 'email',
-      providers: ['email'],
-    },
-    user_metadata: {
-      full_name: displayName || email,
-      account_role: 'admin_instituto',
-    },
+    app_metadata: { provider: 'email', providers: ['email'] },
+    user_metadata: { full_name: displayName || email, account_role: 'admin_instituto' },
   })
-
   if (error) throw error
   if (!data.user) throw new Error('Supabase no devolvio el usuario creado.')
   return data.user
+}
+
+async function markReusedInstitutionAdmin(adminClient: ReturnType<typeof getClients>['adminClient'], userId: string, email: string) {
+  // Un admin existente conserva su contrasena, rol y estado: solo se asegura el perfil.
+  const { error } = await adminClient
+    .from('profiles')
+    .upsert({ user_id: userId, email, account_role: 'admin_instituto', updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+  if (error) throw error
 }
 
 async function upsertProfile({
@@ -737,22 +736,8 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
 
   // I2f: primero todo lo que puede rechazar sin escribir; despues institucion, usuario, perfil y membresia,
   // y si algo falla se deshace lo creado en esta llamada (institucion y, si es nuevo, el usuario Auth).
-  const existingUser = await findAuthUserByEmail(adminClient, email)
-  if (existingUser) {
-    const { data: existingProfile, error: profileLookupError } = await adminClient
-      .from('profiles')
-      .select('account_role, is_global_admin, is_blocked')
-      .eq('user_id', existingUser.id)
-      .maybeSingle()
-    if (profileLookupError) throw profileLookupError
-    const existingRole = String(existingProfile?.account_role ?? '').toLowerCase()
-    if (existingProfile?.is_global_admin || (existingRole && existingRole !== 'admin_instituto')) {
-      throw new HttpError('El email ya pertenece a un usuario con otro rol. Usa otro email para el administrador.', 409)
-    }
-    if (existingProfile?.is_blocked) {
-      throw new HttpError('El email pertenece a un administrador bloqueado. Desbloquealo antes de asignarle otra institucion.', 409)
-    }
-  } else if (password.trim().length < 8) {
+  const existingUser = await findReusableInstitutionAdmin(adminClient, email)
+  if (!existingUser && password.trim().length < 8) {
     throw badRequest('La contrasena debe tener al menos 8 caracteres.')
   }
 
@@ -777,23 +762,11 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
   try {
     let adminUserId = existingUser?.id ?? ''
     if (existingUser) {
-      // Un admin existente conserva su contrasena, rol y estado: solo se le suma la institucion.
-      const { error: profileError } = await adminClient
-        .from('profiles')
-        .upsert({ user_id: existingUser.id, email, account_role: 'admin_instituto', updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-      if (profileError) throw profileError
+      await markReusedInstitutionAdmin(adminClient, existingUser.id, email)
     } else {
-      const { data, error } = await adminClient.auth.admin.createUser({
-        email,
-        password: password.trim(),
-        email_confirm: true,
-        app_metadata: { provider: 'email', providers: ['email'] },
-        user_metadata: { full_name: displayName || email, account_role: 'admin_instituto' },
-      })
-      if (error) throw error
-      if (!data.user) throw new Error('Supabase no devolvio el usuario creado.')
-      createdUserId = data.user.id
-      adminUserId = data.user.id
+      const created = await createInstitutionAdminUser({ adminClient, email, password, displayName })
+      createdUserId = created.id
+      adminUserId = created.id
       await upsertProfile({ adminClient, userId: adminUserId, email, displayName })
     }
 
@@ -831,35 +804,58 @@ async function handleCreateOrAssignInstitutionUser(adminClient: ReturnType<typeo
   const password = requireString(payload.user_password, 'La contrasena inicial')
   const displayName = requireString(payload.user_display_name, 'El nombre visible')
   const institutionIds = Array.isArray(payload.institution_ids)
-    ? payload.institution_ids.filter((entry): entry is string => typeof entry === 'string')
+    ? [...new Set(payload.institution_ids.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== ''))]
     : []
   const role = requireString(payload.membership_role, 'El rol institucional')
 
-  const authUser = await createOrReuseAuthUser({
-    adminClient,
-    email,
-    password,
-    displayName,
-  })
+  // I2g: todo lo que puede rechazar va antes de escribir (rol, instituciones, identidad, contrasena).
+  if (!membershipRoles.has(role)) throw badRequest(`Rol invalido: ${role}`)
+  if (institutionIds.length === 0) throw badRequest('Debes asignar al menos una institucion.')
+  const { data: foundInstitutions, error: institutionsError } = await adminClient
+    .from('institutions')
+    .select('id')
+    .in('id', institutionIds)
+  if (institutionsError) throw institutionsError
+  if ((foundInstitutions ?? []).length !== institutionIds.length) throw badRequest('Alguna de las instituciones elegidas no existe.')
+  const existingUser = await findReusableInstitutionAdmin(adminClient, email)
+  if (!existingUser && password.trim().length < 8) {
+    throw badRequest('La contrasena debe tener al menos 8 caracteres.')
+  }
 
-  await upsertProfile({
-    adminClient,
-    userId: authUser.id,
-    email,
-    displayName,
-  })
+  let createdUserId: string | null = null
+  try {
+    let userId = existingUser?.id ?? ''
+    if (existingUser) {
+      await markReusedInstitutionAdmin(adminClient, existingUser.id, email)
+    } else {
+      const created = await createInstitutionAdminUser({ adminClient, email, password, displayName })
+      createdUserId = created.id
+      userId = created.id
+      await upsertProfile({ adminClient, userId, email, displayName })
+    }
 
-  await assignMemberships({
-    adminClient,
-    userId: authUser.id,
-    institutionIds,
-    role,
-  })
+    await assignMemberships({
+      adminClient,
+      userId,
+      institutionIds,
+      role,
+    })
 
-  return {
-    user_id: authUser.id,
-    email,
-    created_at: new Date().toISOString(),
+    return {
+      user_id: userId,
+      email,
+      user_reused: Boolean(existingUser),
+      created_at: new Date().toISOString(),
+    }
+  } catch (error) {
+    // Si el usuario se creo en esta llamada, se borra (el perfil y sus membresias caen en cascada).
+    if (createdUserId) {
+      const { error: userDeleteError } = await adminClient.auth.admin.deleteUser(createdUserId)
+      if (userDeleteError) {
+        throw new HttpError(`No se pudo asignar el usuario y no se pudo deshacer su alta. Revisar a mano ${email}.`, 500)
+      }
+    }
+    throw error
   }
 }
 

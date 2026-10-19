@@ -6,7 +6,7 @@ import { localEndpoint } from './validateLocalDbAuthRecovery.mjs';
 import { createLocalStack } from './localSupabaseStack.mjs';
 import { bundleEdgeFunction, removeOwnedDirectory, edgeEnvironment, edgeCall, EDGE_RUNTIME_IMAGE } from './validateRecoveredEdge.mjs';
 
-// I2f: create_tenant_with_admin con GoTrue y Edge Runtime reales. Si algo falla despues de crear la institucion,
+// I2f/I2g: create_tenant_with_admin y create_or_assign_institution_user con GoTrue y Edge Runtime reales. Si algo falla despues de crear la institucion,
 // no queda nada (ni institucion ni usuario nuevo), y un email existente nunca se degrada, promueve ni desbloquea.
 
 const ORIGIN = 'http://127.0.0.1:4173';
@@ -114,6 +114,47 @@ export async function main() {
     assert.equal((await login(people.admin.email, reuse.admin_password)).status, 400, 'Reuse applied the new password');
     checks.reusedAdmin = { status: 200, passwordKept: true, membership: 'owner' };
 
+    // I2g: "Asignar usuario a institucion" (create_or_assign_institution_user) con el mismo criterio.
+    step = 'assign user: new admin, validations and existing identities';
+    const assign = (label, overrides = {}) => ({ action: 'create_or_assign_institution_user', user_email: `${run}-assign-${label}@example.invalid`, user_password: randomBytes(16).toString('hex'), user_display_name: `Synthetic assign ${label}`, institution_ids: [created.body.institution_id], membership_role: 'admin', ...overrides });
+    const assignedNew = assign('new');
+    const assignedNewResult = await call(assignedNew);
+    assert.equal(assignedNewResult.status, 200, `Assign new failed: ${JSON.stringify(assignedNewResult.body)}`);
+    assert.equal(assignedNewResult.body.user_reused, false);
+    assert.equal(profileOf(assignedNewResult.body.user_id), 'admin_instituto,false,false');
+    assert.equal((await login(assignedNew.user_email, assignedNew.user_password)).status, 200);
+    checks.assign = { newAdmin: 200 };
+    for (const [label, overrides, status] of [
+      ['bad-role', { membership_role: 'dueno' }, 400],
+      ['no-institution', { institution_ids: [] }, 400],
+      ['missing-institution', { institution_ids: ['00000000-0000-4000-8000-00000000dead'] }, 400],
+      ['short', { user_password: 'corta' }, 400],
+    ]) {
+      const usersBeforeAssign = count('auth.users', 'true');
+      const rejected = await call(assign(label, overrides));
+      assert.equal(rejected.status, status, `assign ${label}: ${rejected.status}`);
+      assert.equal(count('auth.users', 'true'), usersBeforeAssign, `assign ${label} created an Auth user`);
+      checks.assign[label] = rejected.status;
+    }
+    for (const key of ['superadmin', 'alumno', 'blocked']) {
+      const before = profileOf(people[key].id);
+      const membershipsBefore = count('public.memberships', `user_id='${people[key].id}'`);
+      const rejected = await call(assign(`as-${key}`, { user_email: people[key].email }));
+      assert.equal(rejected.status, 409, `assign ${key}: ${rejected.status}`);
+      assert.equal(profileOf(people[key].id), before, `assign ${key} profile changed`);
+      assert.equal(count('public.memberships', `user_id='${people[key].id}'`), membershipsBefore, `assign ${key} memberships changed`);
+      assert.equal((await login(people[key].email, people[key].password)).status, 200, `assign ${key} password changed`);
+      checks.assign[key] = 409;
+    }
+    const reuseAssign = assign('reuse', { user_email: people.admin.email });
+    const reusedAssign = await call(reuseAssign);
+    assert.equal(reusedAssign.status, 200, `Assign reuse failed: ${JSON.stringify(reusedAssign.body)}`);
+    assert.equal(reusedAssign.body.user_reused, true);
+    assert.equal((await login(people.admin.email, people.admin.password)).status, 200, 'Assign changed the password');
+    assert.equal((await login(people.admin.email, reuseAssign.user_password)).status, 400, 'Assign applied the new password');
+    assert.equal(sql(`select role from public.memberships where user_id='${people.admin.id}' and institution_id='${created.body.institution_id}';`), 'admin');
+    checks.assign.reusedAdmin = { status: 200, passwordKept: true };
+
     step = 'induced failures roll everything back';
     sql(FAILURE_TRIGGERS_SQL);
     const authFail = tenantPayload(run, 'fail-auth', { admin_email: `${run}-fail-auth@example.invalid` });
@@ -138,6 +179,17 @@ export async function main() {
     assert.equal(count('public.institutions', `slug='${reuseFail.institution_slug}'`), '0', 'Reuse failure left an orphan institution');
     assert.equal(count('auth.users', `id='${people.admin.id}'`), '1', 'Rollback deleted a pre-existing user');
     assert.equal((await login(people.admin.email, people.admin.password)).status, 200, 'Rollback broke the existing admin');
+    const failInstitution = '00000000-0000-4000-8000-0000000f0a11';
+    sql(`insert into public.institutions(id,name,slug) values ('${failInstitution}','Synthetic I2g fail','${run}-assign-fail-member');`);
+    const assignFail = assign('fail', { institution_ids: [failInstitution] });
+    const assignFailed = await call(assignFail);
+    assert.ok(assignFailed.status >= 400, `Assign failure accepted: ${assignFailed.status}`);
+    assert.equal(count('auth.users', `email='${assignFail.user_email}'`), '0', 'Assign failure left an orphan Auth user');
+    assert.equal(count('public.profiles', `email='${assignFail.user_email}'`), '0', 'Assign failure left an orphan profile');
+    const assignReuseFailed = await call(assign('fail-reuse', { user_email: people.admin.email, institution_ids: [failInstitution] }));
+    assert.ok(assignReuseFailed.status >= 400, `Assign reuse failure accepted: ${assignReuseFailed.status}`);
+    assert.equal(count('auth.users', `id='${people.admin.id}'`), '1', 'Assign rollback deleted a pre-existing user');
+    checks.assign.rollback = { newUserFailure: assignFailed.status, reuseFailure: assignReuseFailed.status, orphans: 0 };
     checks.rollback = { authFailure: authFailed.status, membershipFailure: memberFailed.status, reuseFailure: reuseFailed.status, orphans: 0, existingUserKept: true };
 
     step = 'slug is free again after the rollback';

@@ -1278,6 +1278,8 @@ export async function createOrAssignInstitutionUser({
       display_name: normalizedDisplayName,
       role: 'admin_instituto',
     },
+    // I2g: si el email ya era de un admin, conserva su contrasena; la ingresada no se usa.
+    userReused: Boolean(data?.user_reused),
     source: 'supabase',
   }
 }

@@ -1,4 +1,4 @@
-# I2f — Alta atómica de institución + admin (local)
+# I2f / I2g — Alta de institución + admin y asignación de usuarios (local)
 
 Fecha: 2026-10-19. Ejecutó: Claude. Entorno: stack local descartable con GoTrue v2.196.0 y Edge Runtime `supabase/edge-runtime:v1.77.4` sobre el bundle real de `admin-users`. Staging y Producción: **NONE**.
 
@@ -38,4 +38,31 @@ Regresiones: `validateSuperAdminEdgeLocal`, `validateInitialPasswordLocal` y `va
 
 - **Redeploy de `admin-users`** en Producción: lo hace Miguel, junto con el de I2d.
 - **Auditoría independiente COMPLETA:** toca la Edge.
-- **Mismo patrón en otra acción:** `create_or_assign_institution_user` usa `upsertProfile` y `createOrReuseAuthUser` y también puede degradar un Super Admin o pisar la contraseña de un usuario existente. Queda anotado como tarjeta aparte, porque cambia el contrato de esa pantalla.
+- **I2g (resuelto, ver abajo):** el mismo patrón en `create_or_assign_institution_user`.
+
+## I2g — "Asignar usuario a institución" (`create_or_assign_institution_user`)
+
+Tenía los mismos dos problemas que el alta de institución:
+- con un email existente, degradaba, promovía o desbloqueaba la identidad y le cambiaba la contraseña;
+- si la asignación fallaba (rol inválido, lista vacía o institución inexistente) después de crear el usuario Auth, ese usuario quedaba huérfano.
+
+**Cambio:** los dos handlers comparten ahora `findReusableInstitutionAdmin`, `createInstitutionAdminUser` y `markReusedInstitutionAdmin`.
+- Antes de crear el usuario se validan el rol, que la lista de instituciones no esté vacía, que existan todas y la identidad.
+- Si la membresía falla, se borra el usuario creado en esa llamada, y su perfil y membresías caen en cascada.
+- La respuesta trae `user_reused`, y la app avisa que conserva su contraseña.
+- `createOrReuseAuthUser` se retiró.
+
+Resultado: mismo harness, **PASS**, run `a90ea76aa8aec64d`, cleanup 0.
+
+| Caso | Resultado |
+|---|---|
+| Admin nuevo asignado | 200; perfil `admin_instituto` y login OK |
+| Rol inválido, lista vacía, institución inexistente, contraseña corta | 400; no se crea ningún usuario Auth |
+| Email de Super Admin, de alumno o de admin bloqueado | 409; perfil, membresías y contraseña sin cambios |
+| Admin existente | 200, `user_reused: true`; conserva la contraseña y suma la membresía |
+| Falla inducida en la membresía, usuario nuevo | No quedan usuario Auth ni perfil |
+| La misma falla con un admin existente | El usuario existente no se borra |
+
+**El harness detecta el bug.** Contra el handler anterior (con solo `user_reused` agregado), falla en "assign bad-role created an Auth user": queda un usuario huérfano.
+
+Regresiones: `validateSuperAdminEdgeLocal`, `validateInitialPasswordLocal` y `validateIntegratedAcceptanceLocal` PASS. `npm run check` PASS (2684).
