@@ -2124,6 +2124,8 @@ begin
     for update;
 
     -- Solo el aprobado vive en student_grades: es lo que leen correlativas y el estado de la materia.
+    -- Mismo lock que el docente y la historia importada (AUD.I2a P1).
+    perform public.academic_lock_student_subject(target_institution_id, clean_workspace_key, enrollment_row.student_id, enrollment_row.subject_id, enrollment_row.program_id);
     v_grade_id := existing_result.student_grade_id;
     if v_result = 'approved' then
       if v_grade_id is not null and exists (

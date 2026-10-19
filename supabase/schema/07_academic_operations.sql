@@ -561,12 +561,36 @@ language plpgsql
 set search_path = public
 as $$
 begin
-  new.updated_at := timezone('utc', now());
+  -- AUD.I2a P1: reloj real, no el inicio de la transaccion. Una escritura que espero un lock queda
+  -- despues de la que lo tenia, y "la ultima condicion" (mesas, correlativas) respeta ese orden.
+  new.updated_at := timezone('utc', clock_timestamp());
   return new;
 end;
 $$;
 
 revoke execute on function public.touch_academic_operations_updated_at() from public, anon, authenticated;
+
+-- AUD.I2a P1: serializa toda escritura de notas sobre la misma identidad academica (alumno, materia,
+-- carrera): docente, historia importada y acta de examen. Lock de transaccion, se libera al terminar.
+-- Interna: sin EXECUTE para roles de la API.
+create or replace function public.academic_lock_student_subject(
+  p_institution_id uuid,
+  p_workspace_key text,
+  p_student_id uuid,
+  p_subject_id text,
+  p_program_id text
+)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  select pg_advisory_xact_lock(
+    hashtextextended(concat_ws('|', 'student_subject', p_institution_id::text, p_workspace_key, p_student_id::text, p_subject_id, p_program_id), 0)
+  );
+$$;
+
+revoke all on function public.academic_lock_student_subject(uuid, text, uuid, text, text) from public, anon, authenticated;
 
 do $$
 declare
@@ -900,6 +924,8 @@ begin
   if resolved_enrollment_id is null then
     raise exception 'STUDENT_SUBJECT_ENROLLMENT_NOT_FOUND';
   end if;
+
+  perform public.academic_lock_student_subject(p_institution_id, clean_workspace_key, p_student_id, btrim(p_subject_id), clean_program_id);
 
   select *
   into existing_row
@@ -1757,12 +1783,26 @@ begin
       and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = raw_dni
       and lower(btrim(coalesce(sr.career, ''))) = lower(v_career_name);
     if v_record_matches = 0 then
+      -- AUD.I2a P2: sin legajo de esa carrera solo sirve un legajo sin carrera cargada. Un legajo de otra
+      -- carrera no se reutiliza: se informa para que se cargue el legajo correcto.
       select count(*), min(sr.id::text)::uuid, min(sr.profile_id::text)::uuid
       into v_record_matches, v_record_id, v_record_profile_id
       from public.student_records sr
       where sr.institution_id = p_institution_id
         and sr.workspace_key = clean_workspace_key
-        and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = raw_dni;
+        and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = raw_dni
+        and btrim(coalesce(sr.career, '')) = '';
+      if v_record_matches = 0 and exists (
+        select 1
+        from public.student_records sr
+        where sr.institution_id = p_institution_id
+          and sr.workspace_key = clean_workspace_key
+          and regexp_replace(coalesce(nullif(sr.dni, ''), sr.national_id, ''), '[^0-9]', '', 'g') = raw_dni
+      ) then
+        issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', 'ALUMNO_DE_OTRA_CARRERA', 'dni', raw_dni, 'materia', raw_subject));
+        rejected_count := rejected_count + 1;
+        continue;
+      end if;
     end if;
     if v_record_matches <> 1 then
       issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', case when v_record_matches = 0 then 'ALUMNO_NO_ENCONTRADO' else 'ALUMNO_AMBIGUO' end, 'dni', raw_dni, 'materia', raw_subject));
@@ -1775,7 +1815,9 @@ begin
       continue;
     end if;
 
-    -- La historia nunca le gana a una nota cargada por un docente en el sistema.
+    -- La historia nunca le gana a una nota cargada por un docente en el sistema. El chequeo y la escritura
+    -- van bajo el mismo lock que usa el docente: una carga concurrente espera o hace omitir la fila.
+    perform public.academic_lock_student_subject(p_institution_id, clean_workspace_key, v_record_profile_id, v_subject_code, v_career_name);
     if exists (
       select 1
       from public.student_grades grade

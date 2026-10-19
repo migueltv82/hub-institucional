@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ACTORS, CASES, STUDENT_DNI, enrollSql, evaluateCase, importSql } from './validateStudentHistoryImportLocal.mjs'
+import { ACTORS, CASES, RACES, STUDENT_DNI, enrollSql, evaluateCase, importSql, teacherRaceSql } from './validateStudentHistoryImportLocal.mjs'
 
 const operations = readFileSync(resolve('supabase/schema/07_academic_operations.sql'), 'utf8')
 const block = operations.slice(operations.indexOf('create or replace function public.academic_admin_import_student_history('))
@@ -16,6 +16,16 @@ describe('validateStudentHistoryImportLocal', () => {
     }
     expect(names).toEqual(expect.arrayContaining(['regular importada habilita la mesa', 're-importar es idempotente y actualiza', 'nunca pisa una nota cargada por el docente']))
     expect(CASES.some((item) => item.enroll === 'registered')).toBe(true)
+  })
+
+  it('AUD.I2a: cubre los dos ordenes de la carrera docente/importacion y el legajo de otra carrera', () => {
+    expect(RACES.map((race) => race.teacher)).toEqual(['write-then-sleep', 'sleep-then-write'])
+    expect(teacherRaceSql('write-then-sleep').indexOf('academic_teacher_upsert_student_grade')).toBeLessThan(teacherRaceSql('write-then-sleep').indexOf('pg_sleep'))
+    expect(teacherRaceSql('sleep-then-write').indexOf('pg_sleep')).toBeLessThan(teacherRaceSql('sleep-then-write').indexOf('academic_teacher_upsert_student_grade'))
+    expect(CASES.flatMap((item) => item.expect?.motivos ?? [])).toContain('ALUMNO_DE_OTRA_CARRERA')
+    expect(operations).toContain("new.updated_at := timezone('utc', clock_timestamp());")
+    expect(operations.match(/perform public\.academic_lock_student_subject\(/g)).toHaveLength(2)
+    expect(operations).toContain('revoke all on function public.academic_lock_student_subject(uuid, text, uuid, text, text) from public, anon, authenticated;')
   })
 
   it('cada llamada corre como el actor dentro de su transaccion y escapa el payload', () => {

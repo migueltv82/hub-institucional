@@ -119,7 +119,9 @@ insert into public.student_grades (institution_id, workspace_key, student_id, st
                ('${REGULAR}'::uuid, 'UAT02', 'final', 6, 'regular', now() - interval '2 day'),
                ('${LIBRE}'::uuid, 'UAT01', 'partial', 3, 'regular', now() - interval '3 day'),
                ('${LIBRE}'::uuid, 'UAT01', 'final', 2, 'libre', now() - interval '1 day')) as v(profile, code, kind, grade, status, at)
-    on v.profile = student.profile_id;`)
+    on v.profile = student.profile_id
+  -- El trigger fija updated_at con el reloj real (AUD.I2a): el orden de insercion es el orden de las notas.
+  order by v.at;`)
     sql(`insert into public.subject_teacher_assignments (institution_id, workspace_key, subject_id, program_id, teacher_id, role, status)
 values ('${INSTITUTION}', 'main', 'UAT01', '${CAREER}', '${ASSIGNED}', 'titular', 'active'),
   ('${INSTITUTION}', 'main', 'UAT01', '${CAREER}', '${VOCAL}', 'suplente', 'active');`)

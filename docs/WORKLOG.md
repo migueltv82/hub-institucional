@@ -1262,3 +1262,11 @@ Pedido de Miguel, con estas reglas: carga el titular, se aprueba con 4, y desapr
 - **App:** el titular carga el acta desde el portal docente; en Mesas y actas, secretaría carga y corrige. El PDF imprime notas y totales.
 
 Harness `validateExamActaResultsLocal.mjs` PASS (16 pasos). F1b pendiente: el ausente pierde el próximo llamado. Evidencia: `supabase/security/EXAM_ACTA_RESULTS_LOCAL_RESULT.md`.
+
+## 2026-10-19 — AUD.I2a: corrección de P1 y P2 (Claude)
+
+- **P1:** lock común por alumno + materia + carrera para el docente, la historia importada y el acta de examen. Además, `updated_at` pasa a tomarse con el reloj real. Así la historia ya no le puede ganar a una nota docente concurrente.
+- **P2:** la historia no se engancha a un legajo de otra carrera (`ALUMNO_DE_OTRA_CARRERA`).
+- **Pruebas:** el harness prueba los dos órdenes de la carrera con procesos concurrentes. Contra el SQL anterior reproduce el bug; con la corrección, PASS. Regresiones PASS (el harness de publicación ahora inserta en orden cronológico).
+
+Detalle en `supabase/security/STUDENT_HISTORY_IMPORT_AUDIT.md`. Pendiente: re-auditoría liviana.

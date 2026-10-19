@@ -125,3 +125,44 @@ Ambos runs finalizaron con `cleanup.databases=0`, `cleanup.errors=[]`. El trigge
 **QUALITY GATE: FAIL** por el hallazgo funcional P1 de la implementación auditada. El commit de esta auditoría contiene solo evidencia y WORKLOG.
 
 Hallazgos sin corregir y entregados para corrección por Claude. No aprobar I2a mientras siga abierto el P1. Esta auditoría no autoriza deploy ni escritura remota y no habilita I2f.
+
+## Corrección (Claude, 2026-10-19)
+
+Corregido por el implementador. La re-auditoría liviana queda a cargo de quien no escribió el cambio.
+
+**P1 — carrera entre la carga docente y la importación.** Dos cambios en `07_academic_operations.sql`:
+
+- **Un lock común para todas las escrituras de notas.** `academic_lock_student_subject(institución, workspace, alumno, materia, carrera)` es un helper interno, sin EXECUTE para roles de la API, que toma `pg_advisory_xact_lock` sobre la identidad académica. Lo llaman las tres escrituras de notas:
+  - el docente (`academic_teacher_upsert_student_grade`), antes de leer y escribir;
+  - la importación de historia, antes de la comprobación de notas del sistema, que así se vuelve a evaluar bajo el lock;
+  - el acta de examen (`exam_save_acta_results`, F1a).
+- **`updated_at` con el reloj real.** `touch_academic_operations_updated_at` usa `clock_timestamp()` en lugar de `now()`. La escritura que esperó el lock queda después de la que lo tenía. Antes ganaba la transacción que empezaba más tarde, aunque escribiera antes.
+
+**P2 — legajo de otra carrera.** Si no hay un legajo de esa carrera, el fallback por DNI solo acepta legajos **sin** carrera cargada. Un legajo de otra carrera se rechaza con `ALUMNO_DE_OTRA_CARRERA`, que tiene su mensaje en la app.
+
+**Pruebas.** `validateStudentHistoryImportLocal.mjs` suma estos casos:
+
+- el rechazo `ALUMNO_DE_OTRA_CARRERA`;
+- la carrera docente ↔ importación, con dos procesos psql concurrentes y en los dos órdenes:
+  - el docente escribe "libre" y mantiene la transacción: la importación espera y se omite;
+  - el docente abre la transacción antes y escribe "libre" después de la importación: la nota del docente queda última.
+
+  En ambos casos el alumno **no** puede inscribirse a la mesa.
+
+Contra el SQL anterior (HEAD `eaa0a1d`), el harness reproduce los dos bugs (run `d817e37eb9e0be58`): `historia:regular` queda como última nota y la inscripción da `registered`. Con la corrección: **PASS** (run `1cb4df7952769ddc`, cleanup 0).
+
+**Regresiones PASS:**
+
+| Harness | Run |
+|---|---|
+| 03.5b | `fca010af590a80e4` |
+| F1a | `fff32a0d372d2b6a` |
+| QA.1 | `26ec9dd0d104320d` |
+| Paridad 03.3 | `b8bc552344b90451` |
+| CHECK 03.5c | `299b373b464c9aa1` |
+| 06.3 | `c65ebe1d6e60d60a` |
+| Publicación | `98f3fc2a718c5049` y `3c7112b5507b7087` |
+
+El harness de publicación forzaba `updated_at` en un INSERT, y el trigger siempre lo pisó. Ahora inserta en orden cronológico (`order by v.at`), que era lo que pretendía. Con `now()` todas las filas empataban; con el reloj real cuenta el orden de inserción.
+
+Efecto colateral aceptado: en la vida real ya no hay empates de `updated_at` entre notas de distintas escrituras. El escenario de paridad "empate updated_at" sigue comparando el servidor con el espejo sobre los mismos datos.

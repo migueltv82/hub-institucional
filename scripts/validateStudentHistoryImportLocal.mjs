@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -22,6 +22,8 @@ export const ACTORS = Object.freeze({
 export const STUDENT_DNI = '30111222';
 // Legajo cargado desde la planilla, todavia sin cuenta (sin profile_id).
 export const NO_ACCOUNT_DNI = '30222333';
+// AUD.I2a P2: legajo con cuenta pero de otra carrera; la historia no se le engancha.
+export const OTHER_CAREER_DNI = '30333444';
 const ENROLLMENT_ID = 'ae000000-0000-4000-8000-000000000001';
 
 const quote = value => value === null || value === undefined ? 'null' : "'" + String(value).replaceAll("'", "''") + "'";
@@ -76,8 +78,9 @@ export const CASES = Object.freeze([
       row({ fila: '9', dni: '99999999' }),
       row({ fila: '10', fecha: '01/01/2999' }),
       row({ fila: '11', dni: NO_ACCOUNT_DNI }),
+      row({ fila: '12', dni: OTHER_CAREER_DNI }),
     ],
-    expect: { importadas: 0, actualizadas: 0, omitidas: 0, rechazadas: 9, motivos: ['FALTAN_DATOS', 'CONDICION_INVALIDA', 'NOTA_INVALIDA', 'FECHA_INVALIDA', 'CARRERA_NO_ENCONTRADA', 'MATERIA_NO_ESTA_EN_EL_PLAN', 'ALUMNO_NO_ENCONTRADO', 'FECHA_INVALIDA', 'ALUMNO_SIN_CUENTA'] },
+    expect: { importadas: 0, actualizadas: 0, omitidas: 0, rechazadas: 10, motivos: ['FALTAN_DATOS', 'CONDICION_INVALIDA', 'NOTA_INVALIDA', 'FECHA_INVALIDA', 'CARRERA_NO_ENCONTRADA', 'MATERIA_NO_ESTA_EN_EL_PLAN', 'ALUMNO_NO_ENCONTRADO', 'FECHA_INVALIDA', 'ALUMNO_SIN_CUENTA', 'ALUMNO_DE_OTRA_CARRERA'] },
     grades: [],
   },
   {
@@ -106,6 +109,23 @@ export const CASES = Object.freeze([
     enroll: 'EXAM_REGULARITY_REQUIRED',
   },
 ]);
+
+// AUD.I2a P1: carrera entre la carga docente ("libre") y la importacion ("regular") de la misma materia.
+// Gana siempre el docente: o la historia se omite (el docente escribio antes) o la nota docente queda
+// despues (escribio despues, con reloj real). En ningun orden el alumno puede inscribirse a la mesa.
+export const RACES = Object.freeze([
+  { name: 'docente escribe y mantiene la transaccion; la importacion espera y se omite', teacher: 'write-then-sleep', expectImport: { importadas: 0, omitidas: 1 } },
+  { name: 'docente abre la transaccion antes y escribe despues de la importacion', teacher: 'sleep-then-write', expectImport: { importadas: 1, omitidas: 0 } },
+]);
+
+export function teacherRaceSql(order) {
+  const write = `select public.academic_teacher_upsert_student_grade('${STUDENT.institution}', 'main', '${STUDENT.userId}', '${STUDENT.recordId}', '${ENROLLMENT_ID}', '${STUDENT.subjectId}', '${STUDENT.programId}', 'final', 1, null, 'libre', null);`;
+  return `begin;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '${ACTORS.teacherA}', true);
+${order === 'write-then-sleep' ? `${write}\nselect pg_sleep(1.5);` : `select pg_sleep(1.5);\n${write}`}
+commit;`;
+}
 
 export function evaluateCase(testCase, output) {
   const failures = [];
@@ -161,6 +181,10 @@ delete from public.student_grades where student_id='${STUDENT.userId}';
 update public.student_records set dni='${STUDENT_DNI}' where id='${STUDENT.recordId}';
 insert into public.student_records (institution_id, external_code, first_name, last_name, workspace_key, career, dni)
 values ('${STUDENT.institution}', 'STUD-A-NO-ACCOUNT', 'Sin', 'Cuenta', 'main', '${STUDENT.programId}', '${NO_ACCOUNT_DNI}');
+insert into public.student_records (institution_id, external_code, first_name, last_name, workspace_key, career, dni, profile_id)
+values ('${STUDENT.institution}', 'STUD-A-OTHER-CAREER', 'Otra', 'Carrera', 'main', 'OTRA CARRERA', '${OTHER_CAREER_DNI}', '${ACTORS.teacherA}');
+insert into public.subject_teacher_assignments (institution_id, workspace_key, subject_id, program_id, teacher_id, role)
+values ('${STUDENT.institution}', 'main', '${STUDENT.subjectId}', '${STUDENT.programId}', '${ACTORS.teacherA}', 'titular');
 insert into public.subject_enrollments (id, institution_id, workspace_key, subject_id, program_id, student_id, student_record_id)
 values ('${ENROLLMENT_ID}', '${STUDENT.institution}', 'main', '${STUDENT.subjectId}', '${STUDENT.programId}', '${STUDENT.userId}', '${STUDENT.recordId}');`);
     step = 'function contract';
@@ -180,7 +204,32 @@ values ('${STUDENT.institution}', 'main', '${STUDENT.userId}', '${STUDENT.record
       if (testCase.enroll) output.enroll = sql(enrollSql()).split('\n').filter(Boolean).pop();
       report.cases.push({ name: testCase.name, result: testCase.expectError ? result : { ...result, problemas: (result.problemas ?? []).map(item => item.motivo) }, enroll: output.enroll, failures: evaluateCase(testCase, output) });
     }
-    report.failed = report.cases.filter(item => item.failures.length).map(item => item.name);
+    report.races = [];
+    const psqlAsync = query => new Promise((done, fail) => {
+      const child = spawn('docker', ['exec', '-i', SOURCE, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'supabase_admin', '-d', database, '-At'], { stdio: ['pipe', 'pipe', 'pipe'] });
+      let out = '', err = '';
+      child.stdout.on('data', chunk => { out += chunk; });
+      child.stderr.on('data', chunk => { err += chunk; });
+      child.on('close', code => (code === 0 ? done(out.trim()) : fail(new Error(err.match(/ERROR:[^\n]*/)?.[0] ?? 'psql failed'))));
+      child.stdin.end(query);
+    });
+    for (const race of RACES) {
+      step = 'race ' + race.name;
+      sql(`delete from public.exam_enrollments where student_id='${STUDENT.userId}'; delete from public.student_grades where student_id='${STUDENT.userId}';`);
+      const teacher = psqlAsync(teacherRaceSql(race.teacher));
+      await new Promise(done => setTimeout(done, 400));
+      const imported = JSON.parse((await psqlAsync(importSql(ACTORS.adminA, [row({ condicion: 'regular' })]))).split('\n').filter(Boolean).pop());
+      await teacher;
+      const latest = sql(`select g.grade_type || ':' || g.academic_status from public.student_grades g where g.student_id='${STUDENT.userId}' and g.subject_id='${STUDENT.subjectId}' and g.program_id='${STUDENT.programId}' and g.deleted_at is null and g.academic_status <> 'pending' order by g.updated_at desc, g.created_at desc limit 1;`);
+      const enroll = sql(enrollSql()).split('\n').filter(Boolean).pop();
+      const failures = [];
+      for (const [key, value] of Object.entries(race.expectImport)) if (imported[key] !== value) failures.push(`${key}: expected ${value}, got ${imported[key]}`);
+      if (latest !== 'final:libre') failures.push(`latest: expected final:libre, got ${latest}`);
+      if (enroll !== 'EXAM_REGULARITY_REQUIRED') failures.push(`enroll: expected EXAM_REGULARITY_REQUIRED, got ${enroll}`);
+      report.races.push({ name: race.name, imported: { importadas: imported.importadas, omitidas: imported.omitidas }, latest, enroll, failures });
+    }
+    report.failed = report.cases.filter(item => item.failures.length).map(item => item.name)
+      .concat(report.races.filter(item => item.failures.length).map(item => item.name));
     step = 'assertions';
     assert.deepEqual(report.failed, [], 'Student history import cases failed');
     report.result = 'PASS';

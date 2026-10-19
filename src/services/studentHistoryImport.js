@@ -28,6 +28,7 @@ export const HISTORY_REASONS = Object.freeze({
   MATERIA_NO_ESTA_EN_EL_PLAN: 'La materia no esta en el plan de esa carrera.',
   ALUMNO_NO_ENCONTRADO: 'No hay un alumno con ese DNI en el padron.',
   ALUMNO_AMBIGUO: 'Hay mas de un legajo con ese DNI.',
+  ALUMNO_DE_OTRA_CARRERA: 'El alumno con ese DNI tiene legajo en otra carrera: cargale el legajo de esta carrera.',
   ALUMNO_SIN_CUENTA: 'El alumno todavia no tiene acceso: crealo desde "Crear accesos" y volve a importar.',
   YA_TIENE_NOTAS_DEL_SISTEMA: 'La materia ya tiene notas cargadas por un docente: no se pisan.',
 })
