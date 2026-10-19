@@ -1330,3 +1330,12 @@ Evidencia: `supabase/security/TENANT_CREATION_LOCAL_RESULT.md`.
 - **Pruebas:** harness ampliado (`validateTenantCreationLocal`) PASS. Con el código anterior reproduce el usuario huérfano. Regresiones Edge PASS. `npm run check` PASS (2684).
 
 Evidencia: `supabase/security/TENANT_CREATION_LOCAL_RESULT.md`.
+
+## 2026-10-19 — PB.4: inscripción a mesa sin drift entre snapshot y tablas (Claude)
+
+- **Orden:** la Edge del portal alumno escribe primero la tabla (RPC) y después el snapshot. Si una mutación estricta falla, responde 409 con el motivo y no toca el snapshot.
+- **Mesas estrictas:** `register_exam` y `cancel_exam` pasan a ser estrictas, con el espejo en el frontend.
+- **Efecto en modo default:** la mesa también escribe la tabla, que es lo que lee el roster del titular.
+- **Pruebas:** el harness integrado suma la falla inducida de la RPC: 409 y sin drift. Con el orden anterior queda snapshot 1 / tabla 0. Regresiones PASS. `npm run check` PASS (2688).
+
+Evidencia: `supabase/security/PORTAL_EXAM_DRIFT_LOCAL_RESULT.md`.

@@ -106,7 +106,7 @@ describe('admin-users edge function security posture', () => {
   })
 
   it('obliga escritura relacional para inscripciones que alimentan el panel docente', () => {
-    expect(edgeFunction).toContain("new Set(['enroll_subject', 'withdraw_subject'])")
+    expect(edgeFunction).toContain("new Set(['enroll_subject', 'withdraw_subject', 'register_exam', 'cancel_exam'])")
     expect(edgeFunction).toContain('relationalWriteRequired = shouldRequireStudentPortalRelationalWrite(mutationType)')
     expect(edgeFunction).toContain('relationalWriteEnabled = dualWriteEnabled || relationalWriteRequired')
     expect(edgeFunction).toContain('if (relationalWriteRequired || transitionConfig.strictDriftBlockEnabled || shouldReadRelationalAcademics(transitionConfig))')
@@ -169,6 +169,17 @@ describe('admin-users edge function security posture', () => {
     const markReused = edgeFunction.slice(edgeFunction.indexOf('async function markReusedInstitutionAdmin('), edgeFunction.indexOf('async function upsertProfile({'))
     expect(markReused).not.toMatch(/password|is_global_admin|is_blocked/)
     expect(edgeFunction).not.toContain('createOrReuseAuthUser(')
+  })
+
+  it('PB.4: el snapshot del portal alumno se escribe despues de la escritura relacional', () => {
+    const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleStudentPortalMutation('), edgeFunction.indexOf('async function fetchTeacherRosterTeacherRecords({'))
+    const relationalAt = handler.indexOf('relationalResult = await writeStudentPortalRelational({')
+    const snapshotAt = handler.indexOf(".from('workspace_snapshots')\n      .upsert({")
+    expect(relationalAt).toBeGreaterThan(0)
+    expect(snapshotAt).toBeGreaterThan(relationalAt)
+    expect(handler.match(/\.from\('workspace_snapshots'\)\n\s+\.upsert\(/g)).toHaveLength(1)
+    expect(handler).toContain('throw new HttpError(`No se guardo el cambio: ${relationalErrorMessage}`, 409)')
+    expect(handler).not.toContain('El snapshot se actualizo, pero fallo')
   })
 
   it('protege el reset academico total con permisos admin y contrasena actual', () => {

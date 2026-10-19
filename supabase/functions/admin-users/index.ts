@@ -1879,7 +1879,8 @@ function shouldDualWriteAcademics(config: AcademicTransitionConfig) {
   )
 }
 
-const studentPortalRelationalWriteRequiredMutations = new Set(['enroll_subject', 'withdraw_subject'])
+// PB.4: las mesas tambien son estrictas: la RPC de inscripcion a mesa es la autoridad de la regla.
+const studentPortalRelationalWriteRequiredMutations = new Set(['enroll_subject', 'withdraw_subject', 'register_exam', 'cancel_exam'])
 
 function shouldRequireStudentPortalRelationalWrite(mutationType: string) {
   return studentPortalRelationalWriteRequiredMutations.has(mutationType)
@@ -3042,21 +3043,6 @@ async function handleStudentPortalMutation(
     throw badRequest(`Tipo de cambio no soportado: ${mutationType}`)
   }
 
-  if (snapshotWriteEnabled) {
-    const { error: upsertError } = await adminClient
-      .from('workspace_snapshots')
-      .upsert({
-        institution_id: institutionId,
-        workspace_key: workspaceKey,
-        owner_user_id: typeof snapshotRow?.owner_user_id === 'string' ? snapshotRow.owner_user_id : callerId,
-        owner_email: typeof snapshotRow?.owner_email === 'string' ? snapshotRow.owner_email : context.caller.email ?? null,
-        payload: snapshot,
-        updated_at: now,
-      })
-
-    if (upsertError) throw upsertError
-  }
-
   let relationalResult: unknown = null
   let relationalErrorMessage: string | null = null
 
@@ -3126,9 +3112,26 @@ async function handleStudentPortalMutation(
       })
 
       if (relationalWriteRequired || transitionConfig.strictDriftBlockEnabled || shouldReadRelationalAcademics(transitionConfig)) {
-        throw new Error(`El snapshot se actualizo, pero fallo la sincronizacion relacional estricta. ${relationalErrorMessage}`)
+        // PB.4: el snapshot todavia no se escribio, asi que un rechazo de la RPC no deja drift.
+        throw new HttpError(`No se guardo el cambio: ${relationalErrorMessage}`, 409)
       }
     }
+  }
+
+  // PB.4: el snapshot se escribe despues de la escritura relacional, para no quedar distinto de la tabla.
+  if (snapshotWriteEnabled) {
+    const { error: upsertError } = await adminClient
+      .from('workspace_snapshots')
+      .upsert({
+        institution_id: institutionId,
+        workspace_key: workspaceKey,
+        owner_user_id: typeof snapshotRow?.owner_user_id === 'string' ? snapshotRow.owner_user_id : callerId,
+        owner_email: typeof snapshotRow?.owner_email === 'string' ? snapshotRow.owner_email : context.caller.email ?? null,
+        payload: snapshot,
+        updated_at: now,
+      })
+
+    if (upsertError) throw upsertError
   }
 
   return {

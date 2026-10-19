@@ -30,6 +30,10 @@ export function separateFixtureAuth(source) {
 // Modos de transicion del fixture (RUNBOOK §4.1). El principal es dual_write; default = sin fila (snapshot_only).
 // El tercer ciclo (dual_write de nuevo) reinscribe sobre la fila del snapshot que ya existe: es el caso de PB.1.
 export const EXAM_MODES = Object.freeze(['dual_write', 'default', 'dual_write']);
+// PB.4: falla inducida de la RPC de mesa (solo en la base descartable) para probar que no queda drift.
+export const PB4_FAILURE_TRIGGER_SQL = `create or replace function public.pb4_fail_exam_enrollment() returns trigger language plpgsql as $$
+begin raise exception 'PB4_INDUCED_EXAM_RPC_FAILURE'; end $$;
+create trigger pb4_fail_exam_enrollment before insert or update on public.exam_enrollments for each row execute function public.pb4_fail_exam_enrollment();`;
 export const DUAL_WRITE_TRANSITION = Object.freeze({ stage: 'dual_write', write_mode: 'dual_write', read_mode: 'snapshot_only', dual_write_enabled: true });
 export function transitionSql(mode) {
   if (mode === 'dual_write') return `insert into public.app_settings(key, value, is_public) values ('academic_relational_transition', '${JSON.stringify(DUAL_WRITE_TRANSITION)}'::jsonb, false) on conflict (key) do update set value = excluded.value;`;
@@ -179,7 +183,8 @@ export async function main() {
       const replayBody = registered.request().postDataJSON();
       await page.getByRole('button', { name: 'Cancelar inscripcion', exact: true }).first().waitFor();
       result.afterRegister = examCounts();
-      assert.deepEqual(result.afterRegister, { relational: mode === 'dual_write' ? 1 : 0, snapshot: 1 }, `Registration persistence (${mode})`);
+      // PB.4: la mesa es estricta en todos los modos (como las cursadas): la RPC siempre escribe la fila.
+      assert.deepEqual(result.afterRegister, { relational: 1, snapshot: 1 }, `Registration persistence (${mode})`);
       phase = `student exam ${mode}: cancel through UI`;
       const [cancelled] = await Promise.all([page.waitForResponse(isEdgePost), page.getByRole('button', { name: 'Cancelar inscripcion', exact: true }).first().click()]);
       assert.equal(cancelled.status(), 200, 'Exam cancel failed');
@@ -239,6 +244,20 @@ export async function main() {
       report.examModes = [];
       for (const mode of EXAM_MODES) report.examModes.push(await examScenario(page, mode));
       report.examRegistered = report.examModes.every(entry => entry.positive && entry.negatives);
+      // PB.4: si la RPC de mesa falla en dual_write, la Edge responde 409 y no escribe el snapshot (sin drift).
+      phase = 'adversarial PB.4: induced exam RPC failure';
+      stack.sql(transitionSql('dual_write'));
+      stack.sql(PB4_FAILURE_TRIGGER_SQL);
+      try {
+        await page.goto(`${origin}/app/mesas-examen`, { waitUntil: 'networkidle' });
+        const [failed] = await Promise.all([page.waitForResponse(isEdgePost), page.getByRole('button', { name: 'Inscribirme', exact: true }).first().click()]);
+        report.pb4 = { status: failed.status(), afterFailure: examCounts() };
+        assert.equal(report.pb4.status, 409, `Induced RPC failure must return 409, got ${report.pb4.status}`);
+        assert.deepEqual(report.pb4.afterFailure, { relational: 0, snapshot: 0 }, 'Induced RPC failure left drift');
+        await page.getByRole('button', { name: 'Inscribirme', exact: true }).first().waitFor();
+      } finally {
+        stack.sql('drop trigger if exists pb4_fail_exam_enrollment on public.exam_enrollments;');
+      }
     });
     await withActor(actors[1], async page => {
       phase = 'teacher attendance through UI';

@@ -1,6 +1,7 @@
 import { isSupabaseConfigured, supabase } from '../../../lib/supabase.js'
 
-const subjectEnrollmentMutations = new Set(['enroll_subject', 'withdraw_subject'])
+// Espejo de studentPortalRelationalWriteRequiredMutations (admin-users): PB.4 suma las mesas.
+const subjectEnrollmentMutations = new Set(['enroll_subject', 'withdraw_subject', 'register_exam', 'cancel_exam'])
 
 function shouldRequireRelationalWrite(data, mutationType) {
   const readMode = String(data?.transition?.read_mode || '').trim()

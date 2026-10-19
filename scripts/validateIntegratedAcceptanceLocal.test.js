@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { DUAL_WRITE_TRANSITION, EXAM_MODES, expectedFailurePhase, isAllowedBrowserRequest, separateFixtureAuth, transitionSql } from './validateIntegratedAcceptanceLocal.mjs';
+import { DUAL_WRITE_TRANSITION, EXAM_MODES, PB4_FAILURE_TRIGGER_SQL, expectedFailurePhase, isAllowedBrowserRequest, separateFixtureAuth, transitionSql } from './validateIntegratedAcceptanceLocal.mjs';
 import { fixtureSql } from './validateExamEligibilityParityLocal.mjs';
 import { assertOwnedStackDatabase } from './localSupabaseStack.mjs';
 
@@ -42,5 +42,14 @@ describe('integrated acceptance harness boundaries', () => {
     expect(expectedFailurePhase('adversarial dual_write: Edge replay')).toBe(true);
     expect(expectedFailurePhase('student exam dual_write: cancel through UI')).toBe(false);
     expect(expectedFailurePhase('admin_instituto/a logout')).toBe(false);
+  });
+
+  it('PB.4: induce una falla de la RPC de mesa en dual_write y exige 409 sin drift', () => {
+    const harness = readFileSync('scripts/validateIntegratedAcceptanceLocal.mjs', 'utf8');
+    expect(PB4_FAILURE_TRIGGER_SQL).toContain('before insert or update on public.exam_enrollments');
+    expect(harness).toContain("phase = 'adversarial PB.4: induced exam RPC failure';");
+    expect(harness).toContain("assert.deepEqual(report.pb4.afterFailure, { relational: 0, snapshot: 0 }, 'Induced RPC failure left drift');");
+    expect(harness).toContain("drop trigger if exists pb4_fail_exam_enrollment on public.exam_enrollments;");
+    expect(expectedFailurePhase('adversarial PB.4: induced exam RPC failure')).toBe(true);
   });
 });
