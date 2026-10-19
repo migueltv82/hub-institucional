@@ -184,3 +184,14 @@ describe('academicRelationalData', () => {
     expect(effectiveSnapshot.academicRelationalSource.enrollmentsLoaded).toBe(true)
   })
 })
+
+describe('I2a: historia academica en el portal del alumno', () => {
+  it('trata la historia importada como nota final y conserva el origen', async () => {
+    const { mapStudentPortalGrade } = await import('./academicRelationalData.js')
+    expect(mapStudentPortalGrade({ id: 'g1', grade_type: 'historia', grade_value: 8, academic_status: 'approved' }))
+      .toMatchObject({ grade_type: 'final', origin: 'historia', score: 8, academic_status: 'approved' })
+    expect(mapStudentPortalGrade({ id: 'g2', grade_type: 'partial', grade_value: 6 }))
+      .toMatchObject({ grade_type: 'partial' })
+    expect(mapStudentPortalGrade({ id: 'g2', grade_type: 'partial' }).origin).toBeUndefined()
+  })
+})

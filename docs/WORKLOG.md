@@ -1236,3 +1236,12 @@ Arreglo:
 - **Portales:** no cambia lo que muestran. I2b va a usar este dataset para crear las cursadas reales (`subject_enrollments`).
 
 Tests nuevos: un alumno con 3 materias más una repetida; fila sin materia; merge; persistencia en las dos plantillas; reset del alumno. `npm run check` PASS, 2601 tests.
+
+## 2026-10-18 — I2a: importación de historia académica (Claude)
+
+Bloqueante del Día D. Sin historia académica, los regulares de años anteriores no podían inscribirse a mesas, y las correlativas y el control de años quedaban sin aprobadas.
+- **RPC nueva:** `academic_admin_import_student_history`, solo staff, por lotes y con reporte por fila. Escribe `student_grades` en canónico con legajo y `grade_type 'historia'`. Nunca pisa notas del docente.
+- **App:** sección "Historia académica" en Alumnos (plantilla, importar y tabla de problemas). El portal del alumno la cuenta como nota final.
+- **Documentación:** runbook §8.1 paso 6 y matriz de seguridad.
+
+Harness PASS `f9d1b68e6b0b51c1`; regresiones de base PASS. Evidencia: `supabase/security/STUDENT_HISTORY_IMPORT_LOCAL_RESULT.md`.

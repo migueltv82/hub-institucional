@@ -40,6 +40,7 @@ import AssetsSection from './generadorCronograma/AssetsSection.jsx'
 import DeletedPersonRecordsSection from './generadorCronograma/DeletedPersonRecordsSection.jsx'
 import { isDevAuditSnapshotRoleAuthorized } from './generadorCronograma/devAuditSnapshotAccess.js'
 import StudentAccessSection from './generadorCronograma/StudentAccessSection.jsx'
+import StudentHistoryImportSection from './generadorCronograma/StudentHistoryImportSection.jsx'
 import StudentCareerDashboard from './generadorCronograma/StudentCareerDashboard.jsx'
 import StudentSubjectEnrollmentSection from './generadorCronograma/StudentSubjectEnrollmentSection.jsx'
 import TribunalMatrixDiagnosis from './generadorCronograma/TribunalMatrixDiagnosis.jsx'
@@ -1846,6 +1847,12 @@ function GeneradorCronograma() {
                         lastResult={studentAccessResult}
                         onProvisionStudents={crearAccesosAlumnos}
                         useRemoteWorkspace={useRemoteWorkspace}
+                      />
+                      <StudentHistoryImportSection
+                        canEditWorkspace={canEditWorkspace}
+                        institutionId={activeInstitutionId}
+                        useRemoteWorkspace={useRemoteWorkspace}
+                        workspaceKey={workspaceKey}
                       />
                       <StudentCareerDashboard
                         alumnos={alumnos}

@@ -5,6 +5,15 @@ import {
   mapCanonicalSubjectEnrollment,
 } from '../../../services/academicCanonicalRows.js'
 
+// I2a: la historia academica importada (grade_type 'historia') es una nota final para el alumno: cuenta en
+// calificaciones y promedio. Se conserva el origen para mostrarlo. El docente la sigue viendo con su tipo.
+export function mapStudentPortalGrade(row) {
+  const grade = mapCanonicalStudentGrade(row)
+  return grade.grade_type === 'historia'
+    ? { ...grade, grade_type: 'final', origin: 'historia' }
+    : grade
+}
+
 const DEFAULT_TRANSITION_CONFIG = {
   stage: 'snapshot_only',
   writeMode: 'snapshot_only',
@@ -217,7 +226,7 @@ export async function fetchAcademicRelationalSnapshotOverlay({
       enrollments,
       enrollmentsLoaded: readRelationalEnrollments && !subjectError,
       examEnrollments: examError ? [] : asArray(examRows).map(mapCanonicalExamEnrollment),
-      grades: gradeError ? [] : asArray(gradeRows).map(mapCanonicalStudentGrade),
+      grades: gradeError ? [] : asArray(gradeRows).map(mapStudentPortalGrade),
     },
   }
 }
