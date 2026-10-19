@@ -73,7 +73,9 @@ export default function StudentGradesPage() {
         .sort(sortGradesByAttempt)
       const finalGrade = enrollmentGrades.find(grade => getGradeType(grade) === 'final')
       const finalScore = getGradeScore(finalGrade)
-      const academicStatus = getAcademicStatus({ grade: finalGrade, enrollment })
+      // D1: sin final, el estado sale de la condicion importada (regular o libre de la historia academica).
+      const conditionGrade = enrollmentGrades.find(grade => getGradeType(grade) === 'condicion')
+      const academicStatus = getAcademicStatus({ grade: finalGrade ?? conditionGrade, enrollment })
       const hasExplicitStatus = academicStatus !== 'pending'
 
       return {

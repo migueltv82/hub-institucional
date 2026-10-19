@@ -7,11 +7,21 @@ import {
 
 // I2a: la historia academica importada (grade_type 'historia') es una nota final para el alumno: cuenta en
 // calificaciones y promedio. Se conserva el origen para mostrarlo. El docente la sigue viendo con su tipo.
+// Para el alumno, la historia importada (I2a) y el acta de examen (F1, 'final_exam') llevan la fecha de la
+// planilla o del examen en grading_period. Un resultado (aprobada, promocionada, desaprobada) es su nota final;
+// una condicion de historia (regular, libre) no es un final: solo marca la regularidad y su fecha.
+const STUDENT_FINAL_GRADE_ORIGINS = Object.freeze({ historia: 'historia', final_exam: 'acta' })
+const HISTORY_CONDITIONS = new Set(['regular', 'libre'])
+
 export function mapStudentPortalGrade(row) {
   const grade = mapCanonicalStudentGrade(row)
-  return grade.grade_type === 'historia'
-    ? { ...grade, grade_type: 'final', origin: 'historia' }
-    : grade
+  const origin = STUDENT_FINAL_GRADE_ORIGINS[grade.grade_type]
+  if (!origin) return grade
+  const date = String(row?.grading_period ?? '').trim() || null
+  if (origin === 'historia' && HISTORY_CONDITIONS.has(grade.academic_status)) {
+    return { ...grade, grade_type: 'condicion', origin, regularity_date: grade.academic_status === 'regular' ? date : null }
+  }
+  return { ...grade, grade_type: 'final', origin, final_date: date }
 }
 
 const DEFAULT_TRANSITION_CONFIG = {

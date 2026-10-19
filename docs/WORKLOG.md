@@ -1352,3 +1352,21 @@ El recorrido con navegador real se hace sobre un stack local con el gateway de S
    - **Arreglo:** se aceptan `active`, `activo` y `activa`. Los fixtures de los harnesses ahora usan `activo`: reproducen el bug con el código anterior y pasan con el arreglo.
 
 Runbook: §4 (SQL nuevo después del gateway) y §8.1. `npm run check` PASS (2689).
+
+## 2026-10-19 — D1: recorrido completo del Día D con navegador real (Claude)
+
+Se recorrieron los 5 roles por la UI, sobre un stack local con el gateway de Storage: Super Admin, admin, alumna, titular, vocal y viewer. El flujo cubre:
+- alta de institución y planillas;
+- catálogo, accesos, cursadas, titulares e historia;
+- armado y publicación de mesas;
+- primer ingreso con cambio de contraseña e inscripción;
+- acta cargada y cerrada, la nota en el portal del alumno y el PDF del acta.
+
+Se corrigieron 4 hallazgos: 3 P1 y 1 P2.
+- **A y B** (commit anterior): primera carga en institución nueva y alumnos sin plan.
+- **C:** el final del acta no aparecía en el portal del alumno.
+- **D:** las fechas de la historia importada estaban mal.
+
+Quedan 9 detalles P3 y una decisión (umbral inferido de aprobación) para la Fase 2. Harness integrado e historia PASS. `npm run check` PASS (2692).
+
+Evidencia: `supabase/security/D1_WALKTHROUGH_RESULT.md`.
