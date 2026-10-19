@@ -141,6 +141,20 @@ describe('admin-users edge function security posture', () => {
     expect(edgeFunction.match(/\[MUST_CHANGE_PASSWORD_FLAG\]: false/g)).toHaveLength(1)
   })
 
+  it('I2f: el alta de institucion + admin valida antes de escribir y deshace todo si falla', () => {
+    const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleCreateTenantWithAdmin('), edgeFunction.indexOf('async function handleCreateOrAssignInstitutionUser('))
+    const insertAt = handler.indexOf(".from('institutions')\n    .insert({")
+    expect(insertAt).toBeGreaterThan(0)
+    expect(handler.indexOf('await findAuthUserByEmail(adminClient, email)')).toBeLessThan(insertAt)
+    expect(handler.indexOf("existingProfile?.is_global_admin || (existingRole && existingRole !== 'admin_instituto')")).toBeLessThan(insertAt)
+    expect(handler.indexOf("throw badRequest('La contrasena debe tener al menos 8 caracteres.')")).toBeLessThan(insertAt)
+    expect(handler).toContain("await adminClient.from('institutions').delete().eq('id', institution.id)")
+    expect(handler).toContain('await adminClient.auth.admin.deleteUser(createdUserId)')
+    expect(handler).not.toContain('createOrReuseAuthUser(')
+    const reuseBranch = handler.slice(handler.indexOf('if (existingUser) {\n      // Un admin existente'), handler.indexOf('} else {\n      const { data, error } = await adminClient.auth.admin.createUser('))
+    expect(reuseBranch).not.toMatch(/password|is_global_admin|is_blocked/)
+  })
+
   it('protege el reset academico total con permisos admin y contrasena actual', () => {
     expect(edgeFunction).toContain('reset_student_academic_records: handleResetStudentAcademicRecords')
     expect(edgeFunction).toContain("action === 'bulk_create_students' || action === 'bulk_create_teachers' || action === 'reset_student_academic_records'")

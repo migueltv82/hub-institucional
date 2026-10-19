@@ -1188,6 +1188,8 @@ export async function createInstitutionWithAdmin({
       tenant_id: data?.institution_id,
       is_global_admin: false,
     },
+    // I2f: si el email ya era de un admin, conserva su contrasena; la ingresada no se usa.
+    adminReused: Boolean(data?.admin_reused),
     source: 'supabase',
   }
 }

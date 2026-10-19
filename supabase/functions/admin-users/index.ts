@@ -735,6 +735,27 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
     ? payload.admin_display_name.trim()
     : institutionName
 
+  // I2f: primero todo lo que puede rechazar sin escribir; despues institucion, usuario, perfil y membresia,
+  // y si algo falla se deshace lo creado en esta llamada (institucion y, si es nuevo, el usuario Auth).
+  const existingUser = await findAuthUserByEmail(adminClient, email)
+  if (existingUser) {
+    const { data: existingProfile, error: profileLookupError } = await adminClient
+      .from('profiles')
+      .select('account_role, is_global_admin, is_blocked')
+      .eq('user_id', existingUser.id)
+      .maybeSingle()
+    if (profileLookupError) throw profileLookupError
+    const existingRole = String(existingProfile?.account_role ?? '').toLowerCase()
+    if (existingProfile?.is_global_admin || (existingRole && existingRole !== 'admin_instituto')) {
+      throw new HttpError('El email ya pertenece a un usuario con otro rol. Usa otro email para el administrador.', 409)
+    }
+    if (existingProfile?.is_blocked) {
+      throw new HttpError('El email pertenece a un administrador bloqueado. Desbloquealo antes de asignarle otra institucion.', 409)
+    }
+  } else if (password.trim().length < 8) {
+    throw badRequest('La contrasena debe tener al menos 8 caracteres.')
+  }
+
   const { data: institution, error: institutionError } = await adminClient
     .from('institutions')
     .insert({
@@ -747,33 +768,61 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
     .select('id, created_at')
     .single()
 
-  if (institutionError) throw institutionError
+  if (institutionError) {
+    if (institutionError.code === '23505') throw new HttpError('Ya existe una institucion con ese slug.', 409)
+    throw institutionError
+  }
 
-  const authUser = await createOrReuseAuthUser({
-    adminClient,
-    email,
-    password,
-    displayName,
-  })
+  let createdUserId: string | null = null
+  try {
+    let adminUserId = existingUser?.id ?? ''
+    if (existingUser) {
+      // Un admin existente conserva su contrasena, rol y estado: solo se le suma la institucion.
+      const { error: profileError } = await adminClient
+        .from('profiles')
+        .upsert({ user_id: existingUser.id, email, account_role: 'admin_instituto', updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      if (profileError) throw profileError
+    } else {
+      const { data, error } = await adminClient.auth.admin.createUser({
+        email,
+        password: password.trim(),
+        email_confirm: true,
+        app_metadata: { provider: 'email', providers: ['email'] },
+        user_metadata: { full_name: displayName || email, account_role: 'admin_instituto' },
+      })
+      if (error) throw error
+      if (!data.user) throw new Error('Supabase no devolvio el usuario creado.')
+      createdUserId = data.user.id
+      adminUserId = data.user.id
+      await upsertProfile({ adminClient, userId: adminUserId, email, displayName })
+    }
 
-  await upsertProfile({
-    adminClient,
-    userId: authUser.id,
-    email,
-    displayName,
-  })
+    await assignMemberships({
+      adminClient,
+      userId: adminUserId,
+      institutionIds: [institution.id],
+      role: 'owner',
+    })
 
-  await assignMemberships({
-    adminClient,
-    userId: authUser.id,
-    institutionIds: [institution.id],
-    role: 'owner',
-  })
-
-  return {
-    institution_id: institution.id,
-    admin_user_id: authUser.id,
-    created_at: institution.created_at,
+    return {
+      institution_id: institution.id,
+      admin_user_id: adminUserId,
+      admin_reused: Boolean(existingUser),
+      created_at: institution.created_at,
+    }
+  } catch (error) {
+    const rollbackErrors: string[] = []
+    const { error: institutionDeleteError } = await adminClient.from('institutions').delete().eq('id', institution.id)
+    if (institutionDeleteError) rollbackErrors.push('institucion')
+    if (createdUserId) {
+      const { error: userDeleteError } = await adminClient.auth.admin.deleteUser(createdUserId)
+      if (userDeleteError) rollbackErrors.push('usuario')
+    }
+    const reason = error instanceof Error ? error.message : 'Error inesperado.'
+    if (rollbackErrors.length) {
+      throw new HttpError(`No se pudo crear la institucion (${reason}) y no se pudo deshacer: ${rollbackErrors.join(', ')}. Revisar a mano el slug ${slug}.`, 500)
+    }
+    throw new HttpError(`No se pudo crear la institucion; no quedo nada creado. Detalle: ${reason}`, error instanceof HttpError ? error.status : 500)
   }
 }
 

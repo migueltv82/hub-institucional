@@ -34,7 +34,7 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
     setIsSubmitting(true)
 
     try {
-      await createInstitutionWithAdmin({
+      const created = await createInstitutionWithAdmin({
         institutionName: formData.name,
         adminEmail: formData.adminEmail,
         adminPassword: formData.adminPassword,
@@ -42,7 +42,9 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
         logoUrl: '',
         useRemote: isRemoteSession,
       })
-      toast.success('Institucion creada y administrador asignado')
+      toast.success(created?.adminReused
+        ? 'Institucion creada. El administrador ya existia: conserva su contrasena actual.'
+        : 'Institucion creada y administrador asignado')
       onSuccess()
       onClose()
     } catch (error) {

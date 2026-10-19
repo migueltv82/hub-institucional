@@ -1305,3 +1305,12 @@ Harness: SQL y RPC dejan catálogos idénticos, y el payload de la app es igual 
 - **Pendiente:** redeploy de la Edge, a cargo de Miguel.
 
 Evidencia: `supabase/security/INITIAL_PASSWORD_LOCAL_RESULT.md`.
+
+## 2026-10-19 — I2f: alta atómica de institución + admin (Claude)
+
+- **Huérfanas:** `create_tenant_with_admin` valida todo antes de escribir. Si algo falla después de crear la institución, la borra junto con el usuario Auth creado en esa llamada, así que ya no quedan instituciones huérfanas ni slugs ocupados.
+- **Identidades existentes:** un email de Super Admin, de otro rol o de un admin bloqueado se rechaza con 409, sin tocar nada. Antes los degradaba, promovía o desbloqueaba, y les cambiaba la contraseña. Un admin existente conserva su contraseña y la app lo avisa.
+- **Pruebas:** el harness con GoTrue y Edge reales provoca fallas con triggers y verifica que no quede nada huérfano. Con el código anterior reproduce la institución huérfana. Regresiones Edge PASS. `npm run check` PASS (2678).
+- **Pendiente:** redeploy de la Edge (Miguel). El mismo patrón en `create_or_assign_institution_user` quedó como tarjeta I2g.
+
+Evidencia: `supabase/security/TENANT_CREATION_LOCAL_RESULT.md`.
