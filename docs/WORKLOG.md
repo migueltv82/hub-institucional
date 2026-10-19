@@ -1199,3 +1199,21 @@ Se corrigieron los P2/P3 de texto en `docs/RUNBOOK_PRODUCCION_V1.md`:
 P3 pendientes, sin impacto en la demo:
 - el harness ensaya solo el primer bloque SQL de cada sección;
 - un detalle de la evidencia se editó a mano (sacaba un UUID sintético).
+
+## 2026-10-18 — 03.5c: CHECK canónico en `student_grades.academic_status` (Claude)
+
+Opción B de 03.5, desbloqueada por el diagnóstico de Producción (0 filas no canónicas).
+- **Cambio en 07:** agrega `student_grades_academic_status_check` con el conjunto canónico de 03.5b: primero `NOT VALID`, después `VALIDATE`.
+- **Filas no canónicas:** si las hay, aborta con `ACADEMIC_STATUS_NONCANONICAL_ROWS` sin tocar datos.
+- **Idempotente:** se puede volver a aplicar sin efecto.
+
+Harness nuevo: `scripts/validateAcademicStatusCheckLocal.mjs`, PASS (`143611066729349b`). Cubre:
+- base nueva con el CHECK validado;
+- rechazo de escrituras directas no canónicas;
+- abort con datos malos y aplicación con la tabla limpia;
+- el RPC 03.5b, que sigue normalizando y decidiendo la mesa.
+
+Paridad 03.3: los 4 escenarios legacy sacan el CHECK solo dentro de su transacción (rollback), y un test fija cuáles son.
+Regresiones PASS: 03.5b, 03.3, publicación de mesas, QA.1 y 06.3. `npm run check` PASS, 2596 tests.
+
+Producción: pendiente del OK de Miguel. Evidencia: `supabase/security/ACADEMIC_STATUS_CHECK_LOCAL_RESULT.md`.

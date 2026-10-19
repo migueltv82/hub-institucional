@@ -408,6 +408,41 @@ begin
   end if;
 end $$;
 
+-- 03.5c: academic_status solo admite el conjunto canonico, el mismo que normaliza
+-- academic_teacher_upsert_student_grade (03.5b) y que leen el RPC de mesas y el portal.
+-- Se agrega NOT VALID y se valida aparte; si hay filas no canonicas aborta sin tocar datos.
+do $$
+declare
+  noncanonical_count bigint;
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.student_grades'::regclass
+      and conname = 'student_grades_academic_status_check'
+  ) then
+    alter table public.student_grades
+      add constraint student_grades_academic_status_check
+      check (academic_status in ('pending', 'regular', 'libre', 'promocionado', 'approved', 'failed', 'absent'))
+      not valid;
+  end if;
+
+  if exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.student_grades'::regclass
+      and conname = 'student_grades_academic_status_check'
+      and not convalidated
+  ) then
+    select count(*) into noncanonical_count
+    from public.student_grades
+    where academic_status not in ('pending', 'regular', 'libre', 'promocionado', 'approved', 'failed', 'absent');
+    if noncanonical_count > 0 then
+      raise exception 'ACADEMIC_STATUS_NONCANONICAL_ROWS: % filas de student_grades tienen academic_status fuera del conjunto canonico. Corregirlas antes de aplicar 03.5c (ver validateAcademicStatusDiagnostic.mjs).', noncanonical_count
+        using errcode = '23514';
+    end if;
+    alter table public.student_grades validate constraint student_grades_academic_status_check;
+  end if;
+end $$;
+
 -- El legajo de una inscripcion pertenece al mismo tenant y workspace.
 create unique index if not exists student_records_tenant_workspace_id_key
   on public.student_records (institution_id, workspace_key, id);

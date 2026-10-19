@@ -36,15 +36,21 @@ export const PARITY_SCENARIOS = Object.freeze([
 
 const quote = value => value === null || value === undefined ? 'null' : "'" + String(value).replaceAll("'", "''") + "'";
 
+// 03.5c: el CHECK canonico impide escribir estos valores. Los escenarios que los usan representan datos
+// legacy (bases previas a 03.5c) y sacan el CHECK solo dentro de su transaccion, que siempre termina en rollback.
+export const CANONICAL_STATUSES = Object.freeze(['pending', 'regular', 'libre', 'promocionado', 'approved', 'failed', 'absent']);
+export const isLegacyScenario = scenario => scenario.rows.some(row => !CANONICAL_STATUSES.includes(row.status));
+
 export function scenarioInsertSql(scenario) {
   if (scenario.rows.length === 0) return '';
+  const legacy = isLegacyScenario(scenario) ? 'alter table public.student_grades drop constraint if exists student_grades_academic_status_check;\n' : '';
   const base = Date.parse('2026-10-01T00:00:00Z');
   const values = scenario.rows.map((row, index) => {
     const updated = new Date(base + (row.at ?? (index + 1) * 10) * 60000).toISOString();
     const created = new Date(base + (row.createdAt ?? (row.at ?? (index + 1) * 10)) * 60000).toISOString();
     return `(${[STUDENT.institution, 'main', STUDENT.userId, STUDENT.recordId, row.subjectId ?? STUDENT.subjectId, row.programId ?? STUDENT.programId, row.status].map(quote).join(',')},${quote(row.gradeType ?? 'final')},${row.gradeValue ?? 'null'},${index + 1},${quote(created)},${quote(updated)},${row.deleted ? quote(updated) : 'null'})`;
   });
-  return `insert into public.student_grades (institution_id, workspace_key, student_id, student_record_id, subject_id, program_id, academic_status, grade_type, grade_value, attempt_number, created_at, updated_at, deleted_at) values ${values.join(',')};`;
+  return `${legacy}insert into public.student_grades (institution_id, workspace_key, student_id, student_record_id, subject_id, program_id, academic_status, grade_type, grade_value, attempt_number, created_at, updated_at, deleted_at) values ${values.join(',')};`;
 }
 
 // JS mas permisivo que el servidor es el bug que CLAUDE.md prohibe; mas estricto es una divergencia de UX.
