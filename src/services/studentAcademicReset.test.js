@@ -45,8 +45,14 @@ describe('studentAcademicReset', () => {
         { id: 'subject-attendance-1', student_id: 'student-1' },
         { id: 'subject-attendance-2', student_id: 'student-2' },
       ],
+      inscripcionesAlumnos: [
+        { id: 'dni-123::ing::ing01', dni: '123' },
+        { id: 'dni-999::ing::ing01', dni: '999' },
+      ],
       academicStatus: { student_id: 'student-1', status: 'regular' },
     }, student)
+
+    expect(result.inscripcionesAlumnos).toEqual([{ id: 'dni-999::ing::ing01', dni: '999' }])
 
     expect(result.estadoAcademico).toEqual([{ dni: '999' }])
     expect(result.academicStatusRows).toEqual([{ email: 'otra@example.com' }])

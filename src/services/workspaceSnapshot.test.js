@@ -74,6 +74,7 @@ describe('workspaceSnapshot service', () => {
       estadoAcademico: [],
       academicStatusRows: [],
       enrollments: [],
+      inscripcionesAlumnos: [],
       courseClassmates: [],
       grades: [],
       examEnrollments: [],

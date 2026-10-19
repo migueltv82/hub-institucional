@@ -1223,3 +1223,16 @@ Corregido junto con dos P3:
 - un CHECK con otra definición aborta con `ACADEMIC_STATUS_CHECK_MISMATCH`;
 - el mensaje remite al diagnóstico SQL.
 Re-runs PASS: CHECK `7eb7b92844dc480b`, diagnóstico `b8bec8b6f6497b7b`, 03.5b `87b409b5ea2ac2dd`, paridad `21e0b786abdb5d69`.
+
+## 2026-10-18 — I2e: el importador de alumnos ya no pierde materias (Claude)
+
+Bug confirmado: `alumnos_inscripciones` trae una fila por alumno y materia, pero el importador deduplicaba por alumno. Sobrevivía solo la primera materia de cada uno.
+
+Arreglo:
+- **Padrón:** `alumnos` sigue con una fila por alumno, como antes.
+- **Inscripciones:** las materias van a `inscripcionesAlumnos` (alumno + carrera + materia) dentro del workspace snapshot. Pasa con las dos plantillas, la de alumnos y la maestra.
+- **Carga acumulativa:** igual que el padrón; las inscripciones que no vienen en la planilla se conservan.
+- **Borrado de alumno:** al borrar un alumno se borran también sus inscripciones.
+- **Portales:** no cambia lo que muestran. I2b va a usar este dataset para crear las cursadas reales (`subject_enrollments`).
+
+Tests nuevos: un alumno con 3 materias más una repetida; fila sin materia; merge; persistencia en las dos plantillas; reset del alumno. `npm run check` PASS, 2601 tests.

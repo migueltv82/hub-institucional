@@ -426,6 +426,20 @@ export function mergeAcademicWorkbookDatasets(snapshotPayload = {}, incomingData
   }
 }
 
+// I2e: inscripciones importadas (alumno + carrera + materia). Las nuevas reemplazan a las del mismo id;
+// las que no vinieron en la planilla se conservan, igual que el padron.
+export function mergeStudentEnrollmentImports(existing = [], incoming = []) {
+  const merged = new Map()
+  ;(Array.isArray(existing) ? existing : []).forEach((row) => { if (row?.id) merged.set(row.id, row) })
+  let created = 0
+  ;(Array.isArray(incoming) ? incoming : []).forEach((row) => {
+    if (!row?.id) return
+    if (!merged.has(row.id)) created += 1
+    merged.set(row.id, row)
+  })
+  return { rows: [...merged.values()], created }
+}
+
 export function useCronogramaFiles({
   activeInstitutionId,
   canEditWorkspace = true,
@@ -441,6 +455,7 @@ export function useCronogramaFiles({
   setHorariosDocentes,
   setPlanesEstudio,
   setRequiereRegeneracion,
+  setStudentEnrollmentImports,
   setUploadedFiles,
   snapshotPayload,
   useRemoteWorkspace,
@@ -485,6 +500,8 @@ export function useCronogramaFiles({
       const studentDatasets = hasStudentDatasets ? mergeStudentRows(snapshotPayload?.alumnos, datasets.alumnos) : null
       if (teacherDatasets) Object.assign(mergedDatasets, teacherDatasets.datasets)
       if (studentDatasets) mergedDatasets.alumnos = studentDatasets.rows
+      const enrollmentImports = hasStudentDatasets ? mergeStudentEnrollmentImports(snapshotPayload?.inscripcionesAlumnos, datasets.inscripcionesAlumnos) : null
+      if (enrollmentImports) mergedDatasets.inscripcionesAlumnos = enrollmentImports.rows
       const willRequireReview = Boolean(cronogramaLength) || snapshotPayload?.requiereRegeneracion
 
       await persistFile({ file, datasetKey: 'masterWorkbook', datasets: mergedDatasets, nextUploadedFiles })
@@ -498,6 +515,7 @@ export function useCronogramaFiles({
         setCargaHorariaDocente?.(teacherDatasets.datasets.cargaHorariaDocente)
       }
       if (studentDatasets) setAlumnos(studentDatasets.rows)
+      if (enrollmentImports) setStudentEnrollmentImports?.(enrollmentImports.rows)
       const message = `Carga maestra guardada: ${summary.planesEstudio} materias importadas, ${academicDatasets.datasets.planesEstudio.length} materias totales.`
       toast.success(message)
       showImportantNotice({
@@ -551,10 +569,12 @@ export function useCronogramaFiles({
     try {
       const { datasets } = await fileHandlers.parseTemplateV2StudentsWorkbook(file, { planesEstudio: snapshotPayload?.planesEstudio })
       const merged = mergeStudentRows(snapshotPayload?.alumnos, datasets.alumnos)
-      const mergedDatasets = { alumnos: merged.rows }
+      const enrollmentImports = mergeStudentEnrollmentImports(snapshotPayload?.inscripcionesAlumnos, datasets.inscripcionesAlumnos)
+      const mergedDatasets = { alumnos: merged.rows, inscripcionesAlumnos: enrollmentImports.rows }
       const nextUploadedFiles = { ...snapshotPayload?.uploadedFiles, alumnosWorkbook: file.name }
       await persistFile({ file, datasetKey: 'alumnosWorkbook', datasets: mergedDatasets, nextUploadedFiles })
       setAlumnos(merged.rows)
+      setStudentEnrollmentImports?.(enrollmentImports.rows)
       const message = `Carga acumulativa guardada: ${merged.created} nuevos, ${merged.updated} actualizados, ${merged.preserved} conservados, ${merged.rows.length} alumnos totales.`
       toast.success(message)
       showImportantNotice({
@@ -566,6 +586,7 @@ export function useCronogramaFiles({
           `${merged.updated} alumnos actualizados.`,
           `${merged.preserved} alumnos existentes conservados porque no vinieron en la planilla.`,
           `${merged.rows.length} alumnos totales.`,
+          `${enrollmentImports.rows.length} inscripciones a materias guardadas (${enrollmentImports.created} nuevas).`,
         ],
       })
     } catch (error) { toast.error(`No se pudo cargar la plantilla de alumnos: ${error.message}`) } finally { event.target.value = '' }

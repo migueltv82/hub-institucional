@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mergeAcademicWorkbookDatasets,
+  mergeStudentEnrollmentImports,
   mergeStudentRows,
   mergeTeacherWorkbookDatasets,
   useCronogramaFiles,
@@ -60,6 +61,7 @@ function props(overrides = {}) {
     setHorariosDocentes: vi.fn(),
     setPlanesEstudio: vi.fn(),
     setRequiereRegeneracion: vi.fn(),
+    setStudentEnrollmentImports: vi.fn(),
     setUploadedFiles: vi.fn(),
     snapshotPayload: { cronograma: [{ id: 'mesa-1' }], uploadedFiles: {} },
     uploadedFiles: {},
@@ -71,6 +73,37 @@ function props(overrides = {}) {
 
 describe('useCronogramaFiles', () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it('I2e: acumula inscripciones importadas por id y conserva las que no vinieron', () => {
+    const result = mergeStudentEnrollmentImports(
+      [{ id: 'dni-1::ing::ing01', estado: 'vieja' }, { id: 'dni-1::ing::ing02' }],
+      [{ id: 'dni-1::ing::ing01', estado: 'nueva' }, { id: 'dni-1::ing::ing03' }, { materia: 'sin id' }],
+    )
+    expect(result.rows).toEqual([{ id: 'dni-1::ing::ing01', estado: 'nueva' }, { id: 'dni-1::ing::ing02' }, { id: 'dni-1::ing::ing03' }])
+    expect(result.created).toBe(1)
+  })
+
+  it('I2e: la plantilla de alumnos persiste el padron y las inscripciones a materias', async () => {
+    const inscripciones = [{ id: 'dni-1::ing::ing01' }, { id: 'dni-1::ing::ing02' }, { id: 'dni-1::ing::ing03' }]
+    const settings = props({
+      fileHandlers: {
+        ...props().fileHandlers,
+        parseTemplateV2StudentsWorkbook: vi.fn().mockResolvedValue({
+          datasets: { alumnos: [{ alumno_id: 'a1', dni: '1' }], inscripcionesAlumnos: inscripciones },
+          summary: { alumnos: 1, inscripcionesAlumnos: 3 },
+        }),
+      },
+      snapshotPayload: { uploadedFiles: {}, inscripcionesAlumnos: [{ id: 'dni-9::ing::ing01' }] },
+    })
+    const event = { target: { files: [new File(['x'], 'alumnos.xlsx')], value: 'selected' } }
+    const { result } = renderHook(() => useCronogramaFiles(settings))
+
+    await act(async () => result.current.onUploadStudents(event))
+
+    const expected = [{ id: 'dni-9::ing::ing01' }, ...inscripciones]
+    expect(settings.persistWorkspaceSnapshot).toHaveBeenCalledWith(expect.objectContaining({ alumnos: [{ alumno_id: 'a1', dni: '1' }], inscripcionesAlumnos: expected }))
+    expect(settings.setStudentEnrollmentImports).toHaveBeenCalledWith(expected)
+  })
 
   it('acumula ingresantes y actualiza coincidencias sin borrar el padron anterior', () => {
     const result = mergeStudentRows(
@@ -314,6 +347,7 @@ describe('useCronogramaFiles', () => {
         parseTemplateV2MasterWorkbook: vi.fn().mockResolvedValue({
           datasets: {
             alumnos: [{ alumno_id: 'a2', nombre: 'Marta' }],
+            inscripcionesAlumnos: [{ id: 'a2::lab::lab2024-01' }],
             correlatividades: [{ id: 'c2' }],
             docenteMateria: [{ docente_id: 'd2', materia_id: 'LAB-2024-01', carrera_id: 'LAB', rol_en_materia: 'TITULAR' }],
             docentes: [{ docente_id: 'd2', apellido: 'Orozco', nombre: 'Elizabeth' }],
@@ -358,6 +392,8 @@ describe('useCronogramaFiles', () => {
       ],
     }))
     expect(settings.setAlumnos).toHaveBeenCalledWith([{ alumno_id: 'a1', nombre: 'Ana' }, { alumno_id: 'a2', nombre: 'Marta' }])
+    expect(settings.persistWorkspaceSnapshot).toHaveBeenCalledWith(expect.objectContaining({ inscripcionesAlumnos: [{ id: 'a2::lab::lab2024-01' }] }))
+    expect(settings.setStudentEnrollmentImports).toHaveBeenCalledWith([{ id: 'a2::lab::lab2024-01' }])
     expect(settings.setDocentes).toHaveBeenCalledWith([{ docente_id: 'd1', apellido: 'Diaz', nombre: 'Ana' }, { docente_id: 'd2', apellido: 'Orozco', nombre: 'Elizabeth' }])
     expect(settings.setDisponibilidadDocente).toHaveBeenCalledWith([
       { docente_id: 'd2', docente: 'Orozco Elizabeth', dia: 'LUNES', turno: 'NOCHE', hora_desde: '19:40', hora_hasta: '21:10' },
