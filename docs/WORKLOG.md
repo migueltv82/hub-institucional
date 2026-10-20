@@ -1432,3 +1432,12 @@ El portal alumno infería "Aprobada" desde 6 cuando una nota final no traía con
 - `npm run check` PASS (2705).
 
 **Producción, 20/10:** el conector de Supabase corta a los 60 s y no alcanza para 07/08. Se aplicó solo la parte idempotente inicial de 07 (tablas y columnas si faltan): sin cambios reales, nada a medias. Miguel decidió aplicar 07, 08 y el SQL de registro desde el SQL Editor; Claude verifica después con una consulta de huella (funciones, constraints, índices, policies, triggers y privilegios contra una base local con los mismos archivos). El redeploy de `admin-users` va después del SQL.
+
+## 2026-10-20 — Corrección de AUD.I2f: P1 y dos P2 de Codex (Claude)
+
+- **P1:** el admin nuevo nace "en alta" en `app_metadata`; ningún camino de reutilización (admin, docente, alumno) lo toma hasta que su alta lo libera, y la compensación solo borra cuentas que siguen en alta.
+- **P2:** una cuenta sin perfil ya no se reutiliza.
+- **P2:** la reutilización no reescribe el perfil y se revalida después de la membresía. Si el usuario fue degradado o bloqueado mientras tanto, se deshace la institución o se restauran sus membresías previas.
+- **Harness:** `validateTenantCreationLocal` reproduce los tres escenarios de la auditoría con Auth y Edge reales: PASS, run `2f1af00344ba0b0f`, cleanup 0. Contra la Edge anterior falla en el P1 (control negativo).
+- **Evidencia:** `TENANT_CREATION_LOCAL_RESULT.md`. Riesgo residual en `docs/SECURITY.md`.
+- **Pendiente:** reauditoría de Codex (I2f). El redeploy de `admin-users` espera esa reauditoría y el SQL de Producción.

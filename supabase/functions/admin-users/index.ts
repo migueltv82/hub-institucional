@@ -69,6 +69,10 @@ const planTypes = new Set(['free', 'pro', 'business'])
 const institutionStatuses = new Set(['active', 'suspended'])
 // I2d: marca de cambio obligatorio de la contrasena inicial (DNI), en app_metadata.
 const MUST_CHANGE_PASSWORD_FLAG = 'must_change_password'
+// AUD.I2f P1: un admin creado en un alta nace "en alta" (app_metadata, atomico con createUser) y ningun
+// camino de reutilizacion lo toma mientras siga asi. Solo esa misma alta lo libera (al terminar) o lo borra
+// (al fallar): asi la compensacion nunca borra una cuenta que otra alta ya reutilizo.
+const ADMIN_PROVISIONING_FLAG = 'institution_admin_provisioning'
 
 class HttpError extends Error {
   status: number
@@ -584,10 +588,17 @@ async function findStudentProvisioningLinks(
   return records
 }
 
+function assertNotInAdminProvisioning(user: { app_metadata?: Record<string, unknown> | null }) {
+  if (user.app_metadata?.[ADMIN_PROVISIONING_FLAG] === true) {
+    throw new HttpError('Hay un alta de administrador en curso con ese email. Espera a que termine y volve a intentar.', 409)
+  }
+}
+
 async function assertStudentProvisioningIdentity(
   adminClient: ReturnType<typeof getClients>['adminClient'], institutionId: string, email: string,
   user: NonNullable<Awaited<ReturnType<typeof findAuthUserByEmail>>>,
 ) {
+  assertNotInAdminProvisioning(user)
   const { data: profile, error: profileError } = await adminClient.from('profiles')
     .select('email, account_role, is_global_admin, is_blocked').eq('user_id', user.id).maybeSingle()
   if (profileError) throw profileError
@@ -606,22 +617,30 @@ async function assertStudentProvisioningIdentity(
 
 // I2f/I2g: un email existente solo se reutiliza como admin si ya es admin_instituto y no esta bloqueado.
 // Nunca se le cambia la contrasena, el rol global ni el bloqueo. Se valida antes de escribir nada.
-async function findReusableInstitutionAdmin(adminClient: ReturnType<typeof getClients>['adminClient'], email: string) {
-  const existingUser = await findAuthUserByEmail(adminClient, email)
-  if (!existingUser) return null
+async function readReusableAdminProfile(adminClient: ReturnType<typeof getClients>['adminClient'], userId: string) {
   const { data: existingProfile, error: profileLookupError } = await adminClient
     .from('profiles')
     .select('account_role, is_global_admin, is_blocked')
-    .eq('user_id', existingUser.id)
+    .eq('user_id', userId)
     .maybeSingle()
   if (profileLookupError) throw profileLookupError
-  const existingRole = String(existingProfile?.account_role ?? '').toLowerCase()
-  if (existingProfile?.is_global_admin || (existingRole && existingRole !== 'admin_instituto')) {
+  // AUD.I2f P2: una cuenta sin perfil no prueba que sea admin; no se reutiliza ni se repara aca.
+  if (!existingProfile) {
+    throw new HttpError('El email tiene una cuenta sin perfil. Revisala antes de asignarle una institucion.', 409)
+  }
+  if (existingProfile.is_global_admin || String(existingProfile.account_role ?? '').toLowerCase() !== 'admin_instituto') {
     throw new HttpError('El email ya pertenece a un usuario con otro rol. Usa otro email para el administrador.', 409)
   }
-  if (existingProfile?.is_blocked) {
+  if (existingProfile.is_blocked) {
     throw new HttpError('El email pertenece a un administrador bloqueado. Desbloquealo antes de asignarle otra institucion.', 409)
   }
+}
+
+async function findReusableInstitutionAdmin(adminClient: ReturnType<typeof getClients>['adminClient'], email: string) {
+  const existingUser = await findAuthUserByEmail(adminClient, email)
+  if (!existingUser) return null
+  assertNotInAdminProvisioning(existingUser)
+  await readReusableAdminProfile(adminClient, existingUser.id)
   return existingUser
 }
 
@@ -642,7 +661,7 @@ async function createInstitutionAdminUser({
     email,
     password: password.trim(),
     email_confirm: true,
-    app_metadata: { provider: 'email', providers: ['email'] },
+    app_metadata: { provider: 'email', providers: ['email'], [ADMIN_PROVISIONING_FLAG]: true },
     user_metadata: { full_name: displayName || email, account_role: 'admin_instituto' },
   })
   if (error) throw error
@@ -650,12 +669,25 @@ async function createInstitutionAdminUser({
   return data.user
 }
 
-async function markReusedInstitutionAdmin(adminClient: ReturnType<typeof getClients>['adminClient'], userId: string, email: string) {
-  // Un admin existente conserva su contrasena, rol y estado: solo se asegura el perfil.
-  const { error } = await adminClient
-    .from('profiles')
-    .upsert({ user_id: userId, email, account_role: 'admin_instituto', updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+// Fin de un alta nueva: la cuenta queda reutilizable. Hasta aca solo esta alta podia tocarla.
+async function finishInstitutionAdminProvisioning(
+  adminClient: ReturnType<typeof getClients>['adminClient'],
+  user: { id: string, app_metadata?: Record<string, unknown> | null },
+) {
+  const { error } = await adminClient.auth.admin.updateUserById(user.id, {
+    app_metadata: { ...(user.app_metadata ?? {}), [ADMIN_PROVISIONING_FLAG]: false },
+  })
   if (error) throw error
+}
+
+// Compensacion de un alta nueva: borra la cuenta solo si sigue "en alta". Si ya se libero (la liberacion
+// llego a aplicarse aunque devolvio error), otra alta pudo reutilizarla y no se toca.
+async function discardProvisionalInstitutionAdmin(adminClient: ReturnType<typeof getClients>['adminClient'], userId: string) {
+  const { data, error } = await adminClient.auth.admin.getUserById(userId)
+  if (error) return false
+  if (data.user?.app_metadata?.[ADMIN_PROVISIONING_FLAG] !== true) return false
+  const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId)
+  return !deleteError
 }
 
 async function upsertProfile({
@@ -761,12 +793,11 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
   let createdUserId: string | null = null
   try {
     let adminUserId = existingUser?.id ?? ''
-    if (existingUser) {
-      await markReusedInstitutionAdmin(adminClient, existingUser.id, email)
-    } else {
-      const created = await createInstitutionAdminUser({ adminClient, email, password, displayName })
-      createdUserId = created.id
-      adminUserId = created.id
+    let createdUser: Awaited<ReturnType<typeof createInstitutionAdminUser>> | null = null
+    if (!existingUser) {
+      createdUser = await createInstitutionAdminUser({ adminClient, email, password, displayName })
+      createdUserId = createdUser.id
+      adminUserId = createdUser.id
       await upsertProfile({ adminClient, userId: adminUserId, email, displayName })
     }
 
@@ -776,6 +807,11 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
       institutionIds: [institution.id],
       role: 'owner',
     })
+
+    // AUD.I2f P2: un admin reutilizado no se reescribe (no pisa una democion o un bloqueo concurrente);
+    // se revalida despues de darle owner y, si ya no califica, se deshace la institucion.
+    if (existingUser) await readReusableAdminProfile(adminClient, adminUserId)
+    if (createdUser) await finishInstitutionAdminProvisioning(adminClient, createdUser)
 
     return {
       institution_id: institution.id,
@@ -790,10 +826,7 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
     if (resourcesDeleteError && !isMissingRelationError(resourcesDeleteError, 'source_file_storage_resources')) rollbackErrors.push('recursos de archivos')
     const { error: institutionDeleteError } = await adminClient.from('institutions').delete().eq('id', institution.id)
     if (institutionDeleteError) rollbackErrors.push('institucion')
-    if (createdUserId) {
-      const { error: userDeleteError } = await adminClient.auth.admin.deleteUser(createdUserId)
-      if (userDeleteError) rollbackErrors.push('usuario')
-    }
+    if (createdUserId && !(await discardProvisionalInstitutionAdmin(adminClient, createdUserId))) rollbackErrors.push('usuario')
     const reason = error instanceof Error ? error.message : 'Error inesperado.'
     if (rollbackErrors.length) {
       throw new HttpError(`No se pudo crear la institucion (${reason}) y no se pudo deshacer: ${rollbackErrors.join(', ')}. Revisar a mano el slug ${slug}.`, 500)
@@ -825,24 +858,37 @@ async function handleCreateOrAssignInstitutionUser(adminClient: ReturnType<typeo
     throw badRequest('La contrasena debe tener al menos 8 caracteres.')
   }
 
+  // AUD.I2f P2: si el admin reutilizado deja de calificar durante la asignacion, se restauran sus membresias.
+  let previousMemberships: { institution_id: string, role: string }[] = []
+  if (existingUser) {
+    const { data, error } = await adminClient.from('memberships').select('institution_id, role')
+      .eq('user_id', existingUser.id).in('institution_id', institutionIds)
+    if (error) throw error
+    previousMemberships = data ?? []
+  }
+
   let createdUserId: string | null = null
+  let membershipsWritten = false
   try {
     let userId = existingUser?.id ?? ''
-    if (existingUser) {
-      await markReusedInstitutionAdmin(adminClient, existingUser.id, email)
-    } else {
-      const created = await createInstitutionAdminUser({ adminClient, email, password, displayName })
-      createdUserId = created.id
-      userId = created.id
+    let createdUser: Awaited<ReturnType<typeof createInstitutionAdminUser>> | null = null
+    if (!existingUser) {
+      createdUser = await createInstitutionAdminUser({ adminClient, email, password, displayName })
+      createdUserId = createdUser.id
+      userId = createdUser.id
       await upsertProfile({ adminClient, userId, email, displayName })
     }
 
+    membershipsWritten = true
     await assignMemberships({
       adminClient,
       userId,
       institutionIds,
       role,
     })
+
+    if (existingUser) await readReusableAdminProfile(adminClient, userId)
+    if (createdUser) await finishInstitutionAdminProvisioning(adminClient, createdUser)
 
     return {
       user_id: userId,
@@ -851,11 +897,21 @@ async function handleCreateOrAssignInstitutionUser(adminClient: ReturnType<typeo
       created_at: new Date().toISOString(),
     }
   } catch (error) {
-    // Si el usuario se creo en esta llamada, se borra (el perfil y sus membresias caen en cascada).
-    if (createdUserId) {
-      const { error: userDeleteError } = await adminClient.auth.admin.deleteUser(createdUserId)
-      if (userDeleteError) {
-        throw new HttpError(`No se pudo asignar el usuario y no se pudo deshacer su alta. Revisar a mano ${email}.`, 500)
+    // Si el usuario se creo en esta llamada y sigue "en alta", se borra (perfil y membresias caen en cascada).
+    if (createdUserId && !(await discardProvisionalInstitutionAdmin(adminClient, createdUserId))) {
+      throw new HttpError(`No se pudo asignar el usuario y no se pudo deshacer su alta. Revisar a mano ${email}.`, 500)
+    }
+    if (existingUser && membershipsWritten) {
+      const kept = new Map(previousMemberships.map((membership) => [membership.institution_id, membership.role]))
+      const added = institutionIds.filter((institutionId) => !kept.has(institutionId))
+      const { error: removeError } = added.length
+        ? await adminClient.from('memberships').delete().eq('user_id', existingUser.id).in('institution_id', added)
+        : { error: null }
+      const { error: restoreError } = previousMemberships.length
+        ? await adminClient.from('memberships').upsert(previousMemberships.map((membership) => ({ ...membership, user_id: existingUser.id })), { onConflict: 'institution_id,user_id' })
+        : { error: null }
+      if (removeError || restoreError) {
+        throw new HttpError(`No se pudo asignar el usuario y no se pudieron restaurar sus membresias. Revisar a mano ${email}.`, 500)
       }
     }
     throw error
@@ -948,6 +1004,7 @@ async function createOrReuseTeacherAuthUser({
   }
 
   if (existingUser) {
+    assertNotInAdminProvisioning(existingUser)
     const { data: existingProfile, error: profileLookupError } = await adminClient
       .from('profiles')
       .select('account_role, is_global_admin')

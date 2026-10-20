@@ -149,7 +149,8 @@ describe('admin-users edge function security posture', () => {
     expect(handler.indexOf('await findReusableInstitutionAdmin(adminClient, email)')).toBeLessThan(insertAt)
     expect(handler.indexOf("throw badRequest('La contrasena debe tener al menos 8 caracteres.')")).toBeLessThan(insertAt)
     expect(handler).toContain("await adminClient.from('institutions').delete().eq('id', institution.id)")
-    expect(handler).toContain('await adminClient.auth.admin.deleteUser(createdUserId)')
+    expect(handler).toContain('await discardProvisionalInstitutionAdmin(adminClient, createdUserId)')
+    expect(handler).not.toContain('deleteUser(')
   })
 
   it('I2g: asignar usuario a institucion valida antes de crear el usuario y lo borra si la asignacion falla', () => {
@@ -160,15 +161,44 @@ describe('admin-users edge function security posture', () => {
       expect(handler.indexOf(guard)).toBeGreaterThan(-1)
       expect(handler.indexOf(guard)).toBeLessThan(createAt)
     }
-    expect(handler).toContain('await adminClient.auth.admin.deleteUser(createdUserId)')
+    expect(handler).toContain('await discardProvisionalInstitutionAdmin(adminClient, createdUserId)')
+    expect(handler).not.toContain('deleteUser(')
+    expect(handler).toContain("await adminClient.from('memberships').upsert(previousMemberships.map(")
+  })
+
+  it('AUD.I2f P1: un admin en alta no se reutiliza y la compensacion solo borra cuentas que siguen en alta', () => {
+    const create = edgeFunction.slice(edgeFunction.indexOf('async function createInstitutionAdminUser({'), edgeFunction.indexOf('// Fin de un alta nueva'))
+    expect(create).toContain("app_metadata: { provider: 'email', providers: ['email'], [ADMIN_PROVISIONING_FLAG]: true }")
+    const reusable = edgeFunction.slice(edgeFunction.indexOf('async function findReusableInstitutionAdmin('), edgeFunction.indexOf('async function createInstitutionAdminUser({'))
+    expect(reusable.indexOf('assertNotInAdminProvisioning(existingUser)')).toBeLessThan(reusable.indexOf('await readReusableAdminProfile('))
+    const discard = edgeFunction.slice(edgeFunction.indexOf('async function discardProvisionalInstitutionAdmin('), edgeFunction.indexOf('async function upsertProfile({'))
+    expect(discard.indexOf('[ADMIN_PROVISIONING_FLAG] !== true) return false')).toBeGreaterThan(0)
+    expect(discard.indexOf('[ADMIN_PROVISIONING_FLAG] !== true) return false')).toBeLessThan(discard.indexOf('deleteUser(userId)'))
+    // Toda reutilizacion de cuentas (admin, docente, alumno) respeta el alta en curso.
+    expect(edgeFunction.match(/assertNotInAdminProvisioning\((existingUser|user)\)/g)).toHaveLength(3)
+    for (const handlerName of ['handleCreateTenantWithAdmin', 'handleCreateOrAssignInstitutionUser']) {
+      const handler = edgeFunction.slice(edgeFunction.indexOf(`async function ${handlerName}(`))
+      const body = handler.slice(0, handler.indexOf('\n}\n'))
+      expect(body.indexOf('await finishInstitutionAdminProvisioning(adminClient, createdUser)')).toBeGreaterThan(body.indexOf('await assignMemberships({'))
+    }
   })
 
   it('I2f/I2g: un admin existente se reutiliza sin tocar contrasena, rol global ni bloqueo', () => {
     const reusable = edgeFunction.slice(edgeFunction.indexOf('async function findReusableInstitutionAdmin('), edgeFunction.indexOf('async function createInstitutionAdminUser({'))
-    expect(reusable).toContain("existingProfile?.is_global_admin || (existingRole && existingRole !== 'admin_instituto')")
-    expect(reusable).toContain('if (existingProfile?.is_blocked)')
-    const markReused = edgeFunction.slice(edgeFunction.indexOf('async function markReusedInstitutionAdmin('), edgeFunction.indexOf('async function upsertProfile({'))
-    expect(markReused).not.toMatch(/password|is_global_admin|is_blocked/)
+    const profileCheck = edgeFunction.slice(edgeFunction.indexOf('async function readReusableAdminProfile('), edgeFunction.indexOf('async function findReusableInstitutionAdmin('))
+    // AUD.I2f P2: sin perfil no se reutiliza; el rol tiene que ser exactamente admin_instituto.
+    expect(profileCheck).toContain('if (!existingProfile) {')
+    expect(profileCheck).toContain("existingProfile.is_global_admin || String(existingProfile.account_role ?? '').toLowerCase() !== 'admin_instituto'")
+    expect(profileCheck).toContain('if (existingProfile.is_blocked)')
+    expect(profileCheck).not.toMatch(/\.(upsert|update|insert)\(/)
+    expect(reusable).not.toMatch(/password|\.(upsert|update|insert)\(/)
+    // AUD.I2f P2: el reutilizado no se reescribe y se revalida despues de recibir la membresia.
+    expect(edgeFunction).not.toContain('markReusedInstitutionAdmin')
+    for (const handlerName of ['handleCreateTenantWithAdmin', 'handleCreateOrAssignInstitutionUser']) {
+      const handler = edgeFunction.slice(edgeFunction.indexOf(`async function ${handlerName}(`))
+      const body = handler.slice(0, handler.indexOf('\n}\n'))
+      expect(body.indexOf('if (existingUser) await readReusableAdminProfile(adminClient,')).toBeGreaterThan(body.indexOf('await assignMemberships({'))
+    }
     expect(edgeFunction).not.toContain('createOrReuseAuthUser(')
   })
 

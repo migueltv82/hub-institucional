@@ -28,6 +28,17 @@ begin
 end $$;
 create trigger i2f_fail_membership before insert on public.memberships for each row execute function public.i2f_fail_membership();`;
 
+// AUD.I2f: demoras (y una falla demorada) en la membresia, solo para slugs sinteticos de estas pruebas.
+export const AUDIT_DELAY_TRIGGERS_SQL = `create or replace function public.i2f_audit_delay() returns trigger language plpgsql as $$
+declare v_slug text;
+begin
+  select i.slug into v_slug from public.institutions i where i.id = new.institution_id;
+  if v_slug like '%-slow-fail' then perform pg_sleep(6); raise exception 'AUDIT_I2F_DELAYED_FAILURE'; end if;
+  if v_slug like '%-slow-ok' or v_slug like '%-demote' then perform pg_sleep(4); end if;
+  return new;
+end $$;
+create trigger i2f_audit_delay before insert on public.memberships for each row execute function public.i2f_audit_delay();`;
+
 export function tenantPayload(run, label, overrides = {}) {
   assert.match(run, /^[a-f0-9]{16}$/); assert.match(label, /^[a-z0-9-]+$/);
   return {
@@ -205,6 +216,88 @@ export async function main() {
     const retry = await call(authFail);
     assert.equal(retry.status, 200, `Retry after rollback failed: ${JSON.stringify(retry.body)}`);
     checks.retryAfterRollback = 200;
+
+    // AUD.I2f P1 y P2, reproducidos como en la auditoria de Codex: ahora tienen que terminar bien.
+    step = 'audit P1: an admin still being provisioned is never reused nor lost';
+    sql(AUDIT_DELAY_TRIGGERS_SQL);
+    const waitUntil = async (probe, what) => {
+      for (let i = 0; i < 80; i++) { if (probe()) return; await new Promise((done) => setTimeout(done, 100)); }
+      throw new Error(`Timeout waiting for ${what}`);
+    };
+    const sleeping = () => sql("select count(*) from pg_stat_activity where wait_event = 'PgSleep';") !== '0';
+    checks.audit = {};
+    const slowFail = tenantPayload(run, 'p1-slow-fail');
+    const slowFailCall = call(slowFail);
+    await waitUntil(sleeping, 'A to reach the membership');
+    assert.equal(count('public.profiles', `email='${slowFail.admin_email}'`), '1', 'A profile is not visible yet');
+    const racing = await call(tenantPayload(run, 'p1-racer', { admin_email: slowFail.admin_email }));
+    assert.equal(racing.status, 409, `B reused an admin still being provisioned: ${JSON.stringify(racing.body)}`);
+    assert.equal(count('public.institutions', `slug='${run}-p1-racer'`), '0', 'B left an institution');
+    const slowFailed = await slowFailCall;
+    assert.ok(slowFailed.status >= 400, `A delayed failure accepted: ${slowFailed.status}`);
+    assert.equal(count('auth.users', `email='${slowFail.admin_email}'`), '0', 'A rollback left its provisional user');
+    const afterRace = tenantPayload(run, 'p1-after', { admin_email: slowFail.admin_email });
+    const afterRaceResult = await call(afterRace);
+    assert.equal(afterRaceResult.status, 200, `B retry failed: ${JSON.stringify(afterRaceResult.body)}`);
+    assert.equal((await login(afterRace.admin_email, afterRace.admin_password)).status, 200, 'B admin cannot log in');
+    checks.audit.p1DelayedFailure = { racerDuringProvisioning: 409, provisionalUserDeleted: true, racerRetry: 200 };
+
+    const slowOk = tenantPayload(run, 'p1-slow-ok');
+    const slowOkCall = call(slowOk);
+    await waitUntil(sleeping, 'A to reach the membership');
+    const racingOk = await call(tenantPayload(run, 'p1-racer-ok', { admin_email: slowOk.admin_email }));
+    assert.equal(racingOk.status, 409, `B reused an admin still being provisioned: ${racingOk.status}`);
+    const slowOkResult = await slowOkCall;
+    assert.equal(slowOkResult.status, 200, `A slow success failed: ${JSON.stringify(slowOkResult.body)}`);
+    const reusedAfter = await call(tenantPayload(run, 'p1-reuse-after', { admin_email: slowOk.admin_email }));
+    assert.equal(reusedAfter.status, 200, `Reuse after provisioning failed: ${JSON.stringify(reusedAfter.body)}`);
+    assert.equal(reusedAfter.body.admin_reused, true);
+    assert.equal(count('public.memberships', `user_id='${slowOkResult.body.admin_user_id}' and role='owner'`), '2');
+    assert.equal((await login(slowOk.admin_email, slowOk.admin_password)).status, 200, 'Provisioned admin cannot log in');
+    checks.audit.p1SlowSuccess = { racerDuringProvisioning: 409, provisioned: 200, reusedAfterwards: 200 };
+
+    step = 'audit P2: an account without profile is not reused as admin';
+    const noProfileEmail = `${run}-no-profile@example.invalid`;
+    const noProfile = await stack.authRequest('/admin/users', { token: stack.serviceKey, body: { email: noProfileEmail, password: randomBytes(24).toString('hex'), email_confirm: true } });
+    assert.equal(noProfile.status, 200, 'No-profile fixture failed');
+    sql(`delete from public.profiles where user_id='${noProfile.body.id}';`);
+    const noProfileResult = await call(tenantPayload(run, 'p2-no-profile', { admin_email: noProfileEmail }));
+    assert.equal(noProfileResult.status, 409, `Account without profile reused: ${noProfileResult.status}`);
+    assert.equal(count('public.profiles', `user_id='${noProfile.body.id}'`), '0', 'A profile was invented');
+    assert.equal(count('public.institutions', `slug='${run}-p2-no-profile'`), '0');
+    checks.audit.p2NoProfile = 409;
+
+    step = 'audit P2: a concurrent demotion is not overwritten';
+    const demoteAdmin = async (key) => {
+      const email = `${run}-${key}@example.invalid`;
+      const created = await stack.authRequest('/admin/users', { token: stack.serviceKey, body: { email, password: randomBytes(24).toString('hex'), email_confirm: true } });
+      assert.equal(created.status, 200);
+      sql(`update public.profiles set account_role='admin_instituto' where user_id='${created.body.id}';`);
+      return { id: created.body.id, email };
+    };
+    const demoted = await demoteAdmin('demoted');
+    const demoteCall = call(tenantPayload(run, 'p2-demote', { admin_email: demoted.email }));
+    await waitUntil(sleeping, 'the reuse to reach the membership');
+    sql(`update public.profiles set account_role='alumno' where user_id='${demoted.id}';`);
+    const demoteResult = await demoteCall;
+    assert.equal(demoteResult.status, 409, `Demotion overwritten: ${JSON.stringify(demoteResult.body)}`);
+    assert.equal(profileOf(demoted.id), 'alumno,false,false', 'Demotion was overwritten');
+    assert.equal(count('public.institutions', `slug='${run}-p2-demote'`), '0', 'Institution kept for a demoted admin');
+    assert.equal(count('public.memberships', `user_id='${demoted.id}'`), '0', 'Demoted user kept the owner membership');
+
+    const demotedAssign = await demoteAdmin('demoted-assign');
+    const demoteInstitution = '00000000-0000-4000-8000-0000000de307';
+    sql(`insert into public.institutions(id,name,slug) values ('${demoteInstitution}','Synthetic I2f demote','${run}-assign-demote');
+      insert into public.memberships(institution_id,user_id,role) values ('${created.body.institution_id}','${demotedAssign.id}','viewer');`);
+    const demoteAssignCall = call(assign('demote', { user_email: demotedAssign.email, institution_ids: [created.body.institution_id, demoteInstitution] }));
+    await waitUntil(sleeping, 'the assignment to reach the membership');
+    sql(`update public.profiles set account_role='alumno' where user_id='${demotedAssign.id}';`);
+    const demoteAssignResult = await demoteAssignCall;
+    assert.equal(demoteAssignResult.status, 409, `Assign demotion overwritten: ${JSON.stringify(demoteAssignResult.body)}`);
+    assert.equal(profileOf(demotedAssign.id), 'alumno,false,false');
+    assert.equal(sql(`select string_agg(institution_id||':'||role, ',') from public.memberships where user_id='${demotedAssign.id}';`), `${created.body.institution_id}:viewer`, 'Previous memberships not restored');
+    checks.audit.p2ConcurrentDemotion = { tenant: 409, assign: 409, demotionKept: true, membershipsRestored: true };
+    sql('drop trigger i2f_audit_delay on public.memberships;');
 
     report.checks = checks;
     report.result = 'PASS';

@@ -66,3 +66,34 @@ Resultado: mismo harness, **PASS**, run `a90ea76aa8aec64d`, cleanup 0.
 **El harness detecta el bug.** Contra el handler anterior (con solo `user_reused` agregado), falla en "assign bad-role created an Auth user": queda un usuario huérfano.
 
 Regresiones: `validateSuperAdminEdgeLocal`, `validateInitialPasswordLocal` y `validateIntegratedAcceptanceLocal` PASS. `npm run check` PASS (2684).
+
+## Corrección de AUD.I2f (Codex, FAIL: un P1 y dos P2) — 2026-10-20
+
+**P1 — el rollback borraba al admin de otra alta exitosa.** Solución:
+- `createInstitutionAdminUser` crea la cuenta con `app_metadata.institution_admin_provisioning = true`, en la misma llamada a Auth, sin ventana.
+- Ningún camino de reutilización toma una cuenta así: admin (`findReusableInstitutionAdmin`), docente (`createOrReuseTeacherAuthUser`) y alumno (`assertStudentProvisioningIdentity`) responden 409 "alta en curso".
+- La marca la libera solo la misma alta, al terminar (`finishInstitutionAdminProvisioning`).
+- La compensación (`discardProvisionalInstitutionAdmin`) relee la cuenta y la borra solo si sigue en alta. Si ya se liberó, la conserva y lo informa como "no se pudo deshacer: usuario".
+- No hay TOCTOU: mientras la cuenta está en alta nadie más la usa, y una vez liberada nadie la borra.
+
+**P2 — una cuenta sin perfil se reutilizaba como admin.** Ahora responde 409 y no se inventa el perfil.
+
+**P2 — se pisaba una democión concurrente.**
+- La reutilización ya no escribe el perfil: se retiró `markReusedInstitutionAdmin`.
+- `readReusableAdminProfile` se vuelve a correr después de dar la membresía. Si el usuario dejó de ser `admin_instituto` o quedó bloqueado:
+  - en el alta, se deshace la institución, y la membresía cae en cascada;
+  - en "Asignar usuario", se borran las membresías nuevas y se restauran las previas con su rol.
+
+Harness `scripts/validateTenantCreationLocal.mjs`, con los escenarios de la auditoría reproducidos con Auth, PostgREST y Edge reales (`supabase/edge-runtime:v1.77.4`). **PASS**, run `2f1af00344ba0b0f`, cleanup 0:
+
+| Escenario de la auditoría | Antes (Codex) | Ahora |
+|---|---|---|
+| A en alta con falla demorada, B reutiliza el mismo email | B 200; A borra la cuenta y B queda sin admin | B **409**; A deshace su cuenta; B reintenta y crea → 200 con login OK |
+| A en alta lenta y exitosa, B en el medio | — | B 409 mientras dura; al terminar A, B reutiliza → 200; 2 owners |
+| Cuenta Auth sin perfil | 200, perfil `admin_instituto` inventado | **409**, sin perfil ni institución |
+| Democión a alumno durante el alta | 200; vuelve a `admin_instituto` + owner | **409**; sigue `alumno`, sin institución ni membresía |
+| La misma democión en "Asignar usuario" | — | **409**; membresía previa restaurada (`viewer`), sin la nueva |
+
+**Control negativo:** el mismo harness contra la Edge anterior (`041cc82`) falla en el P1: "B reused an admin still being provisioned", con B 200 y `admin_reused: true`. Cleanup 0.
+
+**Riesgo residual:** si el proceso de la Edge muere entre crear la cuenta y liberarla, la cuenta queda "en alta". Esa cuenta puede iniciar sesión, pero no se puede reutilizar (409). Para recuperarla, un Super Admin pone `institution_admin_provisioning` en `false` desde Authentication → Users, o borra la cuenta si no tiene membresías.
