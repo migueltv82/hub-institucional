@@ -38,7 +38,7 @@ function OperationsDashboard({
           <div className="soft-card border-l-4 border-l-lime-500 bg-white">
             <p className="text-xs font-bold uppercase tracking-wide text-lime-700">Reporte listo</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Cuando confirmas mesas, el XLSX de salida se separa por carrera automaticamente.
+              Cuando confirmas mesas, el XLSX de salida se separa por carrera automáticamente.
             </p>
           </div>
         </div>

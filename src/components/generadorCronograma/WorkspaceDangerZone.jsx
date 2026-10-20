@@ -33,11 +33,11 @@ function WorkspaceDangerZone({
             </div>
             <h4 className="mt-2 text-xl font-extrabold text-slate-950">Eliminar toda la carga</h4>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-red-950">
-              Vacia planillas, padrones, horarios, titularidades, inscripciones, notas, asistencia y mesas del workspace.
-              No elimina la institucion activa, usuarios, roles ni accesos.
+              Vacía planillas, padrones, horarios, titularidades, inscripciones, notas, asistencia y mesas del workspace.
+              No elimina la institución activa, usuarios, roles ni accesos.
             </p>
             <p className="mt-2 text-xs font-bold text-red-900">
-              {activeInstitutionName ? `Institucion: ${activeInstitutionName}. ` : ''}
+              {activeInstitutionName ? `Institución: ${activeInstitutionName}. ` : ''}
               {useRemoteWorkspace ? 'Se borra la carga sincronizada en Supabase.' : 'Se borra la carga local de este navegador.'}
             </p>
           </div>

@@ -216,7 +216,7 @@ function SubjectCard({
         <p className="mt-2 text-xs font-semibold text-slate-500">
           {attendanceSummary?.total
             ? `${attendanceSummary.present} presentes de ${attendanceSummary.total} clases`
-            : 'Todavia no hay clases con asistencia cargada.'}
+            : 'Todavía no hay clases con asistencia cargada.'}
         </p>
       </div>
 
@@ -233,7 +233,7 @@ function SubjectCard({
             disabled={!canEnroll}
             className="inline-flex flex-1 items-center justify-center rounded-md bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
           >
-            {showEnrollForm ? 'Cerrar inscripcion' : 'Inscribirme'}
+            {showEnrollForm ? 'Cerrar inscripción' : 'Inscribirme'}
           </button>
         )}
 
@@ -425,7 +425,7 @@ export default function StudentSubjectsPage({
             <input
               value={search}
               onChange={event => setSearch(event.target.value)}
-              placeholder="Buscar por nombre o codigo"
+              placeholder="Buscar por nombre o código"
               className="input-base h-10 px-3 py-2"
             />
 

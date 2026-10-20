@@ -955,7 +955,7 @@ function StudentDashboardContent({
                   <p className="truncate text-slate-800">{studentDni || 'Sin cargar'}</p>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Telefono</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Teléfono</p>
                   <p className="truncate text-slate-800">{studentProfile.telefono || 'Sin cargar'}</p>
                 </div>
                 {photoError && <p className="col-span-full text-sm font-semibold text-red-700">{photoError}</p>}
@@ -970,7 +970,7 @@ function StudentDashboardContent({
               <span className="hidden h-6 w-px bg-slate-200 sm:block" />
               <button type="button" className="btn-secondary justify-center" onClick={printAcademicDocument}>
                 <Printer className="h-4 w-4" />
-                Imprimir estado academico
+                Imprimir estado académico
               </button>
               <button type="button" className="btn-primary justify-center" onClick={downloadAcademicPdf}>
                 <Download className="h-4 w-4" />
@@ -983,7 +983,7 @@ function StudentDashboardContent({
             <div className="mt-4 flex items-start gap-2 rounded-md border border-[var(--student-lavender)]/30 bg-[var(--student-lavender-tint)] px-3 py-2.5 text-sm text-[var(--student-lavender-ink)]">
               <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[var(--student-lavender-ink)]" />
               <p>
-                <span className="font-extrabold">Proximo paso:</span>{' '}
+                <span className="font-extrabold">Próximo paso:</span>{' '}
                 {nextExam
                   ? `${getSubjectLabelFromExam(nextExam)} - mesa el ${formatDate(getExamDate(nextExam))}.`
                   : `${dashboard.nextSubject?.name} - materia pendiente para seguir avanzando en la carrera.`}
@@ -997,7 +997,7 @@ function StudentDashboardContent({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-extrabold uppercase text-[var(--student-lavender-ink)]">Datos personales</p>
-                <h2 className="mt-1 text-xl font-extrabold text-slate-950">Editar informacion del estudiante</h2>
+                <h2 className="mt-1 text-xl font-extrabold text-slate-950">Editar información del estudiante</h2>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="btn-secondary" onClick={cancelStudentProfileEdit}>
@@ -1095,8 +1095,8 @@ function StudentDashboardContent({
                 <div className="certificate-logo-slot">Logo</div>
                 <div className="certificate-heading">
                   <p className="certificate-kicker">Instituto</p>
-                  <h2>{institutionName || 'Institucion'}</h2>
-                  <p>Estado academico institucional</p>
+                  <h2>{institutionName || 'Institución'}</h2>
+                  <p>Estado académico institucional</p>
                 </div>
               </header>
 
@@ -1104,7 +1104,7 @@ function StudentDashboardContent({
 
               <p className="certificate-text">
                 Se hace constar que <strong>{studentName}</strong>, estudiante de <strong>{programName || 'carrera sin especificar'}</strong>,
-                registra la siguiente situacion academica segun la informacion obrante en el sistema institucional.
+                registra la siguiente situación académica segun la información obrante en el sistema institucional.
               </p>
               <p className="certificate-text">
                 {certificateSummary}
@@ -1114,7 +1114,7 @@ function StudentDashboardContent({
                 <table className="certificate-table">
                   <thead>
                     <tr>
-                      <th>Anio</th>
+                      <th>Año</th>
                       <th>Materia</th>
                       <th>Fecha regularidad</th>
                       <th colSpan="3">Final</th>
@@ -1126,7 +1126,7 @@ function StudentDashboardContent({
                       <th />
                       <th />
                       <th />
-                      <th>Numeros</th>
+                      <th>Números</th>
                       <th>Letras</th>
                       <th>Fecha</th>
                       <th />
@@ -1150,7 +1150,7 @@ function StudentDashboardContent({
                     ))}
                     {certificateRows.length === 0 && (
                       <tr>
-                        <td colSpan="9">No hay informacion academica cargada para emitir la constancia.</td>
+                        <td colSpan="9">No hay información académica cargada para emitir la constancia.</td>
                       </tr>
                     )}
                   </tbody>
@@ -1314,7 +1314,7 @@ function StudentDashboardContent({
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <p className="truncate text-xs font-semibold uppercase text-slate-500">
-                                  {subject.code || 'Sin codigo'}
+                                  {subject.code || 'Sin código'}
                                 </p>
                                 <h3 className="mt-2 text-lg font-semibold text-slate-950">{subject.name}</h3>
                               </div>
@@ -1372,7 +1372,7 @@ function StudentDashboardContent({
 
               <div className="space-y-6">
                 <Section
-                  title="Proximas mesas"
+                  title="Próximas mesas"
                   icon={CalendarDays}
                   tint="amber"
                   action={
@@ -1411,7 +1411,7 @@ function StudentDashboardContent({
                       })}
                     </div>
                   ) : (
-                    <EmptyBlock>No hay mesas proximas publicadas.</EmptyBlock>
+                    <EmptyBlock>No hay mesas próximas publicadas.</EmptyBlock>
                   )}
                 </Section>
 
@@ -1445,7 +1445,7 @@ function StudentDashboardContent({
                                 {subject?.name || grade.subject_name || 'Materia'}
                               </div>
                               <div className="text-sm text-slate-600">
-                                {grade.grade_type || grade.type || 'Calificacion'}
+                                {grade.grade_type || grade.type || 'Calificación'}
                               </div>
                             </div>
                             <div className={`text-lg font-extrabold ${scoreClass}`}>

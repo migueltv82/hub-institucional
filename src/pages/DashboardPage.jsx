@@ -36,7 +36,7 @@ function DashboardPage() {
     try {
       setIsAuthActionLoading(true)
       await signOutRemote()
-      toast.success('Sesion cerrada. Ya podes ingresar con otra cuenta.')
+      toast.success('Sesión cerrada. Ya podés ingresar con otra cuenta.')
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -50,7 +50,7 @@ function DashboardPage() {
         <div className="dashboard-topbar__identity">
           <ProductBrand className="dashboard-topbar__brand" />
           <div className="dashboard-topbar__institution">
-            <span>Institucion activa</span>
+            <span>Institución activa</span>
             <strong>{institutionName}</strong>
           </div>
         </div>
@@ -82,7 +82,7 @@ function DashboardPage() {
               type="button"
             >
               <KeyRound className="h-4 w-4" />
-              Cambiar contrasena
+              Cambiar contraseña
             </button>
             <button
               className="btn-secondary dashboard-topbar__button"
@@ -91,7 +91,7 @@ function DashboardPage() {
               type="button"
             >
               <LogOut className="h-4 w-4" />
-              Cambiar sesion
+              Cambiar sesión
             </button>
           </div>
         </div>
@@ -104,7 +104,7 @@ function DashboardPage() {
             <span className="soft-title">Institutional Hub</span>
             <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Cargando workspace</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Estamos preparando el modulo principal de Institutional Hub.
+              Estamos preparando el módulo principal de Institutional Hub.
             </p>
           </div>
         </section>

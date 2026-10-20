@@ -223,7 +223,7 @@ function SuperAdminAuditPage() {
 
   async function handleResyncRoster() {
     if (!activeInstitutionId) {
-      toast.error('Selecciona una institucion antes de re-sincronizar padrones.')
+      toast.error('Selecciona una institución antes de re-sincronizar padrones.')
       return
     }
 
@@ -268,25 +268,25 @@ function SuperAdminAuditPage() {
         <article className="soft-card bg-white">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <span className="soft-title">Institucion auditada</span>
+              <span className="soft-title">Institución auditada</span>
               <h3 className="mt-2 text-3xl font-bold text-slate-950">
-                {currentInstitution?.name ?? 'Selecciona una institucion'}
+                {currentInstitution?.name ?? 'Selecciona una institución'}
               </h3>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                El selector vive dentro de auditoria para que no dependas del dashboard ni de otra pantalla para controlar el sitio.
+                El selector vive dentro de auditoría para que no dependas del dashboard ni de otra pantalla para controlar el sitio.
               </p>
             </div>
 
             <div className="w-full lg:max-w-md">
               <label className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                Elegir institucion
+                Elegir institución
               </label>
               <select
                 className="input-base mt-2"
                 value={activeInstitutionId ?? ''}
                 onChange={(event) => setActiveInstitutionId(event.target.value || null)}
               >
-                <option value="">Seleccionar institucion</option>
+                <option value="">Seleccionar institución</option>
                 {selectableInstitutions.map((institution) => (
                   <option key={institution.id} value={institution.id}>
                     {institution.name}
@@ -319,7 +319,7 @@ function SuperAdminAuditPage() {
 
           {selectableInstitutions.length === 0 && (
             <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-              Todavia no hay instituciones disponibles para auditar.
+              Todavía no hay instituciones disponibles para auditar.
             </div>
           )}
         </article>
@@ -383,7 +383,7 @@ function SuperAdminAuditPage() {
           </div>
 
           <h3 className="mt-3 text-2xl font-bold text-slate-950">
-            Revision de padrones institucionales
+            Revisión de padrones institucionales
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Se compara el snapshot operativo con las tablas normalizadas para detectar drift y decidir si hace falta re-sincronizar.
@@ -391,7 +391,7 @@ function SuperAdminAuditPage() {
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <SummaryTile
-              label="Institucion"
+              label="Institución"
               value={currentInstitution?.name ?? 'Sin seleccion'}
               helper={currentInstitution?.slug ?? 'Selecciona una institucion'}
               tone="cyan"
@@ -413,7 +413,7 @@ function SuperAdminAuditPage() {
               tone="slate"
             />
             <SummaryTile
-              label="Revision"
+              label="Revisión"
               value={rosterDrift}
               helper={rosterIsAligned ? 'Sin desvio operativo' : 'Diferencias detectadas'}
               tone="amber"
@@ -424,14 +424,14 @@ function SuperAdminAuditPage() {
         <article className="soft-card soft-card--tint-amber flex h-full flex-col">
           <span className="soft-title">Acciones</span>
           <h3 className="mt-2 text-2xl font-bold text-slate-950">
-            Control y sincronizacion
+            Control y sincronización
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Desde aqui actualizas el estado de auditoria o relanzas la sincronizacion cuando detectas drift.
+            Desde aquí actualizas el estado de auditoría o relanzas la sincronización cuando detectas drift.
           </p>
 
           <div className="mt-4 rounded-lg border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-600">
-            Institucion auditada: <strong className="text-slate-900">{currentInstitution?.name ?? 'Sin seleccion'}</strong>
+            Institución auditada: <strong className="text-slate-900">{currentInstitution?.name ?? 'Sin selección'}</strong>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -464,7 +464,7 @@ function SuperAdminAuditPage() {
 
           {!isRemoteSession && (
             <p className="mt-4 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
-              La re-sincronizacion solo queda habilitada con sesion remota en Supabase.
+              La re-sincronizacion solo queda habilitada con sesión remota en Supabase.
             </p>
           )}
         </article>
@@ -473,7 +473,7 @@ function SuperAdminAuditPage() {
       <section className="space-y-3">
         {!activeInstitutionId && (
           <AuditStatusBanner tone="amber">
-            Selecciona una institucion para habilitar la auditoria.
+            Selecciona una institución para habilitar la auditoría.
           </AuditStatusBanner>
         )}
 
@@ -492,11 +492,11 @@ function SuperAdminAuditPage() {
         {rosterAudit?.status === 'ready' && (
           <AuditStatusBanner tone={rosterIsAligned ? 'emerald' : 'amber'}>
             {rosterIsAligned
-              ? 'Los padrones normalizados estan alineados con el snapshot activo.'
+              ? 'Los padrones normalizados están alineados con el snapshot activo.'
               : `Se detectaron ${rosterDrift} diferencias entre snapshot y tablas normalizadas.`}
             {rosterAudit.snapshotUpdatedAt && (
               <span className="ml-2">
-                Ultimo snapshot: {new Date(rosterAudit.snapshotUpdatedAt).toLocaleString()}
+                Último snapshot: {new Date(rosterAudit.snapshotUpdatedAt).toLocaleString()}
               </span>
             )}
           </AuditStatusBanner>
@@ -504,7 +504,7 @@ function SuperAdminAuditPage() {
 
         {rosterAuditError && (
           <AuditStatusBanner tone="amber">
-            {rosterAuditError.message || 'No se pudo cargar la auditoria de padrones.'}
+            {rosterAuditError.message || 'No se pudo cargar la auditoría de padrones.'}
           </AuditStatusBanner>
         )}
       </section>

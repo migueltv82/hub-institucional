@@ -460,14 +460,14 @@ export function ExamAdminReviewWorkflowPanel({
   }
 
   return (
-    <section className="soft-card soft-card--tint-amber border-l-4 border-l-amber-500" aria-label="Revision administrativa experimental de examenes">
+    <section className="soft-card soft-card--tint-amber border-l-4 border-l-amber-500" aria-label="Revisión administrativa experimental de exámenes">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="soft-title">Flujo experimental</p>
-          <h3 className="mt-2 text-2xl font-extrabold text-slate-950">Revision administrativa asistida</h3>
+          <h3 className="mt-2 text-2xl font-extrabold text-slate-950">Revisión administrativa asistida</h3>
           <p className="mt-2 max-w-4xl text-sm font-bold leading-6 text-slate-700">
             Vista experimental. Construye precronograma con titulares, sugiere agrupamientos y recomienda vocales.
-            No reemplaza la generacion oficial ni publica cronogramas.
+            No reemplaza la generación oficial ni publica cronogramas.
           </p>
         </div>
         <div className="grid gap-2 text-sm sm:grid-cols-3">
@@ -498,10 +498,10 @@ export function ExamAdminReviewWorkflowPanel({
         </p>
       ) : null}
 
-      <section className="mt-4 rounded-md border border-slate-200 bg-white p-3" aria-label="Validacion del precronograma experimental">
-        <h4 className="text-sm font-extrabold uppercase text-slate-800">Validacion titular-only</h4>
+      <section className="mt-4 rounded-md border border-slate-200 bg-white p-3" aria-label="Validación del precronograma experimental">
+        <h4 className="text-sm font-extrabold uppercase text-slate-800">Validación titular-only</h4>
         <p className="mt-1 text-sm font-bold text-slate-700">
-          Confirmable: {preScheduleValidation.confirmable ? 'si' : 'no'}. Un tribunal incompleto no puede marcarse como valido.
+          Confirmable: {preScheduleValidation.confirmable ? 'si' : 'no'}. Un tribunal incompleto no puede marcarse como válido.
         </p>
         {preScheduleValidation.hardRuleViolations.length ? (
           <p className="mt-2 text-sm font-bold text-red-800">
@@ -612,7 +612,7 @@ export function ExamAdminReviewWorkflowPanel({
                         <p className="text-sm font-bold text-slate-600">{selection.role} / {selection.fechaIso} {selection.inicio}-{selection.fin}</p>
                       </div>
                       <button type="button" className="btn-secondary" disabled={!canEditWorkspace} onClick={() => removeSelectedTeacher(selection)}>
-                        Quitar seleccion
+                        Quitar selección
                       </button>
                     </div>
                   ))}
@@ -646,7 +646,7 @@ export function ExamAdminReviewWorkflowPanel({
                     {' '}y {displayNumber(Math.max(0, recommendation.afectacionesRestantes - 1))} restantes.
                   </p>
                   <p className="mt-1 text-sm font-bold text-slate-600">
-                    Consume afectacion: si. Disponibilidad: dia {recommendation.disponibleEseDia ? 'si' : 'no'}, turno/franja {recommendation.disponibleEnTurno ? 'si' : 'no'}.
+                    Consume afectacion: si. Disponibilidad: día {recommendation.disponibleEseDia ? 'si' : 'no'}, turno/franja {recommendation.disponibleEnTurno ? 'si' : 'no'}.
                     Afinidad: {recommendation.nivelAfinidad}. Score: {displayNumber(recommendation.score)}.
                   </p>
                   {recommendation.reasons.length ? (
@@ -664,7 +664,7 @@ export function ExamAdminReviewWorkflowPanel({
                     </button>
                     {persistedSelectionDecision?.decision === 'SELECTED' ? (
                       <button type="button" className="btn-secondary" disabled={!canEditWorkspace} onClick={() => removeSelectedTeacher(persistedSelectionDecision)}>
-                        Quitar seleccion
+                        Quitar selección
                       </button>
                     ) : null}
                   </div>
@@ -818,7 +818,7 @@ export function ExamAdminReviewWorkflowPanel({
                 <div key={promotion.promotionId} className={`rounded-md border bg-white px-3 py-2 ${promotion.integrityStatus === 'MISMATCH' ? 'border-red-400' : 'border-emerald-200'}`}>
                   <p className="font-extrabold text-slate-950">{promotion.promotionId}</p>
                   <p className="text-sm font-bold text-slate-600">
-                    {promotion.status} / revision {displayNumber(promotion.revisionNumber ?? 1)} / oficial: {promotion.isOfficial ? 'si' : 'no'} / mesas {displayNumber(promotion.schedule?.length)}
+                    {promotion.status} / revisión {displayNumber(promotion.revisionNumber ?? 1)} / oficial: {promotion.isOfficial ? 'si' : 'no'} / mesas {displayNumber(promotion.schedule?.length)}
                   </p>
                   <p className={`mt-1 text-xs font-extrabold uppercase ${promotion.integrityStatus === 'VERIFIED' ? 'text-emerald-800' : promotion.integrityStatus === 'MISMATCH' ? 'text-red-800' : 'text-amber-800'}`}>
                     Integridad: {promotion.integrityStatus}
@@ -841,7 +841,7 @@ export function ExamAdminReviewWorkflowPanel({
                   {promotion.integrityStatus === 'MISMATCH' ? (
                     <div className="mt-2 rounded-md border border-red-300 bg-red-50 p-2" role="alert">
                       <p className="text-sm font-extrabold text-red-900">
-                        Promocion alterada: no es candidata a una aprobacion futura.
+                        Promocion alterada: no es candidata a una aprobación futura.
                       </p>
                       <p className="mt-1 text-xs font-bold text-red-800">
                         Diferencias: {renderList(promotion.integrityVerification?.mismatchFields)}
@@ -864,10 +864,10 @@ export function ExamAdminReviewWorkflowPanel({
           </section>
         ) : null}
         {verifiedAdminReviewPromotions.length ? (
-          <section className="mt-3 rounded-md border border-sky-200 bg-sky-50 p-3" aria-label="Elegibilidad para aprobacion futura">
-            <h5 className="text-sm font-extrabold uppercase text-sky-950">Elegibilidad para aprobacion futura</h5>
+          <section className="mt-3 rounded-md border border-sky-200 bg-sky-50 p-3" aria-label="Elegibilidad para aprobación futura">
+            <h5 className="text-sm font-extrabold uppercase text-sky-950">Elegibilidad para aprobación futura</h5>
             <p className="mt-1 text-sm font-bold text-sky-900">
-              Esto todavia no aprueba ni reemplaza el cronograma oficial.
+              Esto todavía no aprueba ni reemplaza el cronograma oficial.
             </p>
             <p className="mt-1 text-xs font-extrabold uppercase text-slate-600">
               Elegibles: {displayNumber(approvalEligibility.eligiblePromotions.length)} / bloqueadas: {displayNumber(approvalEligibility.blockedPromotions.length)} / superadas: {displayNumber(approvalEligibility.supersededPromotions.length)}
@@ -879,7 +879,7 @@ export function ExamAdminReviewWorkflowPanel({
                     <p className="text-xs font-extrabold uppercase text-emerald-800">Promocion elegible actual</p>
                     <p className="font-extrabold text-slate-950">{promotion.promotionId}</p>
                     <p className="text-sm font-bold text-slate-600">
-                      Borrador {promotion.draftId} / revision {displayNumber(promotion.revisionNumber)}
+                      Borrador {promotion.draftId} / revisión {displayNumber(promotion.revisionNumber)}
                     </p>
                     {activeApprovalRequestByPromotion[promotion.promotionId] ? (
                       <p className="mt-2 text-xs font-extrabold uppercase text-sky-800">
@@ -892,7 +892,7 @@ export function ExamAdminReviewWorkflowPanel({
                         disabled={!canEditWorkspace}
                         onClick={() => requestApproval(promotion)}
                       >
-                        Solicitar aprobacion
+                        Solicitar aprobación
                       </button>
                     )}
                     {pendingApprovalPromotionId === promotion.promotionId ? (
@@ -935,7 +935,7 @@ export function ExamAdminReviewWorkflowPanel({
                     <div key={entry.promotionId} className="rounded-md border border-amber-200 bg-white px-3 py-2">
                       <p className="font-extrabold text-slate-950">{entry.promotionId}</p>
                       <p className="mt-1 text-xs font-bold text-amber-800">
-                        {entry.reason} / reemplazada por {entry.supersededByPromotionId || 'revision ambigua'}
+                        {entry.reason} / reemplazada por {entry.supersededByPromotionId || 'revisión ambigua'}
                       </p>
                     </div>
                   ))}
@@ -943,14 +943,14 @@ export function ExamAdminReviewWorkflowPanel({
               </div>
             ) : null}
             {adminReviewApprovalRequests.length ? (
-              <div className="mt-3" role="region" aria-label="Solicitudes de aprobacion administrativa">
+              <div className="mt-3" role="region" aria-label="Solicitudes de aprobación administrativa">
                 <p className="text-xs font-extrabold uppercase text-sky-800">Solicitudes creadas</p>
                 <div className="mt-2 grid gap-2 md:grid-cols-2">
                   {adminReviewApprovalRequests.slice(-6).map((request) => (
                     <div key={request.requestId} className="rounded-md border border-sky-200 bg-white px-3 py-2">
                       <p className="font-extrabold text-slate-950">{request.requestId}</p>
                       <p className="text-sm font-bold text-slate-600">
-                        {request.status} / revision {displayNumber(request.revisionNumber)} / oficial: {request.isOfficial ? 'si' : 'no'}
+                        {request.status} / revisión {displayNumber(request.revisionNumber)} / oficial: {request.isOfficial ? 'si' : 'no'}
                       </p>
                       <p className="mt-1 text-xs font-bold text-slate-600">
                         Promocion: {request.promotionId}
@@ -963,10 +963,10 @@ export function ExamAdminReviewWorkflowPanel({
           </section>
         ) : null}
         {adminReviewApprovalRequests.length ? (
-          <section className="mt-3 rounded-md border border-indigo-200 bg-indigo-50 p-3" aria-label="Elegibilidad para segunda aprobacion">
-            <h5 className="text-sm font-extrabold uppercase text-indigo-950">Elegibilidad para segunda aprobacion</h5>
+          <section className="mt-3 rounded-md border border-indigo-200 bg-indigo-50 p-3" aria-label="Elegibilidad para segunda aprobación">
+            <h5 className="text-sm font-extrabold uppercase text-indigo-950">Elegibilidad para segunda aprobación</h5>
             <p className="mt-1 text-sm font-bold text-indigo-900">
-              Esto todavia no aprueba ni reemplaza el cronograma oficial.
+              Esto todavía no aprueba ni reemplaza el cronograma oficial.
             </p>
             <p className="mt-1 text-xs font-extrabold uppercase text-slate-600">
               Elegibles: {displayNumber(secondApprovalEligibility.eligibleRequests.length)} / bloqueadas: {displayNumber(secondApprovalEligibility.blockedRequests.length)}
@@ -978,11 +978,11 @@ export function ExamAdminReviewWorkflowPanel({
                     <p className="text-xs font-extrabold uppercase text-emerald-800">Solicitud elegible</p>
                     <p className="font-extrabold text-slate-950">{request.requestId}</p>
                     <p className="text-sm font-bold text-slate-600">
-                      Promocion {request.promotionId} / revision {displayNumber(request.revisionNumber)}
+                      Promocion {request.promotionId} / revisión {displayNumber(request.revisionNumber)}
                     </p>
                     {secondApprovalByRequest[request.requestId] ? (
                       <p className="mt-2 text-xs font-extrabold uppercase text-indigo-800">
-                        Segunda aprobacion registrada: {secondApprovalByRequest[request.requestId].status}
+                        Segunda aprobación registrada: {secondApprovalByRequest[request.requestId].status}
                       </p>
                     ) : (
                       <button
@@ -991,17 +991,17 @@ export function ExamAdminReviewWorkflowPanel({
                         disabled={!canEditWorkspace}
                         onClick={() => requestSecondApproval(request)}
                       >
-                        Registrar segunda aprobacion
+                        Registrar segunda aprobación
                       </button>
                     )}
                     {pendingSecondApprovalRequestId === request.requestId ? (
-                      <div className="mt-2 rounded-md border border-indigo-300 bg-indigo-50 p-2" role="group" aria-label={`Confirmar segunda aprobacion ${request.requestId}`}>
+                      <div className="mt-2 rounded-md border border-indigo-300 bg-indigo-50 p-2" role="group" aria-label={`Confirmar segunda aprobación ${request.requestId}`}>
                         <p className="text-sm font-bold text-indigo-950">
                           Esto no convierte el cronograma en oficial.
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button type="button" className="btn-primary" onClick={confirmSecondApproval}>
-                            Confirmar segunda aprobacion
+                            Confirmar segunda aprobación
                           </button>
                           <button type="button" className="btn-secondary" onClick={() => setPendingSecondApprovalRequestId('')}>
                             Cancelar
@@ -1034,7 +1034,7 @@ export function ExamAdminReviewWorkflowPanel({
                     <div key={approval.secondApprovalId} className="rounded-md border border-indigo-200 bg-white px-3 py-2">
                       <p className="font-extrabold text-slate-950">{approval.secondApprovalId}</p>
                       <p className="text-sm font-bold text-slate-600">
-                        {approval.status} / revision {displayNumber(approval.revisionNumber)} / oficial: {approval.isOfficial ? 'si' : 'no'}
+                        {approval.status} / revisión {displayNumber(approval.revisionNumber)} / oficial: {approval.isOfficial ? 'si' : 'no'}
                       </p>
                       <p className="mt-1 text-xs font-bold text-slate-600">Request: {approval.requestId}</p>
                     </div>
@@ -1059,7 +1059,7 @@ export function ExamAdminReviewWorkflowPanel({
             {finalReadiness.ready ? 'Listo para futura oficializacion.' : 'Bloqueado hasta resolver las validaciones pendientes.'}
           </p>
           <p className="mt-1 text-sm font-bold text-slate-700">
-            Esto todavia no oficializa ni reemplaza el cronograma.
+            Esto todavía no oficializa ni reemplaza el cronograma.
           </p>
           <p className="mt-2 text-xs font-extrabold uppercase text-slate-600">
             Promociones elegibles: {displayNumber(finalReadiness.diagnostics.eligiblePromotions)} / bloqueos: {displayNumber(finalReadiness.diagnostics.blockedReasons)} / reglas duras: {displayNumber(finalReadiness.diagnostics.hardRuleViolations)}
@@ -1069,7 +1069,7 @@ export function ExamAdminReviewWorkflowPanel({
               <p className="text-xs font-extrabold uppercase text-emerald-800">Candidato final experimental</p>
               <p className="font-extrabold text-slate-950">{finalReadiness.finalCandidate.candidateId}</p>
               <p className="text-sm font-bold text-slate-600">
-                {finalReadiness.finalCandidate.status} / revision {displayNumber(finalReadiness.finalCandidate.revisionNumber)} / oficial: no
+                {finalReadiness.finalCandidate.status} / revisión {displayNumber(finalReadiness.finalCandidate.revisionNumber)} / oficial: no
               </p>
               <p className="mt-1 text-xs font-bold text-slate-600">
                 Mesas: {displayNumber(finalReadiness.finalCandidate.diagnostics.scheduleCount)} / tribunales completos: {displayNumber(finalReadiness.finalCandidate.diagnostics.completeTribunals)}
@@ -1097,7 +1097,7 @@ export function ExamAdminReviewWorkflowPanel({
           <h5 className="text-sm font-extrabold uppercase text-slate-950">Plan de oficializacion segura</h5>
           <p className="mt-1 text-sm font-bold text-slate-800">
             {officializationPlanResult.canPrepareOfficialization
-              ? 'Plan tecnico preparado para validacion servidor-side.'
+              ? 'Plan técnico preparado para validación servidor-side.'
               : 'El plan no puede prepararse con el estado actual.'}
           </p>
           <p className="mt-1 text-sm font-bold text-slate-700">Este plan no oficializa el cronograma.</p>
@@ -1105,7 +1105,7 @@ export function ExamAdminReviewWorkflowPanel({
             Cronograma actual: {displayNumber(officializationPlanResult.diagnostics.currentOfficialScheduleCount)} mesas / propuesta: {displayNumber(officializationPlanResult.diagnostics.proposedScheduleCount)} mesas
           </p>
           {officializationPlanResult.officializationPlan ? (
-            <div className="mt-3 rounded-md border border-cyan-200 bg-white px-3 py-2" role="region" aria-label="Plan tecnico de oficializacion">
+            <div className="mt-3 rounded-md border border-cyan-200 bg-white px-3 py-2" role="region" aria-label="Plan técnico de oficializacion">
               <p className="font-extrabold text-slate-950">{officializationPlanResult.officializationPlan.planId}</p>
               <p className="mt-1 break-all text-xs font-bold text-slate-600">
                 Fingerprint actual: {officializationPlanResult.officializationPlan.currentOfficialScheduleFingerprint}

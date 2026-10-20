@@ -44,7 +44,7 @@ describe('TribunalReviewTable', () => {
     const onPublishForReview = vi.fn()
     render(<TribunalReviewTable rows={rows} onExport={vi.fn()} onExportPdf={vi.fn()} onPublishForReview={onPublishForReview} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /Publicar para revision docente/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Publicar para revisión docente/ }))
 
     expect(onPublishForReview).toHaveBeenCalledTimes(1)
     expect(screen.getByText(/solo llega a los docentes que ya tienen cuenta de/)).toBeInTheDocument()
@@ -53,6 +53,6 @@ describe('TribunalReviewTable', () => {
   it('deshabilita las acciones sin filas', () => {
     render(<TribunalReviewTable rows={[]} onExport={vi.fn()} onExportPdf={vi.fn()} onPublishForReview={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: /Publicar para revision docente/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Publicar para revisión docente/ })).toBeDisabled()
   })
 })

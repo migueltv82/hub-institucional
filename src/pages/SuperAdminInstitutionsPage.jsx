@@ -44,7 +44,7 @@ function CareerBreakdownTable({ careers = [] }) {
   if (careers.length === 0) {
     return (
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-        Todavia no se detectaron carreras activas en el snapshot institucional.
+        Todavía no se detectaron carreras activas en el snapshot institucional.
       </div>
     )
   }
@@ -128,7 +128,7 @@ function SuperAdminInstitutionsPage() {
         updates: { status: newStatus },
         useRemote: isRemoteSession,
       })
-      toast.success(newStatus === 'active' ? 'Institucion habilitada' : 'Institucion bloqueada')
+      toast.success(newStatus === 'active' ? 'Institución habilitada' : 'Institución bloqueada')
       await refreshData()
     } catch (mutationError) {
       toast.error(mutationError.message)
@@ -140,7 +140,7 @@ function SuperAdminInstitutionsPage() {
 
     try {
       await deleteInstitution({ id: institution.id, useRemote: isRemoteSession })
-      toast.success('Institucion eliminada correctamente')
+      toast.success('Institución eliminada correctamente')
       await refreshData()
     } catch (mutationError) {
       toast.error(mutationError.message)
@@ -188,7 +188,7 @@ function SuperAdminInstitutionsPage() {
 
           <button className="btn-primary w-full sm:w-auto" onClick={() => setIsModalOpen(true)} type="button">
             <PlusCircle className="h-4 w-4" />
-            Crear nueva institucion
+            Crear nueva institución
           </button>
         </div>
       </div>
@@ -196,7 +196,7 @@ function SuperAdminInstitutionsPage() {
       <div className="rounded-lg border border-slate-200 bg-white/86 px-4 py-3 text-sm text-slate-600">
         {total === 0
           ? 'No hay instituciones activas para el criterio aplicado.'
-          : `Mostrando ${institutions.length} instituciones activas en esta pagina. Cada tarjeta resume alumnos, docentes, carreras y administradores.`}
+          : `Mostrando ${institutions.length} instituciones activas en esta página. Cada tarjeta resume alumnos, docentes, carreras y administradores.`}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -319,7 +319,7 @@ function SuperAdminInstitutionsPage() {
                 <div className="mt-5 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-bold text-slate-950">Distribucion por carrera</p>
+                      <p className="text-sm font-bold text-slate-950">Distribución por carrera</p>
                       <p className="mt-1 text-sm text-slate-500">
                         Cantidad de alumnos y docentes detectados por carrera.
                       </p>

@@ -121,7 +121,7 @@ describe('StudentSubjectsPage', () => {
 
     const blockedCard = screen.getByText('Lengua Inglesa III').closest('article')
 
-    expect(within(blockedCard).getByText('Anios previos pendientes')).toBeInTheDocument()
+    expect(within(blockedCard).getByText('Años previos pendientes')).toBeInTheDocument()
     expect(within(blockedCard).getByText(/Faltan: Lengua Inglesa I/)).toBeInTheDocument()
     expect(within(blockedCard).getByRole('button', { name: 'Inscribirme' })).toBeDisabled()
   })

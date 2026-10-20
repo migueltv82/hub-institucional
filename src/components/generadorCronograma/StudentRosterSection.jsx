@@ -864,9 +864,9 @@ function ResetAcademicRecordsDialog({
             <ShieldAlert className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-lg font-extrabold text-slate-950">Resetear estado academico</h3>
+            <h3 className="text-lg font-extrabold text-slate-950">Resetear estado académico</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Se borraran inscripciones a materias, inscripciones a mesas, notas, regularidades, aprobaciones, ausencias y fechas academicas de {studentName}.
+              Se borraran inscripciones a materias, inscripciones a mesas, notas, regularidades, aprobaciones, ausencias y fechas académicas de {studentName}.
             </p>
           </div>
         </div>
@@ -885,7 +885,7 @@ function ResetAcademicRecordsDialog({
         </label>
 
         <label className="mt-4 block">
-          <span className="text-sm font-bold text-slate-800">Contrasena actual del administrador que solicita la accion</span>
+          <span className="text-sm font-bold text-slate-800">Contraseña actual del administrador que solicita la acción</span>
           <input
             className="input-base mt-2"
             type="password"
@@ -1095,7 +1095,7 @@ function StudentAcademicDetailPage({
       <div className="print-hidden flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button type="button" className="btn-secondary" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
-          Volver al menu principal del administrador
+          Volver al menú principal del administrador
         </button>
         <div className="flex flex-wrap gap-2">
           <button
@@ -1103,13 +1103,13 @@ function StudentAcademicDetailPage({
             className="btn-secondary"
             onClick={() => onRefreshAcademicData?.({ notify: true })}
             disabled={isRefreshingAcademicData}
-            title="Vuelve a traer notas y estado academico sincronizados desde Supabase"
+            title="Vuelve a traer notas y estado académico sincronizados desde Supabase"
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshingAcademicData ? 'animate-spin' : ''}`} />
             {isRefreshingAcademicData ? 'Actualizando...' : 'Actualizar'}
           </button>
           <button type="button" className="btn-secondary border-red-300 text-red-700 hover:bg-red-50" onClick={() => setIsResetDialogOpen(true)} disabled={!canEditWorkspace}>
-            Resetear estado academico
+            Resetear estado académico
           </button>
           <button type="button" className="btn-primary" onClick={saveAllAcademicChanges} disabled={!canEditWorkspace || Object.keys(academicDrafts).length === 0}>
             Guardar todos los cambios
@@ -1132,7 +1132,7 @@ function StudentAcademicDetailPage({
             <div className="certificate-heading">
               <p className="certificate-kicker">Instituto</p>
               <h2>{institutionName}</h2>
-              <p>Estado academico institucional</p>
+              <p>Estado académico institucional</p>
             </div>
           </header>
 
@@ -1140,7 +1140,7 @@ function StudentAcademicDetailPage({
 
           <p className="certificate-text">
             Se hace constar que <strong>{studentName}</strong>, DNI <strong>{student.dni || 'sin registrar'}</strong>,
-            estudiante de <strong>{detail.career || 'carrera sin especificar'}</strong>, registra la siguiente situacion academica segun la informacion obrante en el sistema institucional.
+            estudiante de <strong>{detail.career || 'carrera sin especificar'}</strong>, registra la siguiente situación académica segun la información obrante en el sistema institucional.
           </p>
           <p className="certificate-text">
             Resumen: {detail.approved.length} materias aprobadas, {detail.currentSubjects.length} materias en curso,
@@ -1151,7 +1151,7 @@ function StudentAcademicDetailPage({
             <table className="certificate-table">
               <thead>
                 <tr>
-                  <th rowSpan="2">Anio</th>
+                  <th rowSpan="2">Año</th>
                   <th rowSpan="2">Materia</th>
                   <th colSpan="3">Calificaciones</th>
                   <th rowSpan="2">Estado</th>
@@ -1159,7 +1159,7 @@ function StudentAcademicDetailPage({
                   <th rowSpan="2">Plan</th>
                 </tr>
                 <tr>
-                  <th>Numeros</th>
+                  <th>Números</th>
                   <th>Letras</th>
                   <th>Fecha</th>
                 </tr>
@@ -1179,7 +1179,7 @@ function StudentAcademicDetailPage({
                 ))}
                 {certificateRows.length === 0 && (
                   <tr>
-                    <td colSpan="8">No hay informacion academica cargada para emitir la constancia.</td>
+                    <td colSpan="8">No hay información académica cargada para emitir la constancia.</td>
                   </tr>
                 )}
               </tbody>
@@ -1216,7 +1216,7 @@ function StudentAcademicDetailPage({
               )}
             </div>
             <div>
-            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-sky-700">Estado academico</p>
+            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-sky-700">Estado académico</p>
             <h3 className="mt-2 text-3xl font-extrabold text-slate-950">{getStudentFullName(student) || student.email}</h3>
             <p className="mt-2 text-sm text-slate-600">{detail.career || 'Carrera sin especificar'} · DNI {student.dni || 'sin DNI'}</p>
             <p className="mt-1 text-sm text-slate-600">{student.email || 'Sin email'}{student.telefono ? ` - ${student.telefono}` : ''}</p>
@@ -1253,8 +1253,8 @@ function StudentAcademicDetailPage({
         <article className="screen-academic-view mt-5 rounded-lg border border-slate-200 bg-white p-4">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-700">Estado academico completo</p>
-              <h4 className="mt-1 text-lg font-extrabold text-slate-950">Plan de estudios y situacion por materia</h4>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-700">Estado académico completo</p>
+              <h4 className="mt-1 text-lg font-extrabold text-slate-950">Plan de estudios y situación por materia</h4>
             </div>
             <p className="text-sm text-slate-500">{detail.completeItems.length} materias del plan</p>
           </div>
@@ -1310,7 +1310,7 @@ function StudentAcademicDetailPage({
           </article>
 
           <article className="rounded-lg border border-slate-200 bg-white p-4">
-            <h4 className="text-sm font-extrabold text-slate-950">Situacion por materia</h4>
+            <h4 className="text-sm font-extrabold text-slate-950">Situación por materia</h4>
             <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
               {detail.items.map((item) => (
                 <div key={`${item.subject}-${item.status}`} className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
@@ -1321,7 +1321,7 @@ function StudentAcademicDetailPage({
                 </div>
               ))}
               {detail.items.length === 0 && (
-                <p className="text-sm text-slate-500">Todavia no hay situacion academica cargada para este alumno.</p>
+                <p className="text-sm text-slate-500">Todavía no hay situación académica cargada para este alumno.</p>
               )}
             </div>
           </article>
@@ -1335,8 +1335,8 @@ function StudentAcademicDetailPage({
                 <tr>
                   <th className="px-4 py-3">Materia</th>
                   <th className="px-4 py-3">Nombre</th>
-                  <th className="px-4 py-3">Anio</th>
-                  <th className="px-4 py-3">Situacion</th>
+                  <th className="px-4 py-3">Año</th>
+                  <th className="px-4 py-3">Situación</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
@@ -1714,7 +1714,7 @@ function StudentRosterSection({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-sky-700">
-              Gestion de alumnos
+              Gestión de alumnos
             </p>
             <h3 className="mt-2 text-xl font-extrabold text-slate-950">Listado, edicion y alta manual de alumnos</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -1739,7 +1739,7 @@ function StudentRosterSection({
             className="input-base mt-2"
             value={searchQuery}
             onChange={handleSearchChange}
-            placeholder="Nombre, apellido, DNI, carrera, anio o email"
+            placeholder="Nombre, apellido, DNI, carrera, año o email"
             autoFocus
           />
         </label>
@@ -1758,9 +1758,9 @@ function StudentRosterSection({
                     <th className="px-4 py-3">Apellido</th>
                     <th className="px-4 py-3">DNI</th>
                     <th className="px-4 py-3">Carrera</th>
-                    <th className="px-4 py-3">Anio</th>
+                    <th className="px-4 py-3">Año</th>
                     <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Telefono</th>
+                    <th className="px-4 py-3">Teléfono</th>
                     <th className="px-4 py-3 text-right">Acciones</th>
                   </tr>
                 </thead>
@@ -1814,7 +1814,7 @@ function StudentRosterSection({
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
-            Escribi un nombre, apellido, DNI, carrera, anio o email para buscar entre los {alumnos.length} alumnos cargados.
+            Escribi un nombre, apellido, DNI, carrera, año o email para buscar entre los {alumnos.length} alumnos cargados.
           </div>
         )}
       </div>

@@ -124,12 +124,12 @@ describe('TeacherRosterSection fechas bloqueadas', () => {
     )
 
     expect(screen.getByText('Docentes').closest('div')).toHaveTextContent('1')
-    expect(screen.queryByText('Docente Validacion Supabase')).not.toBeInTheDocument()
+    expect(screen.queryByText('Docente Validación Supabase')).not.toBeInTheDocument()
 
-    expect(screen.queryByRole('button', { name: 'Datos academicos' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Datos académicos' })).not.toBeInTheDocument()
     expect(screen.getByText('Docente Real')).toBeInTheDocument()
-    expect(screen.queryByText('Docente Validacion Supabase')).not.toBeInTheDocument()
-    expect(screen.queryByText('Validacion Supabase I')).not.toBeInTheDocument()
+    expect(screen.queryByText('Docente Validación Supabase')).not.toBeInTheDocument()
+    expect(screen.queryByText('Validación Supabase I')).not.toBeInTheDocument()
     expect(screen.queryByText('Horas catedra institucionales')).not.toBeInTheDocument()
     expect(screen.queryByText('Con carga horaria')).not.toBeInTheDocument()
     expect(screen.getAllByText('Con materias')).toHaveLength(1)
@@ -167,8 +167,8 @@ describe('TeacherRosterSection fechas bloqueadas', () => {
     expect(within(anaRow).getByText('1 materia')).toBeInTheDocument()
     expect(within(anaRow).getByText('6')).toBeInTheDocument()
     expect(within(anaRow).queryByText('Ingles I')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Datos academicos' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Datos academicos docentes')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Datos académicos' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Datos académicos docentes')).not.toBeInTheDocument()
   })
 
   it('cuenta carreras desde las materias asignadas y muestra horas en el padron', () => {
@@ -238,7 +238,7 @@ describe('TeacherRosterSection fechas bloqueadas', () => {
 
     fireEvent.click(within(modal).getByTitle('Cerrar'))
 
-    expect(screen.queryByRole('button', { name: 'Datos academicos' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Datos académicos' })).not.toBeInTheDocument()
     expect(screen.queryByText(/FISICA I \(TITULAR\)/)).not.toBeInTheDocument()
     expect(screen.queryByText(/QUIMICA GENERAL \(TITULAR\)/)).not.toBeInTheDocument()
   })
@@ -503,9 +503,9 @@ describe('TeacherRosterSection fechas bloqueadas', () => {
     const assignedCard = within(modal).getByText('Materias asignadas').closest('.rounded-lg')
     expect(within(assignedCard).getByText('Geografia Argentina')).toBeInTheDocument()
     expect(within(assignedCard).getByText('PROFESORADO DE GEOGRAFIA')).toBeInTheDocument()
-    expect(within(assignedCard).getByRole('combobox', { name: 'Condicion de Geografia Argentina' })).toHaveValue('')
+    expect(within(assignedCard).getByRole('combobox', { name: 'Condición de Geografia Argentina' })).toHaveValue('')
     expect(within(assignedCard).getAllByRole('option', { name: 'Reemplazo' }).length).toBeGreaterThan(0)
-    expect(within(assignedCard).queryByText('Todavia no tiene materias asignadas.')).not.toBeInTheDocument()
+    expect(within(assignedCard).queryByText('Todavía no tiene materias asignadas.')).not.toBeInTheDocument()
 
     const scheduleTable = within(modal).getAllByRole('table')[1]
     expect(within(scheduleTable).getAllByText('Geografia Argentina')).toHaveLength(2)

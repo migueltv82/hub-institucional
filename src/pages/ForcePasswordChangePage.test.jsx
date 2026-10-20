@@ -9,9 +9,9 @@ vi.mock('../services/initialPasswordChange.js', () => ({ completeInitialPassword
 import ForcePasswordChangePage from './ForcePasswordChangePage.jsx'
 
 function fill() {
-  fireEvent.change(screen.getByLabelText('Contrasena actual (tu DNI)'), { target: { value: '30111222' } })
-  fireEvent.change(screen.getByLabelText('Nueva contrasena'), { target: { value: 'NuevaClave2026' } })
-  fireEvent.change(screen.getByLabelText('Repeti la nueva contrasena'), { target: { value: 'NuevaClave2026' } })
+  fireEvent.change(screen.getByLabelText('Contraseña actual (tu DNI)'), { target: { value: '30111222' } })
+  fireEvent.change(screen.getByLabelText('Nueva contraseña'), { target: { value: 'NuevaClave2026' } })
+  fireEvent.change(screen.getByLabelText('Repeti la nueva contraseña'), { target: { value: 'NuevaClave2026' } })
 }
 
 describe('ForcePasswordChangePage', () => {
@@ -22,7 +22,7 @@ describe('ForcePasswordChangePage', () => {
     render(<ForcePasswordChangePage />)
     expect(screen.getByText('docente@x.local')).toBeInTheDocument()
     fill()
-    fireEvent.click(screen.getByRole('button', { name: 'Cambiar contrasena' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar contraseña' }))
     await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalled())
     expect(mocks.complete).toHaveBeenCalledWith({ currentPassword: '30111222', newPassword: 'NuevaClave2026', confirmPassword: 'NuevaClave2026' })
   })
@@ -31,9 +31,9 @@ describe('ForcePasswordChangePage', () => {
     mocks.complete.mockRejectedValue(new Error('La contrasena ingresada es incorrecta.'))
     render(<ForcePasswordChangePage />)
     fill()
-    fireEvent.click(screen.getByRole('button', { name: 'Cambiar contrasena' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar contraseña' }))
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('La contrasena ingresada es incorrecta.'))
-    expect(screen.getByRole('button', { name: 'Cambiar contrasena' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Cambiar contraseña' })).toBeEnabled()
   })
 
   it('permite salir sin cambiarla', () => {

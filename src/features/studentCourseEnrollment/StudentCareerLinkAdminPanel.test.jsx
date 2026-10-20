@@ -86,7 +86,7 @@ describe('StudentCareerLinkAdminPanel', () => {
       legacyDiagnostic: { rows: [{ status: 'AMBIGUOUS_STUDENT', legacyStudentRecordId: 'record-1' }] },
     })
     render(<StudentCareerLinkAdminPanel {...props({ model: ambiguousModel })} />)
-    await screen.findByText('Diagnostico legacy ambiguo')
+    await screen.findByText('Diagnóstico legacy ambiguo')
     fireEvent.change(screen.getByLabelText('Alumno'), { target: { value: 'student-1' } })
     fireEvent.change(screen.getByLabelText('Registro de padron'), { target: { value: 'record-1' } })
     fireEvent.change(screen.getByLabelText('Carrera'), { target: { value: 'career-1' } })

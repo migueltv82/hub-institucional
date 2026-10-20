@@ -60,7 +60,7 @@ function StudentHistoryImportSection({ canEditWorkspace, institutionId, useRemot
         <div>
           <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-violet-700">
             <History className="h-4 w-4" />
-            Historia academica
+            Historia académica
           </p>
           <h3 className="mt-2 text-xl font-extrabold text-slate-950">Importar materias aprobadas y regulares previas</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
@@ -77,13 +77,13 @@ function StudentHistoryImportSection({ canEditWorkspace, institutionId, useRemot
             <Upload className="h-4 w-4" />
             {isImporting ? `Importando ${progress.done} de ${progress.total}...` : 'Importar historia'}
           </button>
-          <input accept=".xlsx" aria-label="Archivo de historia academica" className="hidden" onChange={onFileSelected} ref={inputRef} type="file" />
+          <input accept=".xlsx" aria-label="Archivo de historia académica" className="hidden" onChange={onFileSelected} ref={inputRef} type="file" />
         </div>
       </div>
 
       {!useRemoteWorkspace && (
         <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Para importar historia necesitas iniciar sesion remota en Supabase y tener una institucion activa.
+          Para importar historia necesitas iniciar sesión remota en Supabase y tener una institución activa.
         </div>
       )}
 

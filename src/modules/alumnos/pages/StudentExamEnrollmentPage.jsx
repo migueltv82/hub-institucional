@@ -50,7 +50,7 @@ function ExamTribunalDetails({ exam }) {
       </div>
       {deadline > 0 && (
         <div className="col-span-2">
-          <dt className="text-xs text-slate-500">Inscripcion hasta</dt>
+          <dt className="text-xs text-slate-500">Inscripción hasta</dt>
           <dd className="font-semibold text-slate-900">{formatDateTime(new Date(deadline).toISOString())}</dd>
         </div>
       )}
@@ -286,7 +286,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
           </p>
           {isRemoteSession && (
             <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--student-lavender-ink)]">
-              Actualizacion automatica cada minuto
+              Actualización automática cada minuto
             </p>
           )}
         </div>
@@ -317,7 +317,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
               activeTab === 'proximas' ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 ring-1 ring-inset ring-slate-200'
             }`}
           >
-            Proximas
+            Próximas
           </button>
           <button
             type="button"
@@ -386,7 +386,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
                         onClick={() => handleCancel(registeredEnrollment)}
                         className="inline-flex w-full items-center justify-center rounded-md border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                       >
-                        Cancelar inscripcion
+                        Cancelar inscripción
                       </button>
                     ) : (
                       <div className="space-y-2">
@@ -463,7 +463,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
             })
           ) : (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-600 lg:col-span-2">
-              Todavia no hay mesas pasadas para mostrar.
+              Todavía no hay mesas pasadas para mostrar.
             </div>
           )}
         </section>

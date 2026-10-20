@@ -12,7 +12,7 @@ const catalog = (extra = {}) => ({ errors: [], warnings: [], careers: [{}], plan
 const file = new File(['x'], 'academica.xlsx')
 
 function chooseFile() {
-  fireEvent.change(screen.getByLabelText('Planilla academica'), { target: { files: [file] } })
+  fireEvent.change(screen.getByLabelText('Planilla académica'), { target: { files: [file] } })
 }
 
 describe('AcademicCatalogPublishSection', () => {
@@ -51,9 +51,9 @@ describe('AcademicCatalogPublishSection', () => {
 
   it('sin rol owner/admin o sin sesion remota no se puede elegir planilla', () => {
     const { rerender } = render(<AcademicCatalogPublishSection {...props} canPublish={false} />)
-    expect(screen.getByRole('button', { name: 'Elegir planilla academica' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Elegir planilla académica' })).toBeDisabled()
     expect(screen.getByText(/Solo el owner o admin/)).toBeInTheDocument()
     rerender(<AcademicCatalogPublishSection {...props} useRemoteWorkspace={false} />)
-    expect(screen.getByRole('button', { name: 'Elegir planilla academica' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Elegir planilla académica' })).toBeDisabled()
   })
 })

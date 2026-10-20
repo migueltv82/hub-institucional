@@ -21,7 +21,7 @@ export default class AppErrorBoundary extends Component {
           <span className="soft-title">Institutional Hub</span>
           <h1 className="mt-2 text-2xl font-extrabold text-slate-900">No se pudo cargar esta vista</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            Recarga la pagina. Si el problema continua, usa este detalle para ubicar el fallo.
+            Recarga la página. Si el problema continua, usa este detalle para ubicar el fallo.
           </p>
           <pre className="mt-4 overflow-auto rounded-md bg-slate-950 p-4 text-xs text-white">
             {error.message || String(error)}

@@ -130,9 +130,9 @@ describe('StudentRosterSection con plantilla nueva', () => {
       })],
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Resetear estado academico' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Resetear estado académico' }))
     fireEvent.change(screen.getByLabelText('Escribi BORRAR TODO para confirmar'), { target: { value: 'BORRAR TODO' } })
-    fireEvent.change(screen.getByLabelText('Contrasena actual del administrador que solicita la accion'), { target: { value: 'clave-segura' } })
+    fireEvent.change(screen.getByLabelText('Contraseña actual del administrador que solicita la acción'), { target: { value: 'clave-segura' } })
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar borrado total' }))
 
     await waitFor(() => {

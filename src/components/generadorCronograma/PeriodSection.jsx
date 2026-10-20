@@ -79,12 +79,12 @@ function PeriodSection({
     >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <span className="soft-title">Definir periodo</span>
+          <span className="soft-title">Definir período</span>
           <h3 className="mt-2 text-xl font-bold text-slate-950">
             {isRegularExam ? 'Llamados regulares' : 'Rango de mesas especiales'}
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Elegi si el periodo es regular o especial. Las mesas especiales quedan pensadas para pedidos puntuales y carga manual.
+            Elegi si el período es regular o especial. Las mesas especiales quedan pensadas para pedidos puntuales y carga manual.
           </p>
         </div>
         <span className="status-chip w-fit border-amber-200 bg-amber-50 text-amber-800">

@@ -262,8 +262,8 @@ function SuperAdminUsersPage() {
         <div className="max-w-3xl">
           <h2 className="text-3xl font-bold text-slate-950">Usuarios y accesos</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Esta vista queda dedicada al directorio de usuarios por rol. Primero elegi el grupo y despues filtra por nombre,
-            apellido, DNI o institucion para ubicar rapido cada acceso.
+            Esta vista queda dedicada al directorio de usuarios por rol. Primero elegi el grupo y después filtra por nombre,
+            apellido, DNI o institución para ubicar rápido cada acceso.
           </p>
         </div>
 
@@ -329,13 +329,13 @@ function SuperAdminUsersPage() {
       )}
       {catalogState === 'empty' && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          No hay instituciones cargadas todavia. Crea una institucion antes de dar de alta usuarios.
+          No hay instituciones cargadas todavía. Crea una institución antes de dar de alta usuarios.
         </div>
       )}
 
       {!selectedRole && (
         <section className="soft-card bg-white">
-          <span className="soft-title">Seleccion guiada</span>
+          <span className="soft-title">Selección guiada</span>
           <h3 className="mt-2 text-2xl font-bold text-slate-950">Elegi un rol para empezar</h3>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
             Superadmins, administradores, docentes y alumnos viven en el mismo directorio, pero se consultan por separado
@@ -363,7 +363,7 @@ function SuperAdminUsersPage() {
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     className="input-base pl-9"
-                    placeholder="Buscar por nombre, apellido, DNI o institucion"
+                    placeholder="Buscar por nombre, apellido, DNI o institución"
                     type="search"
                     value={searchTerm}
                     onChange={(event) => {
@@ -387,7 +387,7 @@ function SuperAdminUsersPage() {
 
           {(selectedRole === 'teachers' || selectedRole === 'students') && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-              Las altas de alumnos y docentes se originan desde sus padrones. Aqui solo se auditan cuentas, estados de acceso
+              Las altas de alumnos y docentes se originan desde sus padrones. Aquí solo se auditan cuentas, estados de acceso
               y vinculaciones institucionales.
             </div>
           )}
@@ -477,7 +477,7 @@ function SuperAdminUsersPage() {
                     disabled={busyKey === `password:${user.id}`}
                   >
                     <KeyRound className="h-4 w-4" />
-                    Resetear contrasena
+                    Resetear contraseña
                   </button>
                   <button
                     className="btn-secondary w-full text-red-700"

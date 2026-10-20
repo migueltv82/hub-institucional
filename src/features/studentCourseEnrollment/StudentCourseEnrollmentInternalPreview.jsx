@@ -61,8 +61,8 @@ function RejectionList({ rejections = [] }) {
         return (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" key={`${detail.code}-${index}`}>
             <p className="font-extrabold">{detail.message}</p>
-            <p className="mt-1">Codigo: <code>{detail.code}</code></p>
-            <p className="mt-1 text-amber-800">Accion: {detail.action}</p>
+            <p className="mt-1">Código: <code>{detail.code}</code></p>
+            <p className="mt-1 text-amber-800">Acción: {detail.action}</p>
           </div>
         )
       })}
@@ -106,9 +106,9 @@ function DiagnosticSection({ model, mode }) {
     <section className="space-y-4" aria-labelledby="course-preview-diagnostic-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="soft-title">Diagnostico previo</p>
+          <p className="soft-title">Diagnóstico previo</p>
           <h3 className="mt-1 text-xl font-extrabold text-slate-950" id="course-preview-diagnostic-title">
-            Estado de datos academicos
+            Estado de datos académicos
           </h3>
         </div>
         <StatusBadge tone={diagnosticTone}>{diagnostics.status}</StatusBadge>
@@ -138,8 +138,8 @@ function DiagnosticSection({ model, mode }) {
           <p className="font-extrabold">No existe un vinculo carrera-plan seleccionable.</p>
           <p className="mt-1">
             {mode === 'admin'
-              ? 'Administracion puede preparar un alta explicita mediante la RPC auditada disponible mas abajo.'
-              : 'Solicita a Administracion que revise y vincule tu identidad academica.'}
+              ? 'Administración puede preparar un alta explicita mediante la RPC auditada disponible mas abajo.'
+              : 'Solicita a Administración que revise y vincule tu identidad académica.'}
           </p>
         </div>
       )}
@@ -148,7 +148,7 @@ function DiagnosticSection({ model, mode }) {
         <div className="overflow-x-auto rounded-md border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-600">
-              <tr><th className="px-3 py-2">Registro</th><th className="px-3 py-2">Diagnostico legacy</th><th className="px-3 py-2">Coincidencias</th></tr>
+              <tr><th className="px-3 py-2">Registro</th><th className="px-3 py-2">Diagnóstico legacy</th><th className="px-3 py-2">Coincidencias</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {legacyRows.map((row) => (
@@ -170,7 +170,7 @@ function OfferingsSection({ model, operations, onEnroll }) {
   return (
     <section className="space-y-3" aria-labelledby="course-preview-offerings-title">
       <div>
-        <p className="soft-title">Oferta academica</p>
+        <p className="soft-title">Oferta académica</p>
         <h3 className="mt-1 text-xl font-extrabold text-slate-950" id="course-preview-offerings-title">Materias disponibles</h3>
       </div>
       {model.offerings.length === 0 ? (
@@ -193,9 +193,9 @@ function OfferingsSection({ model, operations, onEnroll }) {
                   <StatusBadge tone={isOpen ? 'emerald' : 'amber'}>{offering.status}</StatusBadge>
                 </div>
                 <div className="mt-3 space-y-1 text-sm text-slate-700">
-                  <p>Inscripcion: {formatDate(offering.enrollment_opens_at)} a {formatDate(offering.enrollment_closes_at)}</p>
+                  <p>Inscripción: {formatDate(offering.enrollment_opens_at)} a {formatDate(offering.enrollment_closes_at)}</p>
                   {detail.schedules.map((schedule) => (
-                    <p key={schedule.id}>{DAY_NAMES[schedule.day_of_week] ?? `Dia ${schedule.day_of_week}`} {schedule.start_time}-{schedule.end_time} {schedule.location ? `· ${schedule.location}` : ''}</p>
+                    <p key={schedule.id}>{DAY_NAMES[schedule.day_of_week] ?? `Día ${schedule.day_of_week}`} {schedule.start_time}-{schedule.end_time} {schedule.location ? `· ${schedule.location}` : ''}</p>
                   ))}
                   {detail.teachers.map((teacher) => (
                     <p key={teacher.id}>Docente: {teacher.teacher_display_name || 'Sin nombre'} · {teacher.role}</p>
@@ -274,7 +274,7 @@ function AdminReviewSection({ model }) {
     <section className="space-y-4" aria-labelledby="course-preview-admin-title">
       <div>
         <p className="soft-title">Control institucional</p>
-        <h3 className="mt-1 text-xl font-extrabold text-slate-950" id="course-preview-admin-title">Resultados y auditoria</h3>
+        <h3 className="mt-1 text-xl font-extrabold text-slate-950" id="course-preview-admin-title">Resultados y auditoría</h3>
       </div>
       <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -293,14 +293,14 @@ function AdminReviewSection({ model }) {
 
       {Object.keys(model.rejectionCounts).length > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm">
-          <strong>Rechazos por codigo</strong>
+          <strong>Rechazos por código</strong>
           <div className="mt-2 flex flex-wrap gap-2">{Object.entries(model.rejectionCounts).map(([code, count]) => <StatusBadge key={code} tone="amber">{code}: {count}</StatusBadge>)}</div>
         </div>
       )}
 
       <div className="rounded-md border border-slate-200 p-4">
         <label className="block text-sm font-bold text-slate-700">
-          Inscripcion para auditar
+          Inscripción para auditar
           <select className="input-base mt-2" onChange={(event) => setSelectedEnrollmentId(event.target.value)} value={selectedEnrollmentId}>
             <option value="">Seleccionar</option>
             {model.enrollments.map((item) => <option key={item.id} value={item.id}>{item.subject_name} · {item.id}</option>)}
@@ -456,7 +456,7 @@ export default function StudentCourseEnrollmentInternalPreview({
   if (!access.allowed) {
     return (
       <section className="work-surface p-5">
-        <div className="flex items-start gap-3 text-amber-900"><ShieldAlert className="mt-0.5 h-5 w-5" /><div><h2 className="font-extrabold">Preview de inscripcion bloqueado</h2><p className="mt-1 text-sm">{access.reasons.join(' · ')}</p></div></div>
+        <div className="flex items-start gap-3 text-amber-900"><ShieldAlert className="mt-0.5 h-5 w-5" /><div><h2 className="font-extrabold">Preview de inscripción bloqueado</h2><p className="mt-1 text-sm">{access.reasons.join(' · ')}</p></div></div>
       </section>
     )
   }
@@ -467,8 +467,8 @@ export default function StudentCourseEnrollmentInternalPreview({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap gap-2"><StatusBadge tone="amber">DEV</StatusBadge><StatusBadge tone="sky">PREVIEW INTERNA</StatusBadge><StatusBadge tone="red">NO OFICIAL</StatusBadge></div>
-            <h2 className="mt-3 text-2xl font-extrabold text-slate-950">Inscripcion transaccional al cursado</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Consulta ofertas relacionales y ejecuta solamente comandos RPC auditados. Esta vista no crea historia academica oficial.</p>
+            <h2 className="mt-3 text-2xl font-extrabold text-slate-950">Inscripción transaccional al cursado</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Consulta ofertas relacionales y ejecuta solamente comandos RPC auditados. Esta vista no crea historia académica oficial.</p>
           </div>
           <div className="flex items-center gap-2"><StatusBadge tone={state === 'ERROR' ? 'red' : state === 'PROCESSING' ? 'amber' : 'emerald'}>{state}</StatusBadge><button className="btn-secondary" onClick={() => load(selectedRelationId)} type="button"><RefreshCw className="h-4 w-4" />Actualizar</button></div>
         </div>
@@ -489,7 +489,7 @@ export default function StudentCourseEnrollmentInternalPreview({
           {model.selectedRelation?.is_first_year_entrant && (
             <section className="rounded-md border border-sky-200 bg-sky-50 p-4">
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <div><p className="flex items-center gap-2 font-extrabold text-sky-950"><UserRoundCheck className="h-5 w-5" />Alta automatica de primer ano</p><p className="mt-1 text-sm text-sky-800">La RPC decide ofertas, correlatividades, cupos y duplicados.</p></div>
+                <div><p className="flex items-center gap-2 font-extrabold text-sky-950"><UserRoundCheck className="h-5 w-5" />Alta automática de primer ano</p><p className="mt-1 text-sm text-sky-800">La RPC decide ofertas, correlatividades, cupos y duplicados.</p></div>
                 <button className="btn-primary" disabled={!firstYearEligible || firstYearOperation?.state === 'PROCESSING'} onClick={executeFirstYear} type="button"><ClipboardCheck className="h-4 w-4" />Inscribirme en todas las materias de primer ano</button>
               </div>
               <ResultPanel operation={firstYearOperation} />
@@ -501,7 +501,7 @@ export default function StudentCourseEnrollmentInternalPreview({
 
           {mode === 'admin' && (
             <>
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="flex items-center gap-2 font-extrabold"><AlertTriangle className="h-5 w-5" />Fuente academica transitoria</p><p className="mt-1">La validacion de materias aprobadas utiliza `student_grades`. Todavia no existe una historia academica canonica y esta elegibilidad no es definitiva.</p></div>
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="flex items-center gap-2 font-extrabold"><AlertTriangle className="h-5 w-5" />Fuente académica transitoria</p><p className="mt-1">La validación de materias aprobadas utiliza `student_grades`. Todavía no existe una historia académica canonica y esta elegibilidad no es definitiva.</p></div>
               <StudentCareerLinkAdminPanel key={model.selectedRelation?.id ?? 'unlinked'} model={model} onChanged={(relationId) => load(relationId)} requestIdFactory={requestIdFactory} />
               <AdminReviewSection model={model} />
             </>

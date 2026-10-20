@@ -18,7 +18,7 @@ vi.mock('../../services/studentHistoryImport.js', async (importOriginal) => ({
 import StudentHistoryImportSection from './StudentHistoryImportSection.jsx'
 
 function upload() {
-  const input = screen.getByLabelText('Archivo de historia academica')
+  const input = screen.getByLabelText('Archivo de historia académica')
   fireEvent.change(input, { target: { files: [new File(['x'], 'historia.xlsx')] } })
 }
 
@@ -60,6 +60,6 @@ describe('StudentHistoryImportSection', () => {
     expect(screen.getByRole('button', { name: /Importar historia/ })).toBeDisabled()
     rerender(<StudentHistoryImportSection canEditWorkspace institutionId="inst-1" useRemoteWorkspace={false} />)
     expect(screen.getByRole('button', { name: /Importar historia/ })).toBeDisabled()
-    expect(screen.getByText(/iniciar sesion remota/)).toBeInTheDocument()
+    expect(screen.getByText(/iniciar sesión remota/)).toBeInTheDocument()
   })
 })

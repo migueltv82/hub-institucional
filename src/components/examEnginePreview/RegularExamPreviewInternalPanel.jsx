@@ -140,8 +140,8 @@ function PreviewReadinessDiagnostics({ readiness }) {
   ]
 
   return (
-    <section className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3" aria-label="Diagnostico de habilitacion del preview">
-      <h4 className="text-sm font-extrabold uppercase text-amber-900">Diagnostico de habilitacion</h4>
+    <section className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3" aria-label="Diagnóstico de habilitación del preview">
+      <h4 className="text-sm font-extrabold uppercase text-amber-900">Diagnóstico de habilitación</h4>
       {!readiness.canRunPreview ? (
         <p className="mt-1 text-sm font-bold text-amber-800">
           No hay datos suficientes para ejecutar preview interno. reasonDisabled: {readiness.reasonDisabled}
@@ -313,7 +313,7 @@ function InstitutionalInterpretation({ completionRate, observations, teacherLimi
   ]
 
   return (
-    <section className="mt-4 grid gap-3 xl:grid-cols-3" aria-label="Interpretacion institucional del preview">
+    <section className="mt-4 grid gap-3 xl:grid-cols-3" aria-label="Interpretación institucional del preview">
       <div className="rounded-md border border-slate-200 bg-white p-3">
         <h4 className="text-sm font-extrabold uppercase text-slate-800">Cuellos principales</h4>
         {bottlenecks.length ? (
@@ -329,7 +329,7 @@ function InstitutionalInterpretation({ completionRate, observations, teacherLimi
         )}
       </div>
       <div className="rounded-md border border-slate-200 bg-white p-3">
-        <h4 className="text-sm font-extrabold uppercase text-slate-800">Interpretacion automatica</h4>
+        <h4 className="text-sm font-extrabold uppercase text-slate-800">Interpretación automática</h4>
         <ul className="mt-2 space-y-2 text-sm font-bold text-slate-700">
           {interpretations.map((item) => <li key={item}>{item}</li>)}
         </ul>
@@ -515,7 +515,7 @@ export function RegularExamPreviewInternalPanel(props) {
         <div>
           <p className="soft-title">Preview interno examEngine</p>
           <h3 className="mt-2 text-2xl font-extrabold text-slate-950">
-            Auditoria read-only del nuevo motor
+            Auditoría read-only del nuevo motor
           </h3>
           <p className="mt-2 text-sm font-bold text-slate-700">
             Preview interno. No reemplaza el motor oficial. No guarda ni publica cronogramas.
@@ -592,16 +592,16 @@ export function RegularExamPreviewInternalPanel(props) {
         <h4 className="text-sm font-extrabold uppercase text-sky-900">Alertas institucionales</h4>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-bold text-slate-700">
           <li>Mitad mas uno activa; no se relaja por defecto.</li>
-          <li>Toda mesa con 1 vocal requiere revision manual y se marca como TRIBUNAL_UN_VOCAL.</li>
+          <li>Toda mesa con 1 vocal requiere revisión manual y se marca como TRIBUNAL_UN_VOCAL.</li>
           <li>{completionRate >= 0.8 ? 'El escenario actual supera 80%.' : 'Calendario actual insuficiente si no supera 80%.'}</li>
-          <li>No usar para publicacion oficial.</li>
+          <li>No usar para publicación oficial.</li>
         </ul>
       </section>
 
       <section className="mt-4" aria-label="Fechas recomendadas del preview">
         <h4 className="text-sm font-extrabold uppercase text-slate-800">Fechas recomendadas</h4>
         <p className="mt-1 text-sm font-bold text-slate-600">
-          Dias sugeridos: {PRIORITY_DAYS.join(', ')}.
+          Días sugeridos: {PRIORITY_DAYS.join(', ')}.
         </p>
         {scenarios.length ? (
           <>
@@ -657,7 +657,7 @@ export function RegularExamPreviewInternalPanel(props) {
             </div>
           </div>
         ) : (
-          <p className="mt-2 text-sm font-bold text-slate-600">Sin observaciones calculadas todavia.</p>
+          <p className="mt-2 text-sm font-bold text-slate-600">Sin observaciones calculadas todavía.</p>
         )}
 
         {observations?.causasPrincipales?.length ? (
@@ -672,8 +672,8 @@ export function RegularExamPreviewInternalPanel(props) {
       </section>
 
       {hasPreview && countRowsWithOneVocal(allRows) > 0 ? (
-        <section className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3" aria-label="Mesas con un vocal en revision manual">
-          <h4 className="text-sm font-extrabold uppercase text-amber-900">Revision manual</h4>
+        <section className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3" aria-label="Mesas con un vocal en revisión manual">
+          <h4 className="text-sm font-extrabold uppercase text-amber-900">Revisión manual</h4>
           <p className="mt-1 text-sm font-bold text-amber-800">
             {displayNumber(countRowsWithOneVocal(allRows))} mesas marcadas con requiresManualReview=true y reason=TRIBUNAL_UN_VOCAL.
           </p>

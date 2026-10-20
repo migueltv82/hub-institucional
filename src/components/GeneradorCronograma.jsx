@@ -469,7 +469,7 @@ function GeneradorCronograma() {
       setStudentAccessResult(null)
       setTeacherAccessResult(null)
       setActiveDashboardSection('data')
-      toast.success('Carga eliminada. Ya podes volver a subir las planillas limpias.')
+      toast.success('Carga eliminada. Ya podés volver a subir las planillas limpias.')
     } catch (error) {
       toast.error(`No se pudo eliminar la carga: ${error.message}`)
     } finally {
@@ -524,7 +524,7 @@ function GeneradorCronograma() {
       })
     } catch (error) {
       // El cronograma ya quedo guardado: volver a publicar reintenta solo la apertura (la RPC es idempotente).
-      toast.error(`El cronograma quedo guardado, pero no se abrio la inscripcion de alumnos. Volve a publicar para reintentar. ${error.message}`)
+      toast.error(`El cronograma quedo guardado, pero no se abrio la inscripción de alumnos. Volve a publicar para reintentar. ${error.message}`)
       return false
     }
     return true
@@ -1055,7 +1055,7 @@ function GeneradorCronograma() {
     if (record?.person_type === 'student') return restaurarAlumnoDesdeBaja(record)
     if (record?.person_type === 'teacher') return restaurarDocenteDesdeBaja(record)
 
-    toast.error('La restauracion de administrativos requiere recuperar el usuario de Auth desde el panel superadmin.')
+    toast.error('La restauración de administrativos requiere recuperar el usuario de Auth desde el panel superadmin.')
     return false
   }
 
@@ -1265,11 +1265,11 @@ function GeneradorCronograma() {
       setInstitutionAcademicData({
         institutionId: activeInstitutionId, loaded: true, grades, studentRecords,
       })
-      if (notify) toast.success('Datos academicos actualizados.')
+      if (notify) toast.success('Datos académicos actualizados.')
       return { grades, studentRecords }
     } catch (error) {
       console.warn('No se pudo sincronizar la fuente academica canonica con el panel administrador.', error)
-      if (notify) toast.error(`No se pudieron actualizar los datos academicos: ${error.message}`)
+      if (notify) toast.error(`No se pudieron actualizar los datos académicos: ${error.message}`)
       return null
     } finally {
       setIsRefreshingInstitutionAcademicData(false)
@@ -1313,7 +1313,7 @@ function GeneradorCronograma() {
 
   const descargarArchivosOriginales = useCallback(async () => {
     if (!useRemoteWorkspace) {
-      toast.error('Los archivos originales no estan almacenados en el modo local.')
+      toast.error('Los archivos originales no están almacenados en el modo local.')
       return
     }
 
@@ -1408,13 +1408,13 @@ function GeneradorCronograma() {
       })
       return { ...current, estadoAcademico: nextRows }
     })
-    toast.success(`${records.length} cambios academicos guardados.`)
+    toast.success(`${records.length} cambios académicos guardados.`)
     return true
   }
 
   async function resetearEstadoAcademicoAlumno(student, { currentPassword } = {}) {
     if (!canEditWorkspace) {
-      toast.error('Tu rol actual no permite resetear el estado academico.')
+      toast.error('Tu rol actual no permite resetear el estado académico.')
       return false
     }
 
@@ -1428,7 +1428,7 @@ function GeneradorCronograma() {
       })
 
       setAcademicSnapshotData((current) => resetStudentAcademicSnapshotData(current, student))
-      toast.success('Estado academico reseteado por completo.')
+      toast.success('Estado académico reseteado por completo.')
       return true
     } catch (error) {
       toast.error(error.message)
@@ -1504,7 +1504,7 @@ function GeneradorCronograma() {
         />
 
         <div className="admin-workspace-main min-w-0 space-y-5 p-3 sm:p-4 md:space-y-6 md:p-6 xl:p-8">
-          <Suspense fallback={<WorkspaceNotice tone="sky">Cargando modulo...</WorkspaceNotice>}>
+          <Suspense fallback={<WorkspaceNotice tone="sky">Cargando módulo...</WorkspaceNotice>}>
             {activeWorkspaceView === 'dashboard' ? (
               <>
               <div className="space-y-2">
@@ -1514,15 +1514,15 @@ function GeneradorCronograma() {
 
                 {isRemoteSession && !isLoadingInstitutions && institutions.length === 0 && (
                   <WorkspaceNotice>
-                    La sesion remota esta activa, pero este usuario todavia no tiene memberships.
-                    Crea una institucion desde el panel Super Admin o ejecuta `00_base_schema.sql`
+                    La sesión remota esta activa, pero este usuario todavía no tiene memberships.
+                    Crea una institución desde el panel Super Admin o ejecuta `00_base_schema.sql`
                     y luego las migraciones 01-12 listadas en `supabase/setup_multi_tenant/00_README.md`.
                   </WorkspaceNotice>
                 )}
 
                 {isHydrating && (
                   <WorkspaceNotice tone="sky">
-                    Estamos recuperando el ultimo snapshot del workspace antes de que sigas trabajando.
+                    Estamos recuperando el último snapshot del workspace antes de que sigas trabajando.
                   </WorkspaceNotice>
                 )}
 
@@ -1530,7 +1530,7 @@ function GeneradorCronograma() {
                   <WorkspaceNotice tone="sky">
                     {isRelationalWorkspaceSource
                       ? 'Estas viendo datos reales del schema relacional nuevo en modo solo lectura. La edicion directa de padrones queda deshabilitada hasta conectar escrituras contra student_records y teacher_records.'
-                      : 'Estas viendo este workspace en modo solo lectura. Tu rol actual permite consultar la informacion, pero no cargar archivos, editar, confirmar, regenerar ni borrar datos.'}
+                      : 'Estas viendo este workspace en modo solo lectura. Tu rol actual permite consultar la información, pero no cargar archivos, editar, confirmar, regenerar ni borrar datos.'}
                   </WorkspaceNotice>
                 )}
               </div>
@@ -1546,12 +1546,12 @@ function GeneradorCronograma() {
                         {completedDashboardItems}/{dashboardProgressItems.length} etapas
                       </span>
                     </div>
-                    <p className="soft-title mt-5">Administrador de institucion</p>
+                    <p className="soft-title mt-5">Administrador de institución</p>
                     <h3 className="operational-dashboard-hero__title mt-2 text-3xl font-extrabold leading-tight md:text-4xl">
                       Panel principal
                     </h3>
                     <p className="operational-dashboard-hero__description mt-3 max-w-3xl text-sm leading-6 md:text-base">
-                      Vista central de la institucion, carreras, alumnos y docentes antes de entrar al armado de mesas.
+                      Vista central de la institución, carreras, alumnos y docentes antes de entrar al armado de mesas.
                     </p>
 
                     <div className="mt-5 max-w-2xl">
@@ -1566,7 +1566,7 @@ function GeneradorCronograma() {
                   </div>
 
                   <aside className="dashboard-next-action">
-                    <p className="operational-dashboard-hero__label text-xs font-extrabold uppercase tracking-[0.14em]">Siguiente accion</p>
+                    <p className="operational-dashboard-hero__label text-xs font-extrabold uppercase tracking-[0.14em]">Siguiente acción</p>
                     <h4 className="operational-dashboard-hero__title mt-2 text-2xl font-extrabold">{nextDashboardAction.label}</h4>
                     <p className="operational-dashboard-hero__description mt-1 text-sm font-semibold">{nextDashboardAction.helper}</p>
                     <button
@@ -1749,7 +1749,7 @@ function GeneradorCronograma() {
             ) : activeWorkspaceView === 'exam-engine-v21' ? null : (
               <>
               <section className="rise-in admin-module-heading">
-                <span className="soft-title">Modulo</span>
+                <span className="soft-title">Módulo</span>
                 <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <h3 className="text-3xl font-bold text-slate-950">
@@ -1757,8 +1757,8 @@ function GeneradorCronograma() {
                     </h3>
                     <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
                       {activeWorkspaceView === 'students'
-                        ? 'Consulta, filtra y administra alumnos por nombre, apellido, DNI, carrera y anio. Desde este modulo tambien se crean sus accesos al portal.'
-                        : 'Consulta, filtra y administra docentes por nombre, apellido, DNI, telefono y materias asociadas. Desde este modulo tambien se crean sus accesos al portal.'}
+                        ? 'Consulta, filtra y administra alumnos por nombre, apellido, DNI, carrera y año. Desde este módulo también se crean sus accesos al portal.'
+                        : 'Consulta, filtra y administra docentes por nombre, apellido, DNI, teléfono y materias asociadas. Desde este módulo también se crean sus accesos al portal.'}
                     </p>
                   </div>
                   <div className={`soft-card w-full min-w-0 border-l-4 sm:w-auto sm:min-w-[240px] ${

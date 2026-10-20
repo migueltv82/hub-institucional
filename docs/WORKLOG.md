@@ -1463,3 +1463,14 @@ Los 8 detalles P3 del recorrido D1 (1–6, 8 y 9) están resueltos; el detalle d
 - aula de cursada como aula por defecto de la mesa.
 
 Hay tests nuevos o actualizados para cada uno. `npm run check` PASS (2711). Falta revisarlo en el navegador real (queda para el próximo recorrido de la demo).
+
+## 2026-10-20 — Fase 2: tildes en los textos de la interfaz (Claude)
+
+- **Alcance:** 427 textos en 61 archivos, con una transformación automática y acotada (parser de Babel, reemplazo por posición, sin reformatear).
+- **Qué toca:** solo texto visible: texto JSX, `title`, `placeholder`, `aria-label`, `alt`, `label`, ramas de ternarios que llegan ahí y mensajes de `toast`.
+- **Diccionario:** solo palabras inequívocas (contraseña, sesión, institución, inscripción, código, día, año, revisión, etc.).
+  - Quedaron afuera las ambiguas: esta, mas, publico, quedo y las imperativas del voseo (elegí, revisá).
+  - No se tocan emails, dominios, rutas, identificadores, claves ni valores que se comparan.
+- **Tests:** se ajustaron las consultas de Testing Library a los textos nuevos. Los textos que vienen de constantes en `.js` (estados, mensajes del motor) siguen sin tilde y sus tests no cambian.
+- **Pendiente:** un segundo pase con revisión manual para esas constantes y para las formas ambiguas.
+- `npm run check` PASS (2711).

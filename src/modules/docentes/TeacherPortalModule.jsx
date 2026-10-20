@@ -311,7 +311,7 @@ function TeacherScheduleGrid({ group, tone = 0 }) {
           </colgroup>
           <thead>
             <tr>
-              <th className={`border-b border-slate-200 px-2 py-3 text-xs font-extrabold uppercase ${palette.headerCell}`}>Dia</th>
+              <th className={`border-b border-slate-200 px-2 py-3 text-xs font-extrabold uppercase ${palette.headerCell}`}>Día</th>
               {group.slots.map((slot) => (
                 <th key={slot.key} className={`border-b border-slate-200 px-2 py-3 text-[11px] font-extrabold ${palette.headerCell}`}>
                   {slot.label}
@@ -369,7 +369,7 @@ function TeacherWeeklyOverviewTable({ grid }) {
         </colgroup>
         <thead>
           <tr>
-            <th className="border-b border-slate-200 bg-teal-50 px-2 py-3 text-xs font-extrabold uppercase text-teal-700">Dia</th>
+            <th className="border-b border-slate-200 bg-teal-50 px-2 py-3 text-xs font-extrabold uppercase text-teal-700">Día</th>
             {grid.slots.map((slot) => (
               <th key={slot.key} className="border-b border-slate-200 bg-teal-50 px-2 py-3 text-[11px] font-extrabold text-teal-700">
                 {slot.label}
@@ -584,7 +584,7 @@ function ExamRosterPanel({ institutionId, examKey }) {
   const alumnos = state.roster?.alumnos ?? EMPTY_ARRAY
   if (state.loading) return <p className="mt-3 text-sm text-slate-500">Cargando inscriptos...</p>
   if (state.error) return <p className="mt-3 text-sm text-red-700">{state.error}</p>
-  if (!alumnos.length) return <p className="mt-3 text-sm text-slate-500">Todavia no hay alumnos inscriptos.</p>
+  if (!alumnos.length) return <p className="mt-3 text-sm text-slate-500">Todavía no hay alumnos inscriptos.</p>
   // F1a: desde el dia del examen el titular carga el acta; cerrada queda en solo lectura.
   if (state.roster.puedeCargarNotas || state.roster.actaCerrada) {
     return (
@@ -726,11 +726,11 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
       })
       await queryClient.invalidateQueries({ queryKey: ['teacher-portal'] })
       toast.success(profile.email !== teacherEmail
-        ? 'Informacion actualizada. Tu proximo ingreso sera con el nuevo email.'
-        : 'Informacion actualizada.')
+        ? 'Información actualizada. Tu próximo ingreso sera con el nuevo email.'
+        : 'Información actualizada.')
       setIsProfileOpen(false)
     } catch (error) {
-      toast.error(error?.message || 'No se pudo actualizar tu informacion.')
+      toast.error(error?.message || 'No se pudo actualizar tu información.')
     } finally {
       setIsSavingProfile(false)
     }
@@ -785,13 +785,13 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
               })}
             <button className="teacher-profile-button inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md border px-3 py-2 text-sm font-extrabold" type="button" onClick={openProfile}>
               <Pencil className="h-4 w-4" />
-              Mi informacion
+              Mi información
             </button>
 
             {isRemoteSession && (
               <button className="teacher-signout-button ml-auto inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-extrabold text-red-700" type="button" onClick={signOutRemote}>
                 <LogOut className="h-4 w-4" />
-                Cerrar sesion
+                Cerrar sesión
               </button>
             )}
           </nav>
@@ -803,7 +803,7 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
             <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
               <div>
                 <p className="soft-title">Perfil docente</p>
-                <h2 id="teacher-profile-title" className="mt-1 text-2xl font-extrabold text-slate-950">Mi informacion</h2>
+                <h2 id="teacher-profile-title" className="mt-1 text-2xl font-extrabold text-slate-950">Mi información</h2>
                 <p className="mt-2 text-sm text-slate-600">Estos datos se guardan en tu registro institucional.</p>
               </div>
               <button className="btn-secondary h-10 w-10 p-0" type="button" aria-label="Cerrar" disabled={isSavingProfile} onClick={() => setIsProfileOpen(false)}><X className="h-4 w-4" /></button>
@@ -814,7 +814,7 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
                 <span className="mt-2 flex items-center gap-2"><Mail className="h-4 w-4 text-teal-700" /><input className="input-base" type="email" required value={profileForm.email} onChange={(event) => setProfileForm((current) => ({ ...current, email: event.target.value }))} /></span>
               </label>
               <label className="block text-sm font-bold text-slate-700">
-                Telefono
+                Teléfono
                 <span className="mt-2 flex items-center gap-2"><Phone className="h-4 w-4 text-teal-700" /><input className="input-base" type="tel" maxLength={40} value={profileForm.telefono} onChange={(event) => setProfileForm((current) => ({ ...current, telefono: event.target.value }))} /></span>
               </label>
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">Si cambias el email, el próximo inicio de sesión será con la nueva dirección.</p>

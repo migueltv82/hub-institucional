@@ -55,12 +55,12 @@ function AcademicCatalogPublishSection({ canPublish, inscripcionesAlumnos = [], 
         <div>
           <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-emerald-700">
             <BookOpenCheck className="h-4 w-4" />
-            Catalogo academico
+            Catalogo académico
           </p>
           <h3 className="mt-2 text-xl font-extrabold text-slate-950">Publicar carreras, planes y materias</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Usa la planilla academica (plantilla maestra). Publicar de nuevo actualiza sin duplicar. Si ya importaste
-            alumnos, cada uno queda en el plan de su planilla; si no, se asigna solo cuando la carrera tiene un unico plan activo.
+            Usa la planilla académica (plantilla maestra). Publicar de nuevo actualiza sin duplicar. Si ya importaste
+            alumnos, cada uno queda en el plan de su planilla; si no, se asigna solo cuando la carrera tiene un único plan activo.
           </p>
           <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
             <input
@@ -75,23 +75,23 @@ function AcademicCatalogPublishSection({ canPublish, inscripcionesAlumnos = [], 
         <div className="flex flex-wrap gap-2">
           <button className="btn-secondary min-w-48" disabled={!enabled} onClick={() => inputRef.current?.click()} type="button">
             <Upload className="h-4 w-4" />
-            {busy === 'reading' ? 'Leyendo planilla...' : 'Elegir planilla academica'}
+            {busy === 'reading' ? 'Leyendo planilla...' : 'Elegir planilla académica'}
           </button>
           <button className="btn-primary min-w-40" disabled={!enabled || !preview || errors.length > 0} onClick={publish} type="button">
             {busy === 'publishing' ? 'Publicando...' : 'Publicar catalogo'}
           </button>
-          <input accept=".xlsx" aria-label="Planilla academica" className="hidden" onChange={onFileSelected} ref={inputRef} type="file" />
+          <input accept=".xlsx" aria-label="Planilla académica" className="hidden" onChange={onFileSelected} ref={inputRef} type="file" />
         </div>
       </div>
 
       {!canPublish && (
         <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          Solo el owner o admin de la institucion publica el catalogo.
+          Solo el owner o admin de la institución publica el catalogo.
         </div>
       )}
       {canPublish && !useRemoteWorkspace && (
         <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Para publicar el catalogo necesitas iniciar sesion remota en Supabase y tener una institucion activa.
+          Para publicar el catalogo necesitas iniciar sesión remota en Supabase y tener una institución activa.
         </div>
       )}
 

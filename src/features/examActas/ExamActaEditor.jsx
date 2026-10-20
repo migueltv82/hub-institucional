@@ -50,7 +50,7 @@ function ExamActaEditor({ institutionId, workspaceKey = 'main', examKey, roster,
     }
   }
 
-  if (!alumnos.length) return <p className="mt-3 text-sm text-slate-500">Todavia no hay alumnos inscriptos.</p>
+  if (!alumnos.length) return <p className="mt-3 text-sm text-slate-500">Todavía no hay alumnos inscriptos.</p>
 
   return (
     <div className="mt-3 space-y-3">
@@ -61,7 +61,7 @@ function ExamActaEditor({ institutionId, workspaceKey = 'main', examKey, roster,
         </p>
       )}
       {!closed && !roster?.puedeCargarNotas && (
-        <p className="text-sm text-slate-600">Las notas se cargan desde el dia del examen.</p>
+        <p className="text-sm text-slate-600">Las notas se cargan desde el día del examen.</p>
       )}
       <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
         <table className="min-w-full text-left text-sm">
@@ -130,13 +130,13 @@ function ExamActaEditor({ institutionId, workspaceKey = 'main', examKey, roster,
         <div className="flex flex-wrap items-end gap-2">
           {closed && (
             <label className="min-w-72 flex-1 text-sm font-bold text-slate-700">
-              Motivo de la correccion
+              Motivo de la corrección
               <input className="input-base mt-1 w-full py-2" onChange={(event) => setReason(event.target.value)} value={reason} />
             </label>
           )}
           <button className="btn-secondary" disabled={Boolean(saving) || (closed && reason.trim().length < 5)} onClick={() => save()} type="button">
             <Save className="h-4 w-4" />
-            {saving === 'save' ? 'Guardando...' : closed ? 'Guardar correccion' : 'Guardar'}
+            {saving === 'save' ? 'Guardando...' : closed ? 'Guardar corrección' : 'Guardar'}
           </button>
           {!closed && (
             <button className="btn-primary" disabled={Boolean(saving) || summary.sinCargar > 0} onClick={() => save({ close: true })} title={summary.sinCargar ? 'Carga a todos los inscriptos para cerrar' : ''} type="button">

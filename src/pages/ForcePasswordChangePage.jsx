@@ -21,7 +21,7 @@ function ForcePasswordChangePage() {
     try {
       setIsSubmitting(true)
       await completeInitialPasswordChange(formData)
-      toast.success('Contrasena actualizada. Ya podes usar la plataforma.')
+      toast.success('Contraseña actualizada. Ya podés usar la plataforma.')
     } catch (error) {
       toast.error(error.message)
       setIsSubmitting(false)
@@ -41,28 +41,28 @@ function ForcePasswordChangePage() {
       <section className="panel w-full max-w-md rise-in">
         <h1 className="flex items-center gap-2 text-2xl font-extrabold text-slate-900">
           <KeyRound className="text-cyan-600" />
-          Cambia tu contrasena
+          Cambia tu contraseña
         </h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           {user?.email ? <>Ingresaste como <strong>{user.email}</strong>. </> : null}
-          Tu contrasena inicial es tu DNI. Antes de seguir, elegi una nueva de al menos 8 caracteres que no contenga tu DNI.
+          Tu contraseña inicial es tu DNI. Antes de seguir, elegi una nueva de al menos 8 caracteres que no contenga tu DNI.
         </p>
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <label className="block space-y-1">
-            <span className="text-sm font-bold text-slate-700">Contrasena actual (tu DNI)</span>
+            <span className="text-sm font-bold text-slate-700">Contraseña actual (tu DNI)</span>
             <input autoComplete="current-password" className="input-base" required type="password" {...field('currentPassword')} />
           </label>
           <label className="block space-y-1">
-            <span className="text-sm font-bold text-slate-700">Nueva contrasena</span>
+            <span className="text-sm font-bold text-slate-700">Nueva contraseña</span>
             <input autoComplete="new-password" className="input-base" minLength={8} required type="password" {...field('newPassword')} />
           </label>
           <label className="block space-y-1">
-            <span className="text-sm font-bold text-slate-700">Repeti la nueva contrasena</span>
+            <span className="text-sm font-bold text-slate-700">Repeti la nueva contraseña</span>
             <input autoComplete="new-password" className="input-base" minLength={8} required type="password" {...field('confirmPassword')} />
           </label>
           <button className="btn-primary w-full" disabled={isSubmitting} type="submit">
-            {isSubmitting ? 'Guardando...' : 'Cambiar contrasena'}
+            {isSubmitting ? 'Guardando...' : 'Cambiar contraseña'}
           </button>
         </form>
 

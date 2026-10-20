@@ -144,9 +144,9 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
   if (!institutionId) {
     return (
       <section className="soft-card">
-        <h2 className="text-2xl font-bold text-slate-950">Selecciona una institucion</h2>
+        <h2 className="text-2xl font-bold text-slate-950">Selecciona una institución</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Usa la barra lateral para abrir el padron de alumnos o docentes de una institucion.
+          Usa la barra lateral para abrir el padron de alumnos o docentes de una institución.
         </p>
       </section>
     )
@@ -157,7 +157,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
       <section className="soft-card">
         <h2 className="text-2xl font-bold text-slate-950">Acceso restringido</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Necesitas una sesion de administrador para consultar padrones institucionales.
+          Necesitas una sesión de administrador para consultar padrones institucionales.
         </p>
       </section>
     )
@@ -167,9 +167,9 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
     <div className="space-y-6">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <article className="soft-card workspace-gradient-panel">
-          <span className="soft-title">Institucion activa</span>
+          <span className="soft-title">Institución activa</span>
           <h2 className="mt-2 text-3xl font-bold text-slate-950">
-            {institution?.name ?? 'Institucion no encontrada'}
+            {institution?.name ?? 'Institución no encontrada'}
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {description}
@@ -220,7 +220,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
           <h3 className="mt-2 text-2xl font-bold text-slate-950">{title}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {isRelationalSource
-              ? 'Esta vista lee directo el schema relacional academico nuevo.'
+              ? 'Esta vista lee directo el schema relacional académico nuevo.'
               : 'Esta vista usa el snapshot institucional como respaldo para mantener el padron visible.'}
           </p>
 
@@ -230,7 +230,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
 
           {data?.updatedAt && (
             <p className="mt-4 rounded-lg border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-600">
-              Ultima actualizacion del workspace: {new Date(data.updatedAt).toLocaleString()}
+              Última actualización del workspace: {new Date(data.updatedAt).toLocaleString()}
             </p>
           )}
         </article>
@@ -259,7 +259,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
           tone="amber"
         />
         <StatTile
-          label={audience === 'teachers' ? 'Con telefono' : 'Anios'}
+          label={audience === 'teachers' ? 'Con teléfono' : 'Años'}
           value={tertiaryMetric}
           helper={audience === 'teachers' ? 'Docentes con contacto visible' : 'Anios academicos representados'}
           icon={Phone}
@@ -273,7 +273,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
             <span className="soft-title">Padron</span>
             <h3 className="mt-2 text-2xl font-bold text-slate-950">{title}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Usa la busqueda para filtrar nombres, carreras, contacto o identificadores.
+              Usa la búsqueda para filtrar nombres, carreras, contacto o identificadores.
             </p>
           </div>
 
@@ -314,7 +314,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
                   <th className="px-4 py-3">Alumno</th>
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Carrera</th>
-                  <th className="px-4 py-3">Anio</th>
+                  <th className="px-4 py-3">Año</th>
                   <th className="px-4 py-3">Estado</th>
                 </tr>
               )}

@@ -71,9 +71,9 @@ describe('ExamActasPage', () => {
     expect(screen.getByText('SEMINARIO DE MAÑANA')).toBeInTheDocument()
     expect(screen.queryByText('MATERIA DE PRUEBA UAT')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dia anterior' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Día anterior' }))
     expect(screen.getByText('MATERIA DE PRUEBA UAT')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Dia siguiente' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Día siguiente' }))
     fireEvent.click(screen.getByRole('button', { name: 'Hoy' }))
     expect(screen.getByText('MATERIA DE PRUEBA UAT')).toBeInTheDocument()
   })
@@ -143,7 +143,7 @@ describe('ExamActasPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /ver inscriptos/i }))
     expect(await screen.findByText('Aprobado (8)')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Corregir acta (cerrada)' }))
-    expect(screen.getByLabelText('Motivo de la correccion')).toBeInTheDocument()
+    expect(screen.getByLabelText('Motivo de la corrección')).toBeInTheDocument()
     expect(screen.getByLabelText('Nota final de Ana Regular')).not.toBeDisabled()
   })
 
@@ -152,7 +152,7 @@ describe('ExamActasPage', () => {
     render(<ExamActasPage institutionId="inst-1" />)
 
     expect(await screen.findByText('MATERIA DE PRUEBA UAT')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /inscripcion especial/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /inscripción especial/i })).not.toBeInTheDocument()
   })
 
   it('inscripcion especial: elige un alumno de la carrera, pide motivo y recarga', async () => {
@@ -164,7 +164,7 @@ describe('ExamActasPage', () => {
     ]
     render(<ExamActasPage canManage institutionId="inst-1" students={students} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /inscripcion especial/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /inscripción especial/i }))
     const select = screen.getByLabelText('Alumno')
     expect([...select.options].map((option) => option.value)).toEqual(['', 's1'])
     fireEvent.change(select, { target: { value: 's1' } })

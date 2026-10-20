@@ -244,7 +244,7 @@ function InstitutionAdminOverview({
     }
 
     if (filteredScheduleRows.length === 0) {
-      toast.error('No hay horarios para descargar con esa seleccion.')
+      toast.error('No hay horarios para descargar con esa selección.')
       return
     }
 
@@ -287,7 +287,7 @@ function InstitutionAdminOverview({
       <article className="soft-card workspace-gradient-panel">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <p className="soft-title">Datos de la institucion</p>
+            <p className="soft-title">Datos de la institución</p>
             <h4 className="mt-2 text-2xl font-extrabold text-slate-950">{institutionName}</h4>
             <p className="mt-2 text-sm font-semibold text-slate-600">{institutionMeta || 'Workspace principal'}</p>
           </div>
@@ -298,7 +298,7 @@ function InstitutionAdminOverview({
           <div>
             <dt className="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-500">Modo</dt>
             <dd className="mt-1 text-sm font-bold text-slate-900">
-              {useRemoteWorkspace ? 'Remoto por institucion' : 'Local por institucion'}
+              {useRemoteWorkspace ? 'Remoto por institución' : 'Local por institución'}
             </dd>
           </div>
           <div>
@@ -356,7 +356,7 @@ function InstitutionAdminOverview({
               <p className="soft-title">Horarios</p>
               <div className="mt-2 flex items-center gap-2">
                 <CalendarDays className="h-5 w-5 shrink-0 text-teal-700" />
-                <h4 className="text-2xl font-extrabold text-slate-950">Horarios por carrera y anio</h4>
+                <h4 className="text-2xl font-extrabold text-slate-950">Horarios por carrera y año</h4>
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[560px]">
@@ -377,14 +377,14 @@ function InstitutionAdminOverview({
                 </select>
               </label>
               <label className="block">
-                <span className="text-sm font-bold text-slate-700">Anio</span>
+                <span className="text-sm font-bold text-slate-700">Año</span>
                 <select
                   className="input-base mt-2"
                   value={effectiveScheduleYearFilter}
                   onChange={(event) => setScheduleYearFilter(event.target.value)}
                   disabled={!hasScheduleCareerSelection}
                 >
-                  <option value="">Todos los anios</option>
+                  <option value="">Todos los años</option>
                   {scheduleYearOptions.map((year) => (
                     <option key={year} value={year}>{formatYearLabel(year)}</option>
                   ))}
@@ -429,7 +429,7 @@ function InstitutionAdminOverview({
 
             {hasScheduleCareerSelection && scheduleGroups.length === 0 && (
               <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm font-semibold text-slate-500">
-                No hay horarios cargados para esa seleccion.
+                No hay horarios cargados para esa selección.
               </div>
             )}
           </div>
@@ -438,7 +438,7 @@ function InstitutionAdminOverview({
         <article className="soft-card">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="soft-title">Distribucion por carrera</p>
+              <p className="soft-title">Distribución por carrera</p>
               <h4 className="mt-2 text-2xl font-extrabold text-slate-950">Alumnos y docentes</h4>
             </div>
             <span className="status-chip border-sky-200 bg-sky-50 text-sky-900">
@@ -472,7 +472,7 @@ function InstitutionAdminOverview({
           {overview.careerRows.length === 0 && (
             <div className="mt-5 rounded-lg border border-dashed border-slate-300 p-5 text-sm font-semibold text-slate-600">
               <Database className="mb-3 h-5 w-5 text-slate-400" />
-              Todavia no hay carreras cargadas en el workspace.
+              Todavía no hay carreras cargadas en el workspace.
             </div>
           )}
         </article>

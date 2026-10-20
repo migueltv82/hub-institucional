@@ -24,8 +24,8 @@ function StudentAccessSection({
             Crear usuarios desde el padron cargado
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Se creara una cuenta por alumno usando el email como usuario y el DNI como contrasena inicial.
-            Los alumnos quedan con rol de portal y acceso lector a esta institucion.
+            Se creara una cuenta por alumno usando el email como usuario y el DNI como contraseña inicial.
+            Los alumnos quedan con rol de portal y acceso lector a esta institución.
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-600">
             <span className="status-chip border-lime-200 bg-lime-50 text-lime-800">
@@ -33,7 +33,7 @@ function StudentAccessSection({
             </span>
             <span className="status-chip border-slate-200 bg-white text-slate-700">
               <KeyRound className="h-4 w-4" />
-              Contrasena inicial: DNI
+              Contraseña inicial: DNI
             </span>
           </div>
         </div>
@@ -54,7 +54,7 @@ function StudentAccessSection({
 
       {!useRemoteWorkspace && (
         <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Para crear usuarios reales necesitas iniciar sesion remota en Supabase y tener una institucion activa.
+          Para crear usuarios reales necesitas iniciar sesión remota en Supabase y tener una institución activa.
         </div>
       )}
 

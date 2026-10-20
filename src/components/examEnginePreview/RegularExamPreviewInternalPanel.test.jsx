@@ -377,7 +377,7 @@ describe('RegularExamPreviewInternalPanel', () => {
 
     render(<RegularExamPreviewInternalPanel {...props()} />)
 
-    const interpretation = screen.getByRole('region', { name: 'Interpretacion institucional del preview' })
+    const interpretation = screen.getByRole('region', { name: 'Interpretación institucional del preview' })
     expect(within(interpretation).getByText('No se recomienda usar como cronograma oficial.')).toBeInTheDocument()
     expect(within(interpretation).getByText('La regla mitad mas uno se respeta, pero limita la asignacion de vocales.')).toBeInTheDocument()
     expect(within(interpretation).getByText('Las mesas con un vocal requieren revision manual.')).toBeInTheDocument()
@@ -477,7 +477,7 @@ describe('RegularExamPreviewInternalPanel', () => {
       planesEstudio: [],
     })} />)
 
-    const diagnostics = screen.getByRole('region', { name: 'Diagnostico de habilitacion del preview' })
+    const diagnostics = screen.getByRole('region', { name: 'Diagnóstico de habilitación del preview' })
 
     expect(screen.getByRole('button', { name: 'Ejecutar preview interno del nuevo motor' })).toBeDisabled()
     expect(within(diagnostics).getByText('reasonDisabled')).toBeInTheDocument()
@@ -489,7 +489,7 @@ describe('RegularExamPreviewInternalPanel', () => {
   it('deshabilita si horariosDocentes esta vacio y explica el motivo', () => {
     render(<RegularExamPreviewInternalPanel {...props({ horariosDocentes: [] })} />)
 
-    const diagnostics = screen.getByRole('region', { name: 'Diagnostico de habilitacion del preview' })
+    const diagnostics = screen.getByRole('region', { name: 'Diagnóstico de habilitación del preview' })
 
     expect(screen.getByRole('button', { name: 'Ejecutar preview interno del nuevo motor' })).toBeDisabled()
     expect(within(diagnostics).getAllByText(/HORARIOS_DOCENTES_VACIO/).length).toBeGreaterThan(0)

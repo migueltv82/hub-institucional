@@ -1095,7 +1095,7 @@ function TeacherSectionFilterBar({
             className="input-base mt-2"
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Nombre, apellido, DNI, telefono o materia"
+            placeholder="Nombre, apellido, DNI, teléfono o materia"
           />
         </label>
         <label className="block">
@@ -1153,7 +1153,7 @@ function TeacherBaseDataDiagnosticPanel({
       : 'Carga horarios docentes o completa carga horaria y disponibilidad.'
 
   return (
-    <section className="space-y-4" aria-label="Diagnostico de datos base docentes">
+    <section className="space-y-4" aria-label="Diagnóstico de datos base docentes">
       <div className={`rounded-md border p-4 ${
         hasUsableTeacherSource
           ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
@@ -1205,7 +1205,7 @@ function TeacherBaseDataDiagnosticPanel({
 
       {manualExamSubjects.length > 0 && (
         <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          <p className="font-extrabold text-slate-950">Fuera del analisis automatico: Geografia 1, 2 y 3</p>
+          <p className="font-extrabold text-slate-950">Fuera del análisis automático: Geografia 1, 2 y 3</p>
           <p className="mt-1">
             Esas materias pertenecen a una carrera cerrada y quedan para mesas manuales. No se cuentan en el alcance ni en el cruce de titularidades.
           </p>
@@ -1218,7 +1218,7 @@ function TeacherBaseDataDiagnosticPanel({
         </h4>
         {missingEffective.length > 0 && (
           <p className="mt-2 text-sm text-slate-600">
-            Son materias del plan que no encontraron una coincidencia por codigo o nombre en docentes_materias ni en horarios docentes. No significa que no tengan titular: puede faltar el codigo, estar escrito distinto o venir con otra carrera.
+            Son materias del plan que no encontraron una coincidencia por código o nombre en docentes_materias ni en horarios docentes. No significa que no tengan titular: puede faltar el código, estar escrito distinto o venir con otra carrera.
           </p>
         )}
         {missingEffective.length ? (
@@ -1324,14 +1324,14 @@ function AvailabilityAdminPanel({
             </div>
           </div>
           <label className="block">
-            <span className="text-sm font-semibold text-slate-700">Dia</span>
+            <span className="text-sm font-semibold text-slate-700">Día</span>
             <select
               className="input-base mt-2"
               value={summaryDay}
               onChange={(event) => setSummaryDay(event.target.value)}
               disabled={summaryDayOptions.length === 0}
             >
-              <option value="">Todos los dias</option>
+              <option value="">Todos los días</option>
               {summaryDayOptions.map((day) => <option key={day} value={day}>{day}</option>)}
             </select>
           </label>
@@ -1346,7 +1346,7 @@ function AvailabilityAdminPanel({
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.16em] text-slate-500">
               <tr>
                 <th className="px-4 py-3">Docente</th>
-                <th className="px-4 py-3">Dias en instituto</th>
+                <th className="px-4 py-3">Días en instituto</th>
                 <th className="px-4 py-3">Horarios por materia</th>
                 <th className="px-4 py-3">Horas catedra</th>
               </tr>
@@ -1411,7 +1411,7 @@ function AvailabilityAdminPanel({
             <input className="input-base mt-2" list="teacher-options" value={draft.docente} onChange={updateDraft('docente')} disabled={!canEditWorkspace} />
           </label>
           <label className="block">
-            <span className="text-sm font-semibold text-slate-700">Dia</span>
+            <span className="text-sm font-semibold text-slate-700">Día</span>
             <select className="input-base mt-2" value={draft.dia} onChange={updateDraft('dia')} disabled={!canEditWorkspace}>
               <option value="">Seleccionar</option>
               {DAY_OPTIONS.map((day) => <option key={day} value={day}>{day}</option>)}
@@ -1474,7 +1474,7 @@ function AvailabilityAdminPanel({
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.16em] text-slate-500">
             <tr>
               <th className="px-4 py-3">Docente</th>
-              <th className="px-4 py-3">Dia</th>
+              <th className="px-4 py-3">Día</th>
               <th className="px-4 py-3">Turno</th>
               <th className="px-4 py-3">Franja</th>
               <th className="px-4 py-3">Disponible</th>
@@ -1580,7 +1580,7 @@ function TeacherBlockedDatesAdminPanel({
           <label className="block">
             <span className="text-sm font-semibold text-slate-700">Alcance</span>
             <select className="input-base mt-2" value={draft.scope} onChange={updateDraft('scope')} disabled={!canEditWorkspace}>
-              <option value="FULL_DAY">Dia completo</option>
+              <option value="FULL_DAY">Día completo</option>
               <option value="TIME_RANGE">Franja horaria</option>
             </select>
           </label>
@@ -1639,7 +1639,7 @@ function TeacherBlockedDatesAdminPanel({
                 <td className="break-words px-4 py-3 font-semibold text-slate-950">{row.docenteNombre || row.docente || '-'}</td>
                 <td className="px-4 py-3 text-slate-700">{row.date || row.fecha || '-'}</td>
                 <td className="px-4 py-3 text-slate-700">
-                  {row.scope === 'TIME_RANGE' ? `${row.startTime || '-'} - ${row.endTime || '-'}` : 'Dia completo'}
+                  {row.scope === 'TIME_RANGE' ? `${row.startTime || '-'} - ${row.endTime || '-'}` : 'Día completo'}
                 </td>
                 <td className="break-words px-4 py-3 text-slate-700">{row.reason || '-'}</td>
                 <td className="px-4 py-3 text-slate-700">{row.status || 'ACTIVE'}</td>
@@ -1762,7 +1762,7 @@ function LoadAdminPanel({
             <input className="input-base mt-2" value={draft.anio} onChange={updateDraft('anio')} disabled={!canEditWorkspace} />
           </label>
           <label className="block">
-            <span className="text-sm font-semibold text-slate-700">Codigo materia</span>
+            <span className="text-sm font-semibold text-slate-700">Código materia</span>
             <input className="input-base mt-2" value={draft.materia_codigo} onChange={updateDraft('materia_codigo')} disabled={!canEditWorkspace} />
           </label>
           <label className="block">
@@ -1814,7 +1814,7 @@ function LoadAdminPanel({
               <th className="px-4 py-3">Docente</th>
               <th className="px-4 py-3">Carrera</th>
               <th className="px-4 py-3">Materia</th>
-              <th className="px-4 py-3">Anio</th>
+              <th className="px-4 py-3">Año</th>
               <th className="px-4 py-3">Horas catedra</th>
               <th className="px-4 py-3">Rol</th>
               <th className="px-4 py-3">Estado</th>
@@ -1904,7 +1904,7 @@ function TeacherEditModal({
             <input className="input-base mt-2" value={form.dni} onChange={onChange('dni')} />
           </label>
           <label className="block">
-            <span className="text-sm font-semibold text-slate-700">Telefono</span>
+            <span className="text-sm font-semibold text-slate-700">Teléfono</span>
             <input className="input-base mt-2" value={form.telefono} onChange={onChange('telefono')} />
           </label>
           <label className="block md:col-span-2">
@@ -2185,7 +2185,7 @@ function TeacherSubjectAssignmentsPanel({
         <h4 className="font-extrabold text-slate-950">Materias asignadas</h4>
       </div>
       <p className="mt-1 text-sm text-slate-600">
-        Elegi las materias del docente y su condicion. Habilita al docente a cargar asistencia y notas desde su portal.
+        Elegi las materias del docente y su condición. Habilita al docente a cargar asistencia y notas desde su portal.
       </p>
 
       {!teacherEmail && (
@@ -2218,7 +2218,7 @@ function TeacherSubjectAssignmentsPanel({
             <tr>
               <th className="px-4 py-3">Materia</th>
               <th className="px-4 py-3">Carrera</th>
-              <th className="px-4 py-3">Condicion</th>
+              <th className="px-4 py-3">Condición</th>
               <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
@@ -2230,7 +2230,7 @@ function TeacherSubjectAssignmentsPanel({
                       <td className="px-4 py-3">
                         <select
                           className="input-base"
-                          aria-label={`Condicion de ${row.materia}`}
+                          aria-label={`Condición de ${row.materia}`}
                           value={row.source === 'assignment' ? row.role : ''}
                           onChange={(event) => (
                             row.source === 'assignment'
@@ -2239,7 +2239,7 @@ function TeacherSubjectAssignmentsPanel({
                           )}
                           disabled={!canEditWorkspace || isSaving || !teacherId}
                         >
-                          {row.source !== 'assignment' && <option value="">Definir condicion</option>}
+                          {row.source !== 'assignment' && <option value="">Definir condición</option>}
                           {SUBJECT_TEACHER_ROLES.map((role) => <option key={role} value={role}>{SUBJECT_ROLE_LABELS[role]}</option>)}
                         </select>
                         {row.source === 'assignment' && row.role === 'licencia' && (
@@ -2271,7 +2271,7 @@ function TeacherSubjectAssignmentsPanel({
           </tbody>
         </table>
         {!isLoading && displayRows.length === 0 && (
-          <div className="p-6 text-sm text-slate-500">Todavia no tiene materias asignadas.</div>
+          <div className="p-6 text-sm text-slate-500">Todavía no tiene materias asignadas.</div>
         )}
         {isLoading && displayRows.length === 0 && (
           <div className="p-6 text-sm text-slate-500">Cargando materias...</div>
@@ -2366,7 +2366,7 @@ function TeacherScheduleDetailModal({
           <div>
             <p className="text-xs font-extrabold uppercase text-teal-700">Detalle docente</p>
             <h3 className="mt-2 text-2xl font-extrabold text-slate-950">{getTeacherFullName(teacher) || teacher.nombre}</h3>
-            <p className="mt-2 text-sm text-slate-600">DNI {teacher.dni || 'sin DNI'} - {teacher.telefono || 'sin telefono'}</p>
+            <p className="mt-2 text-sm text-slate-600">DNI {teacher.dni || 'sin DNI'} - {teacher.telefono || 'sin teléfono'}</p>
           </div>
           <button type="button" className="btn-secondary px-3 py-2" onClick={onClose} title="Cerrar">
             <X className="h-4 w-4" />
@@ -2404,7 +2404,7 @@ function TeacherScheduleDetailModal({
               <tr>
                 <th className="px-4 py-3">Materia</th>
                 <th className="px-4 py-3">Carrera</th>
-                <th className="px-4 py-3">Dia</th>
+                <th className="px-4 py-3">Día</th>
                 <th className="px-4 py-3">Horario</th>
                 <th className="px-4 py-3">Aula</th>
               </tr>
@@ -2763,7 +2763,7 @@ function TeacherRosterSection({
           <div>
             <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-teal-700">
               <UsersRound className="h-4 w-4" />
-              Gestion de docentes
+              Gestión de docentes
             </p>
             <h3 className="mt-2 text-xl font-extrabold text-slate-950">{activeTabHeader.title}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -2776,7 +2776,7 @@ function TeacherRosterSection({
               className="btn-secondary"
               onClick={onProvisionTeachers}
               disabled={!canProvisionTeacherAccess}
-              title={!useRemoteWorkspace ? 'Requiere sesion remota con Supabase' : 'Crear accesos docentes'}
+              title={!useRemoteWorkspace ? 'Requiere sesión remota con Supabase' : 'Crear accesos docentes'}
             >
               <KeyRound className="h-4 w-4" />
               {isProvisioningTeachers ? 'Creando...' : 'Crear accesos'}
@@ -2817,7 +2817,7 @@ function TeacherRosterSection({
 
         {!useRemoteWorkspace && (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            La creacion de accesos docentes requiere una sesion remota con Supabase.
+            La creación de accesos docentes requiere una sesión remota con Supabase.
           </div>
         )}
 
@@ -2845,7 +2845,7 @@ function TeacherRosterSection({
                     <tr>
                       <th className="px-4 py-3">Docente</th>
                       <th className="px-4 py-3">DNI</th>
-                      <th className="px-4 py-3">Telefono</th>
+                      <th className="px-4 py-3">Teléfono</th>
                       <th className="px-4 py-3">Email</th>
                       <th className="px-4 py-3">Carreras</th>
                       <th className="px-4 py-3">Materias</th>

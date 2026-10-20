@@ -67,7 +67,7 @@ function AccessCard({ to, title, description, icon: Icon }) {
     <NavLink className="soft-card flex h-full flex-col bg-white transition hover:-translate-y-0.5" to={to}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <span className="soft-title">Modulo</span>
+          <span className="soft-title">Módulo</span>
           <h4 className="mt-2 text-xl font-bold text-slate-950">{title}</h4>
         </div>
         <span className="rounded-full border border-slate-200 bg-slate-50 p-2 text-slate-700">
@@ -76,7 +76,7 @@ function AccessCard({ to, title, description, icon: Icon }) {
       </div>
       <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
       <span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-teal-700">
-        Abrir modulo
+        Abrir módulo
         <ArrowRight className="h-4 w-4" />
       </span>
     </NavLink>
@@ -171,7 +171,7 @@ function SuperAdminOverviewPage() {
               Salud operativa del ecosistema
             </h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Usa esta pantalla solo para entender el panorama general y entrar rapido al modulo correcto.
+              Usa esta pantalla solo para entender el panorama general y entrar rápido al módulo correcto.
             </p>
           </div>
 
@@ -210,7 +210,7 @@ function SuperAdminOverviewPage() {
               Cada dato en su lugar
             </h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Dashboard para resumen, instituciones para operacion institucional, usuarios para roles y auditoria para control tecnico.
+              Dashboard para resumen, instituciones para operación institucional, usuarios para roles y auditoría para control técnico.
             </p>
           </div>
 
@@ -228,7 +228,7 @@ function SuperAdminOverviewPage() {
               tone="blue"
             />
             <SummaryTile
-              label="Auditoria"
+              label="Auditoría"
               value="Por institucion"
               helper="Metricas, drift y sincronizacion"
               tone="amber"
@@ -240,7 +240,7 @@ function SuperAdminOverviewPage() {
       <section className="space-y-4">
         <SectionHeader
           eyebrow="Accesos"
-          title="Entrar al modulo correcto"
+          title="Entrar al módulo correcto"
           description="Cada boton abre una vista enfocada. Asi evitamos repetir bloques y mantener todo amontonado en una sola pantalla."
         />
 
@@ -259,7 +259,7 @@ function SuperAdminOverviewPage() {
           />
           <AccessCard
             to="/super-admin/auditoria"
-            title="Auditoria"
+            title="Auditoría"
             description="Selector institucional, estado de padrones, drift y acciones de control."
             icon={Database}
           />

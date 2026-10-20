@@ -134,7 +134,7 @@ function MesaRoster({ institutionId, workspaceKey, examKey }) {
               <th className="px-3 py-2">DNI</th>
               <th className="px-3 py-2">Apellido</th>
               <th className="px-3 py-2">Nombre</th>
-              <th className="px-3 py-2">Inscripcion</th>
+              <th className="px-3 py-2">Inscripción</th>
               <th className="px-3 py-2">Resultado</th>
             </tr>
           </thead>
@@ -186,14 +186,14 @@ function SpecialEnrollmentDialog({ mesa, students, onClose, onConfirm, busy }) {
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="soft-title">Inscripcion especial</p>
+            <p className="soft-title">Inscripción especial</p>
             <h3 className="mt-1 text-lg font-bold text-slate-950">{mesa.materia}</h3>
             <p className="text-sm text-slate-600">{mesa.carrera} · {formatActaDate(mesa.inicio)} {formatArgentinaTime(mesa.inicio)}</p>
           </div>
           <button aria-label="Cerrar" className="btn-secondary" onClick={onClose} type="button"><X className="h-4 w-4" /></button>
         </div>
         <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">
-          Inscribe fuera del plazo del portal (hasta el dia de la mesa). El alumno tiene que ser regular y cumplir las demas reglas; queda registrado quien lo inscribio y el motivo.
+          Inscribe fuera del plazo del portal (hasta el día de la mesa). El alumno tiene que ser regular y cumplir las demas reglas; queda registrado quien lo inscribio y el motivo.
         </p>
         <label className="mt-4 block text-sm font-semibold text-slate-800" htmlFor="special-enrollment-search">Buscar alumno</label>
         <input
@@ -381,14 +381,14 @@ function ExamActasPage({
 
   async function outputActas(targetMesas, label, mode) {
     if (!targetMesas.some(canPrintActa)) {
-      toast.error('No hay mesas con alumnos inscriptos: no se genera ningun acta.')
+      toast.error('No hay mesas con alumnos inscriptos: no se genera ningún acta.')
       return
     }
     setPrinting(label)
     try {
       const actas = await buildActas(targetMesas)
       if (!actas.length) {
-        toast.error('Las mesas ya no tienen alumnos inscriptos: no se genera ningun acta.')
+        toast.error('Las mesas ya no tienen alumnos inscriptos: no se genera ningún acta.')
         return
       }
       const doc = await buildExamActasPdf({ institutionName, institutionLogo: logo, actas })
@@ -427,7 +427,7 @@ function ExamActasPage({
   return (
     <div className="min-w-0 space-y-6">
       <section className="rise-in admin-module-heading">
-        <span className="soft-title">Modulo</span>
+        <span className="soft-title">Módulo</span>
         <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h3 className="flex items-center gap-2 text-3xl font-bold text-slate-950">
@@ -435,7 +435,7 @@ function ExamActasPage({
               Mesas y actas
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Elegi el dia, revisa las mesas por carrera y año, e imprimi las actas volantes. Las mesas sin alumnos inscriptos no generan acta.
+              Elegi el día, revisa las mesas por carrera y año, e imprimi las actas volantes. Las mesas sin alumnos inscriptos no generan acta.
             </p>
           </div>
           <button className="btn-secondary" disabled={loading} onClick={reload} type="button">
@@ -450,7 +450,7 @@ function ExamActasPage({
       <section className="soft-card space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex flex-wrap items-end gap-2">
-            <button aria-label="Dia anterior" className="btn-secondary" disabled={showAllDates} onClick={() => selectDay(shiftDateKey(dateKey, -1))} type="button">
+            <button aria-label="Día anterior" className="btn-secondary" disabled={showAllDates} onClick={() => selectDay(shiftDateKey(dateKey, -1))} type="button">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <label className="text-sm font-semibold text-slate-800">
@@ -463,7 +463,7 @@ function ExamActasPage({
                 value={dateKey}
               />
             </label>
-            <button aria-label="Dia siguiente" className="btn-secondary" disabled={showAllDates} onClick={() => selectDay(shiftDateKey(dateKey, 1))} type="button">
+            <button aria-label="Día siguiente" className="btn-secondary" disabled={showAllDates} onClick={() => selectDay(shiftDateKey(dateKey, 1))} type="button">
               <ChevronRight className="h-4 w-4" />
             </button>
             <button className="btn-secondary" onClick={() => selectDay(todayKey())} type="button">Hoy</button>
@@ -477,7 +477,7 @@ function ExamActasPage({
               className="btn-primary"
               disabled={!summary.actas || Boolean(printing)}
               onClick={() => void outputActas(visibleMesas, selectionLabel, 'print')}
-              title={summary.actas ? '' : 'Ninguna mesa de esta seleccion tiene inscriptos'}
+              title={summary.actas ? '' : 'Ninguna mesa de esta selección tiene inscriptos'}
               type="button"
             >
               <Printer className="h-4 w-4" />
@@ -531,7 +531,7 @@ function ExamActasPage({
             <input
               className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Materia, codigo, docente o aula"
+              placeholder="Materia, código, docente o aula"
               value={search}
             />
           </label>
@@ -554,7 +554,7 @@ function ExamActasPage({
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-800">{error}</p>
       ) : groups.length === 0 ? (
         <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">
-          {mesas.length === 0 ? 'Todavia no hay mesas publicadas.' : 'No hay mesas para esta seleccion.'}
+          {mesas.length === 0 ? 'Todavía no hay mesas publicadas.' : 'No hay mesas para esta selección.'}
         </p>
       ) : (
         groups.map((group) => (
@@ -602,7 +602,7 @@ function ExamActasPage({
                           {canManage && (
                             <button className="btn-secondary" onClick={() => setEnrollMesa(mesa)} type="button">
                               <UserPlus className="h-4 w-4" />
-                              Inscripcion especial
+                              Inscripción especial
                             </button>
                           )}
                         </div>

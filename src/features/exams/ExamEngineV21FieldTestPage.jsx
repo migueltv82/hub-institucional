@@ -344,12 +344,12 @@ function ExamEngineV21FieldTestPage({
   async function refreshTeacherReviewStatus({ silent = false } = {}) {
     if (isPreview) return null
     if (!institutionId) {
-      if (!silent) toast.error('Falta la institucion activa.')
+      if (!silent) toast.error('Falta la institución activa.')
       return null
     }
 
     if (!tribunalReviewExport?.rows?.length) {
-      if (!silent) toast.error('Primero publica el precronograma para revision docente.')
+      if (!silent) toast.error('Primero publica el precronograma para revisión docente.')
       return null
     }
 
@@ -437,7 +437,7 @@ function ExamEngineV21FieldTestPage({
   async function publishForTeacherReview() {
     if (isPreview) return
     if (!institutionId) {
-      toast.error('Falta la institucion activa.')
+      toast.error('Falta la institución activa.')
       return
     }
 
@@ -463,7 +463,7 @@ function ExamEngineV21FieldTestPage({
       const skipped = (result.skippedNoEmail?.length ?? 0) + (result.skippedNoAccount?.length ?? 0)
       toast.success(
         skipped
-          ? `Publicado para ${result.published} docentes. ${skipped} sin cuenta de portal todavia.`
+          ? `Publicado para ${result.published} docentes. ${skipped} sin cuenta de portal todavía.`
           : `Precronograma publicado para ${result.published} docentes.`,
       )
       await refreshTeacherReviewStatus()
@@ -621,7 +621,7 @@ function ExamEngineV21FieldTestPage({
     toast.success(
       combinedCount > 0
         ? `Se combinaron ${combinedCount} ${combinedCount === 1 ? 'par' : 'pares'} de mesas.`
-        : 'No habia combinaciones para aplicar.',
+        : 'No había combinaciones para aplicar.',
     )
   }
 
@@ -722,7 +722,7 @@ function ExamEngineV21FieldTestPage({
       finalAlertsExport: result.finalAlertsExport,
       dataWarnings: nextWarnings,
     })
-    toast.success('Revision final importada y revalidada.')
+    toast.success('Revisión final importada y revalidada.')
   }
 
   async function importFinalReviewFile(file) {
@@ -745,7 +745,7 @@ function ExamEngineV21FieldTestPage({
 
   async function confirmReadyMesasFromTeacherReview() {
     if (!tribunalReviewExport?.rows?.length) {
-      toast.error('Primero publica el precronograma para revision docente.')
+      toast.error('Primero publica el precronograma para revisión docente.')
       return
     }
 
@@ -804,7 +804,7 @@ function ExamEngineV21FieldTestPage({
         return
       }
 
-      toast.success(targets.length === 1 ? 'Confirmacion admin registrada.' : 'Mesa confirmada por admin.')
+      toast.success(targets.length === 1 ? 'Confirmación admin registrada.' : 'Mesa confirmada por admin.')
       await refreshTeacherReviewStatus({ silent: true })
     } finally {
       setIsBusy(false)
@@ -822,7 +822,7 @@ function ExamEngineV21FieldTestPage({
   async function publishOfficialSchedule() {
     if (isPreview) return
     if (!finalResult?.finalTribunals?.length) {
-      toast.error('Primero confirma la revision final.')
+      toast.error('Primero confirma la revisión final.')
       return
     }
 
@@ -903,8 +903,8 @@ function ExamEngineV21FieldTestPage({
         resetResult.warning === EXAM_PROCESS_RESET_LOCAL_ONLY_MESSAGE
           ? EXAM_PROCESS_RESET_LOCAL_ONLY_MESSAGE
           : resetResult.skippedRemote
-            ? 'Proceso reiniciado en esta sesion.'
-            : 'Proceso de mesas reiniciado. Ya podes probar desde cero.',
+            ? 'Proceso reiniciado en esta sesión.'
+            : 'Proceso de mesas reiniciado. Ya podés probar desde cero.',
       )
     } catch (error) {
       toast.error(error.message)
@@ -931,7 +931,7 @@ function ExamEngineV21FieldTestPage({
               Cronograma de mesas de examen
             </h3>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-              {isPreview ? 'Elegi las fechas y el alcance para probar el armado de mesas con los datos de tu institucion.' : 'Configura el llamado, arma el precronograma con sus agrupaciones y vocales, envialo a los docentes y aplica solamente los cambios solicitados antes de publicar.'}
+              {isPreview ? 'Elegi las fechas y el alcance para probar el armado de mesas con los datos de tu institución.' : 'Configura el llamado, arma el precronograma con sus agrupaciones y vocales, envialo a los docentes y aplica solamente los cambios solicitados antes de publicar.'}
             </p>
           </div>
           <button
@@ -1148,7 +1148,7 @@ function ExamEngineV21FieldTestPage({
             </summary>
             <p className="mt-2 text-sm text-slate-600">
               {TEACHER_PORTAL_REVIEW_ENABLED
-                ? 'Solo hace falta para docentes que todavia no tienen cuenta en el portal y no pueden confirmar desde ahi.'
+                ? 'Solo hace falta para docentes que todavía no tienen cuenta en el portal y no pueden confirmar desde ahi.'
                 : 'Si los docentes no pidieron cambios, confirma sin cambios. Si pidieron cambios, importa la planilla editada.'}
             </p>
             <div className="mt-3">

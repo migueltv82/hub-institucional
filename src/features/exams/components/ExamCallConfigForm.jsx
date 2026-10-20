@@ -39,10 +39,10 @@ function ExamCallConfigForm({
     <section className="soft-card soft-card--tint-sky">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="soft-title">{previewOnly ? 'Periodo de examen' : 'examEngine v2.1'}</p>
+          <p className="soft-title">{previewOnly ? 'Período de examen' : 'examEngine v2.1'}</p>
           <h3 className="mt-2 text-2xl font-extrabold text-slate-950">Configurar llamado</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            {previewOnly ? 'Selecciona el periodo y las carreras que queres incluir en la previsualizacion.' : 'Las fechas y el alcance se envian al motor como `examCallConfig` dinamico.'}
+            {previewOnly ? 'Selecciona el período y las carreras que querés incluir en la previsualizacion.' : 'Las fechas y el alcance se envian al motor como `examCallConfig` dinamico.'}
           </p>
         </div>
         <button
@@ -113,7 +113,7 @@ function ExamCallConfigForm({
             type="checkbox"
             onChange={(event) => onChange('usarDiasHabiles', event.target.checked)}
           />
-          Usar dias habiles
+          Usar días habiles
         </label>
       </div>
 

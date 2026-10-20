@@ -106,7 +106,7 @@ function StudentCareerDashboard({
       <div className="mt-5 space-y-4">
         {careerRows.length === 0 && (
           <p className="text-sm text-slate-600">
-            Carga el padron de alumnos para ver la distribucion por carrera.
+            Carga el padron de alumnos para ver la distribución por carrera.
           </p>
         )}
 

@@ -35,7 +35,7 @@ function AssetsSection({
         <DownloadCard
           accentClass="upload-card upload-card--violet hover:border-violet-300"
           eyebrow="Workbook Excel"
-          title="Plantilla academica"
+          title="Plantilla académica"
           description="Carreras, planes, materias, afinidades, correlatividades y calendario."
           iconClass="text-violet-700"
           onClick={onDownloadKitExamEngineV2}

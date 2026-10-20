@@ -32,12 +32,12 @@ function OperationResult({ operation }) {
         <strong>{data?.status ?? (operation.result?.ok ? 'COMPLETED' : 'ERROR')}</strong>
         <code className="text-xs">{operation.requestId}</code>
       </div>
-      {detail && <><p className="mt-2 font-bold">{detail.message}</p><p className="mt-1">Codigo: <code>{detail.code}</code></p><p className="mt-1">Accion: {detail.action}</p></>}
+      {detail && <><p className="mt-2 font-bold">{detail.message}</p><p className="mt-1">Código: <code>{detail.code}</code></p><p className="mt-1">Acción: {detail.action}</p></>}
       {(data?.warnings ?? []).map((warning) => {
         const warningDetail = getStudentCareerAdminMessage(warning)
         return <p className="mt-2" key={warning}>Advertencia: {warningDetail.message} <code>{warning}</code></p>
       })}
-      {(data?.auditEventId || data?.auditEventIds) && <p className="mt-2 text-xs">Auditoria registrada por el servidor.</p>}
+      {(data?.auditEventId || data?.auditEventIds) && <p className="mt-2 text-xs">Auditoría registrada por el servidor.</p>}
     </div>
   )
 }
@@ -187,14 +187,14 @@ export default function StudentCareerLinkAdminPanel({
   return (
     <section className="space-y-4 border-t border-slate-200 pt-6" data-testid="student-career-link-admin-panel">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><p className="soft-title">Gestion administrativa local</p><h3 className="mt-1 text-xl font-extrabold text-slate-950">Vinculo alumno, carrera y plan</h3><p className="mt-1 text-sm text-slate-600">Comandos RPC auditados. No hay escrituras directas ni borrado fisico.</p></div>
+        <div><p className="soft-title">Gestión administrativa local</p><h3 className="mt-1 text-xl font-extrabold text-slate-950">Vinculo alumno, carrera y plan</h3><p className="mt-1 text-sm text-slate-600">Comandos RPC auditados. No hay escrituras directas ni borrado fisico.</p></div>
         <button className="btn-secondary" disabled={loadingHistory || !careerScopeId} onClick={() => refreshHistory()} type="button"><RefreshCw className={`h-4 w-4 ${loadingHistory ? 'animate-spin' : ''}`} />Actualizar historial</button>
       </div>
 
       {historyError && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">{historyError}</p>}
-      {ambiguousLegacy && <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><p className="flex items-center gap-2 font-extrabold"><AlertTriangle className="h-4 w-4" />Diagnostico legacy ambiguo</p><p className="mt-1">No se autocompletara el vinculo. Debes seleccionar explicitamente usuario, registro, carrera y plan.</p></div>}
+      {ambiguousLegacy && <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><p className="flex items-center gap-2 font-extrabold"><AlertTriangle className="h-4 w-4" />Diagnóstico legacy ambiguo</p><p className="mt-1">No se autocompletara el vinculo. Debes seleccionar explicitamente usuario, registro, carrera y plan.</p></div>}
 
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Operacion de vinculo">
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Operación de vinculo">
         <button className={mode === 'CREATE' ? 'btn-primary' : 'btn-secondary'} onClick={() => { setMode('CREATE'); setOperation(null) }} type="button"><Link2 className="h-4 w-4" />Crear</button>
         <button className={mode === 'CORRECT' ? 'btn-primary' : 'btn-secondary'} disabled={!model?.selectedRelation} onClick={() => { setMode('CORRECT'); setOperation(null) }} type="button"><Replace className="h-4 w-4" />Corregir</button>
         <button className={mode === 'INVALIDATE' ? 'btn-primary' : 'btn-secondary'} disabled={!model?.selectedRelation} onClick={() => { setMode('INVALIDATE'); setOperation(null) }} type="button"><Link2Off className="h-4 w-4" />Invalidar</button>
@@ -216,7 +216,7 @@ export default function StudentCareerLinkAdminPanel({
 
       <label className="block text-sm font-bold text-slate-700">Motivo administrativo<textarea className="input-base mt-1 min-h-24" name="reason" onChange={setField} placeholder="Motivo obligatorio y auditable" value={form.reason} /></label>
       {ambiguousLegacy && mode === 'CREATE' && <label className="flex items-start gap-2 text-sm font-bold text-amber-950"><input checked={form.manualIdentityConfirmed} name="manualIdentityConfirmed" onChange={setField} type="checkbox" />Confirme manualmente la identidad y las alternativas ante la ambiguedad legacy.</label>}
-      <label className="flex items-start gap-2 text-sm font-bold text-slate-800"><input checked={form.confirmed} name="confirmed" onChange={setField} type="checkbox" />Confirmo el resumen, los IDs seleccionados y el impacto de esta operacion no oficial.</label>
+      <label className="flex items-start gap-2 text-sm font-bold text-slate-800"><input checked={form.confirmed} name="confirmed" onChange={setField} type="checkbox" />Confirmo el resumen, los IDs seleccionados y el impacto de esta operación no oficial.</label>
       <button className="btn-primary" disabled={!submitEnabled || operation?.state === 'PROCESSING'} onClick={execute} type="button">{operation?.state === 'PROCESSING' ? 'Procesando...' : `${mode === 'CREATE' ? 'Crear' : mode === 'CORRECT' ? 'Corregir' : 'Invalidar'} vinculo`}</button>
       <OperationResult operation={operation} />
 
@@ -225,7 +225,7 @@ export default function StudentCareerLinkAdminPanel({
         <div className="overflow-x-auto rounded-md border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-600"><tr><th className="px-3 py-2">Estado</th><th className="px-3 py-2">Alumno</th><th className="px-3 py-2">Carrera / plan</th><th className="px-3 py-2">Vigencia</th><th className="px-3 py-2">Trazabilidad</th></tr></thead><tbody className="divide-y divide-slate-100 bg-white">{(historyData?.history ?? []).map((link) => <tr key={link.id}><td className="px-3 py-2 font-bold">{link.status}</td><td className="px-3 py-2">{link.studentDisplayName || link.studentId}</td><td className="px-3 py-2">{link.careerName} · {link.studyPlanName}</td><td className="px-3 py-2">{link.validFrom || 'Sin fecha'} / {link.validTo || 'vigente'}</td><td className="px-3 py-2 font-mono text-xs">anterior: {link.supersedesEnrollmentId || '-'}<br />reemplazo: {link.supersededByEnrollmentId || '-'}</td></tr>)}{(historyData?.history ?? []).length === 0 && <tr><td className="px-3 py-4 text-slate-500" colSpan="5">Sin vinculos registrados.</td></tr>}</tbody></table>
         </div>
-        <p className="text-xs text-slate-500">Comandos: {historyData?.commandRequests?.length ?? 0} · Eventos: {historyData?.auditEvents?.length ?? 0}. Hashes y payload de auditoria son solo lectura.</p>
+        <p className="text-xs text-slate-500">Comandos: {historyData?.commandRequests?.length ?? 0} · Eventos: {historyData?.auditEvents?.length ?? 0}. Hashes y payload de auditoría son solo lectura.</p>
       </div>
     </section>
   )

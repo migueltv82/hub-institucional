@@ -42,9 +42,9 @@ function SuperAdminLayout() {
   async function handleSignOut() {
     try {
       await signOutRemote()
-      toast.success('Sesion cerrada correctamente.')
+      toast.success('Sesión cerrada correctamente.')
     } catch (error) {
-      toast.error('Error al cerrar sesion: ' + error.message)
+      toast.error('Error al cerrar sesión: ' + error.message)
     }
   }
 
@@ -80,7 +80,7 @@ function SuperAdminLayout() {
 
             <div className="mt-auto border-t border-white/10 pt-5 text-white">
               <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-cyan-200">
-                Sesion
+                Sesión
               </p>
               <p className="mt-3 text-lg font-extrabold">{user.nombre}</p>
               <p className="mt-1 text-sm text-slate-300">{user.email}</p>
@@ -100,7 +100,7 @@ function SuperAdminLayout() {
                 disabled={!isRemoteSession}
               >
                 <KeyRound className="h-4 w-4" />
-                Cambiar contrasena
+                Cambiar contraseña
               </button>
               <button
                 className="btn-secondary mt-3 w-full justify-start border-white/10 bg-white/5 text-white hover:bg-white/10"
@@ -108,7 +108,7 @@ function SuperAdminLayout() {
                 type="button"
               >
                 <LogOut className="h-4 w-4" />
-                Cerrar sesion
+                Cerrar sesión
               </button>
             </div>
           </aside>
@@ -119,7 +119,7 @@ function SuperAdminLayout() {
                 <span className="soft-title">Backoffice</span>
                 <h2 className="mt-2 text-3xl font-bold text-slate-950">Dashboard Super Admin</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Vista central de instituciones, usuarios y auditoria operativa.
+                  Vista central de instituciones, usuarios y auditoría operativa.
                 </p>
               </div>
               <NavLink className="btn-secondary self-start lg:self-auto" to="/app">

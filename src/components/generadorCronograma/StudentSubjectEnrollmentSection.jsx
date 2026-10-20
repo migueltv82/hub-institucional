@@ -265,7 +265,7 @@ function StudentSubjectEnrollmentSection({
     <section className="rise-in soft-card soft-card--tint-sky border-l-4 border-l-sky-500 space-y-4">
       <div className="flex items-center gap-2">
         <BookOpenCheck className="h-4 w-4 text-sky-700" />
-        <h4 className="font-extrabold text-slate-950">Inscripcion de alumnos a materias</h4>
+        <h4 className="font-extrabold text-slate-950">Inscripción de alumnos a materias</h4>
       </div>
       <p className="text-sm leading-6 text-slate-600">
         Inscribi a cada alumno materia por materia. Es lo que habilita al docente titular a verlo en su roster para cargar asistencia y notas.
@@ -342,7 +342,7 @@ function StudentSubjectEnrollmentSection({
                         className="btn-secondary px-3 py-2 text-red-700"
                         onClick={() => handleDrop(enrollment.id)}
                         disabled={isRelationalWorkspaceSource || !canEditWorkspace}
-                        title="Dar de baja inscripcion"
+                        title="Dar de baja inscripción"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

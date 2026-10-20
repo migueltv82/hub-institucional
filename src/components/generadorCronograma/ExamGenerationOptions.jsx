@@ -106,12 +106,12 @@ function ExamGenerationOptions({
         <div>
           <span className="soft-title">Alcance y reglas</span>
           <h3 className="mt-2 text-xl font-bold text-slate-950">
-            {isSpecial ? 'Mesas especiales a pedido' : 'Configuracion de generacion'}
+            {isSpecial ? 'Mesas especiales a pedido' : 'Configuración de generación'}
           </h3>
           {isSpecial && (
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Este periodo queda marcado como especial. Usalo para pedidos puntuales y ajustes manuales;
-              si generas automaticamente, solo se tomaran las materias seleccionadas.
+              Este período queda marcado como especial. Usalo para pedidos puntuales y ajustes manuales;
+              si generas automáticamente, solo se tomaran las materias seleccionadas.
             </p>
           )}
         </div>

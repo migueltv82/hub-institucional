@@ -31,6 +31,6 @@ describe('TeacherProfileIdentityLinkPanel', () => {
   it('no muestra DNI, email ni telefono', async () => {
     render(<TeacherProfileIdentityLinkPanel institutionId="institution-1" loadCandidates={vi.fn().mockResolvedValue(candidates())} />)
     await screen.findByText(/Profiles sin vinculo/)
-    expect(screen.queryByText(/@example|9939|Telefono:/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/@example|9939|Teléfono:/i)).not.toBeInTheDocument()
   })
 })
