@@ -1,4 +1,5 @@
-import { KeyRound, UserPlus, UsersRound } from 'lucide-react'
+import { KeyRound, UserPlus, UsersRound, Wrench } from 'lucide-react'
+import { hasIncompleteStudentAccess } from '../../services/studentAccess.js'
 
 function StudentAccessSection({
   extraActions = null,
@@ -6,11 +7,14 @@ function StudentAccessSection({
   isLoading,
   lastResult,
   onProvisionStudents,
+  onRepairStudents = null,
+  isRepairing = false,
   useRemoteWorkspace,
 }) {
   const total = Array.isArray(alumnos) ? alumnos.length : 0
   const resultErrors = Array.isArray(lastResult?.errors) ? lastResult.errors : []
   const canProvision = total > 0 && useRemoteWorkspace && !isLoading
+  const needsRepair = Boolean(onRepairStudents) && hasIncompleteStudentAccess(lastResult)
 
   return (
     <section className="rise-in soft-card soft-card--tint-amber border-l-4 border-l-lime-500">
@@ -69,6 +73,21 @@ function StudentAccessSection({
           <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-900">
             Errores: <strong>{lastResult.failed ?? 0}</strong>
           </div>
+        </div>
+      )}
+
+      {needsRepair && (
+        <div role="alert" className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+          <p className="font-extrabold">Hay accesos incompletos</p>
+          <p className="mt-1">
+            Algunos alumnos tienen la cuenta creada pero sin vincular a su legajo: una carga anterior se cortó a mitad de
+            camino. «Crear accesos» no los toca para no mezclar identidades. Repararlos los vincula, solo si la cuenta
+            nunca se usó.
+          </p>
+          <button className="btn-secondary mt-3" disabled={isRepairing || isLoading} onClick={onRepairStudents} type="button">
+            <Wrench className="h-4 w-4" />
+            {isRepairing ? 'Reparando…' : 'Reparar accesos incompletos'}
+          </button>
         </div>
       )}
 

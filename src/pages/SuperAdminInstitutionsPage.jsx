@@ -6,7 +6,6 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
-  Trash2,
   Users,
   UsersRound,
 } from 'lucide-react'
@@ -15,7 +14,7 @@ import { NavLink } from 'react-router-dom'
 import PaginationControls from '../components/PaginationControls.jsx'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { usePaginatedInstitutions } from '../hooks/usePaginatedInstitutions.js'
-import { deleteInstitution, updateInstitution } from '../services/superAdmin.js'
+import { updateInstitution } from '../services/superAdmin.js'
 import InstitutionPreviewControl from '../features/exams/components/InstitutionPreviewControl.jsx'
 
 const CreateInstitutionModal = lazy(() => import('../components/CreateInstitutionModal.jsx'))
@@ -117,8 +116,8 @@ function SuperAdminInstitutionsPage() {
   async function handleToggleStatus(institution) {
     const newStatus = institution.status === 'active' ? 'suspended' : 'active'
     const confirmMessage = newStatus === 'suspended'
-      ? `Estas por bloquear el acceso a ${institution.name}.`
-      : `Estas por volver a habilitar ${institution.name}.`
+      ? `¿Suspender ${institution.name}? Sus usuarios no van a poder entrar hasta que la reactives. No se borra ningún dato.`
+      : `¿Reactivar ${institution.name}? Sus usuarios vuelven a poder entrar.`
 
     if (!window.confirm(confirmMessage)) return
 
@@ -128,19 +127,7 @@ function SuperAdminInstitutionsPage() {
         updates: { status: newStatus },
         useRemote: isRemoteSession,
       })
-      toast.success(newStatus === 'active' ? 'Institución habilitada' : 'Institución bloqueada')
-      await refreshData()
-    } catch (mutationError) {
-      toast.error(mutationError.message)
-    }
-  }
-
-  async function handleDelete(institution) {
-    if (!window.confirm(`Eliminar ${institution.name}? Esta accion no se puede deshacer.`)) return
-
-    try {
-      await deleteInstitution({ id: institution.id, useRemote: isRemoteSession })
-      toast.success('Institución eliminada correctamente')
+      toast.success(newStatus === 'active' ? 'Institución reactivada' : 'Institución suspendida')
       await refreshData()
     } catch (mutationError) {
       toast.error(mutationError.message)
@@ -239,7 +226,8 @@ function SuperAdminInstitutionsPage() {
                         : 'text-emerald-600 hover:bg-emerald-50'
                     }`}
                     onClick={() => handleToggleStatus(institution)}
-                    title={institution.status === 'active' ? 'Bloquear' : 'Habilitar'}
+                    title={institution.status === 'active' ? 'Suspender' : 'Reactivar'}
+                    aria-label={`${institution.status === 'active' ? 'Suspender' : 'Reactivar'} ${institution.name}`}
                     type="button"
                   >
                     {institution.status === 'active' ? (
@@ -247,14 +235,6 @@ function SuperAdminInstitutionsPage() {
                     ) : (
                       <ShieldCheck className="h-4 w-4" />
                     )}
-                  </button>
-                  <button
-                    className="btn-secondary p-2 text-red-600 hover:bg-red-50"
-                    onClick={() => handleDelete(institution)}
-                    title="Eliminar"
-                    type="button"
-                  >
-                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>

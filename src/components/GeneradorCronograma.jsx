@@ -22,7 +22,7 @@ import {
   validateStudentDraft,
   validateTeacherDraft,
 } from '../services/rosterDrafts.js'
-import { applyStudentAccessResultsToRows, provisionStudentAccess } from '../services/studentAccess.js'
+import { applyStudentAccessResultsToRows, INCOMPLETE_ACCESS_PATTERN, provisionStudentAccess, repairStudentAccess } from '../services/studentAccess.js'
 import { fetchInstitutionAcademicCanonicalData } from '../services/academicCanonicalData.js'
 import { showImportantNotice } from '../services/importantNotice.js'
 import { describeExamPublication, publishExamTables } from '../services/examTablePublication.js'
@@ -49,6 +49,7 @@ import TribunalMatrixDiagnosis from './generadorCronograma/TribunalMatrixDiagnos
 import WorkspaceDangerZone from './generadorCronograma/WorkspaceDangerZone.jsx'
 import WorkspaceNotice from './generadorCronograma/WorkspaceNotice.jsx'
 import WorkspaceSidebar from './generadorCronograma/WorkspaceSidebar.jsx'
+import WorkspaceConflictBanner from './generadorCronograma/WorkspaceConflictBanner.jsx'
 import {
   createInitialRegularCallRanges,
   initialFiles,
@@ -153,6 +154,7 @@ function GeneradorCronograma() {
   const [cronograma, setCronograma] = useState([])
   const [requiereRegeneracion, setRequiereRegeneracion] = useState(false)
   const [isProvisioningStudents, setIsProvisioningStudents] = useState(false)
+  const [isRepairingStudents, setIsRepairingStudents] = useState(false)
   const [studentAccessResult, setStudentAccessResult] = useState(null)
   const [selectedStudentCareer, setSelectedStudentCareer] = useState('')
   const [isProvisioningTeachers, setIsProvisioningTeachers] = useState(false)
@@ -327,6 +329,8 @@ function GeneradorCronograma() {
     workspaceKey,
     workspaceSource,
     isRelationalWorkspaceSource,
+    workspaceConflict,
+    resolveWorkspaceConflict,
   } = useWorkspacePersistence({
     isRemoteSession,
     isSuperAdmin,
@@ -600,9 +604,40 @@ function GeneradorCronograma() {
         ],
       })
     } catch (error) {
+      // Todo el lote rechazado por accesos incompletos: se muestra el aviso con "Reparar accesos incompletos".
+      if (INCOMPLETE_ACCESS_PATTERN.test(error.message)) {
+        setStudentAccessResult({ created: 0, updated: 0, failed: 0, errors: [], needsRepair: true })
+      }
       toast.error(error.message)
     } finally {
       setIsProvisioningStudents(false)
+    }
+  }
+
+  async function repararAccesosAlumnos() {
+    try {
+      setIsRepairingStudents(true)
+      const result = await repairStudentAccess({ institutionId: activeInstitutionId, students: alumnos, useRemote: useRemoteWorkspace })
+      if (result.results.length) {
+        const nextAlumnos = applyStudentAccessResultsToRows(alumnos, result.results)
+        setAlumnos(nextAlumnos)
+        await saveSnapshotNow({ ...snapshotPayload, alumnos: nextAlumnos })
+      }
+      setStudentAccessResult({ created: 0, updated: result.repaired, failed: result.failed, errors: result.errors })
+      showImportantNotice({
+        tone: result.failed ? 'warning' : 'success',
+        title: 'Reparación de accesos',
+        message: 'Se revisaron los alumnos del padrón sin acceso vinculado.',
+        details: [
+          `${result.repaired} accesos reparados.`,
+          result.failed ? `${result.failed} sin reparar: el motivo de cada uno figura en la sección de accesos.` : '',
+          result.withoutAccount ? `${result.withoutAccount} alumnos todavía no tienen cuenta: usá "Crear accesos".` : '',
+        ],
+      })
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setIsRepairingStudents(false)
     }
   }
 
@@ -1504,6 +1539,7 @@ function GeneradorCronograma() {
         />
 
         <div className="admin-workspace-main min-w-0 space-y-5 p-3 sm:p-4 md:space-y-6 md:p-6 xl:p-8">
+          <WorkspaceConflictBanner conflict={workspaceConflict} onResolve={resolveWorkspaceConflict} />
           <Suspense fallback={<WorkspaceNotice tone="sky">Cargando módulo...</WorkspaceNotice>}>
             {activeWorkspaceView === 'dashboard' ? (
               <>
@@ -1854,8 +1890,10 @@ function GeneradorCronograma() {
                           />
                         )}
                         isLoading={isProvisioningStudents}
+                        isRepairing={isRepairingStudents}
                         lastResult={studentAccessResult}
                         onProvisionStudents={crearAccesosAlumnos}
+                        onRepairStudents={repararAccesosAlumnos}
                         useRemoteWorkspace={useRemoteWorkspace}
                       />
                       <BulkRosterSection

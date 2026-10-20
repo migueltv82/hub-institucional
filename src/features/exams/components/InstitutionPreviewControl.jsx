@@ -32,6 +32,8 @@ export default function InstitutionPreviewControl({ institution }) {
     // D1 P3: opcion tecnica, plegada por defecto para que no aparezca en la demo.
     <details className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4" aria-label={`Modo base de datos de ${institution.name}`}>
       <summary className="cursor-pointer text-sm font-bold text-slate-700">Opciones avanzadas</summary>
+      {/* Decisión de Miguel (20/10): no se borran instituciones desde la app; se suspenden. */}
+      <p className="mt-3 text-sm text-slate-600">Para dejar de usar la institución, suspendela con el escudo de arriba: no borra ningún dato. El borrado definitivo de una institución de prueba lo hace el responsable técnico con el procedimiento de limpieza (runbook §8.0).</p>
       <p className="mt-3 font-bold text-slate-950">Modo base de datos</p>
       <p className="mt-1 text-sm text-slate-600">Los administradores ven alumnos, docentes, materias y mesas leídos de la base de datos, en lugar de las planillas cargadas.</p>
       <div className="mt-3 flex flex-wrap items-center gap-3">

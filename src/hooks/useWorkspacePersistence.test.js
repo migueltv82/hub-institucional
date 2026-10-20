@@ -4,6 +4,7 @@ import { useWorkspacePersistence } from './useWorkspacePersistence.js'
 
 const mocks = vi.hoisted(() => ({
   clearWorkspaceData: vi.fn(),
+  discardLocalWorkspaceSnapshot: vi.fn(),
   fetchAccessibleInstitutions: vi.fn(),
   fetchExamEngineV21State: vi.fn(),
   fetchRelationalExamSnapshot: vi.fn(),
@@ -60,6 +61,8 @@ vi.mock('../services/workspaceSnapshot.js', () => ({
   }),
   fetchWorkspaceSnapshot: mocks.fetchWorkspaceSnapshot,
   saveWorkspaceSnapshot: mocks.saveWorkspaceSnapshot,
+  discardLocalWorkspaceSnapshot: mocks.discardLocalWorkspaceSnapshot,
+  isWorkspaceConflictError: (error) => error?.code === 'WORKSPACE_CONFLICT',
 }))
 
 vi.mock('../services/relationalExamPreview.js', () => ({
@@ -659,6 +662,53 @@ describe('useWorkspacePersistence', () => {
       )
       expect(saveError.cause).toBe(rootCause)
       expect(mocks.saveWorkspaceSnapshot).toHaveBeenCalledTimes(1)
+    })
+
+    it('conflicto con otra sesion: pausa el autoguardado, avisa y "recargar" descarta la copia local y vuelve a cargar', async () => {
+      const conflict = Object.assign(new Error('Otra sesion guardo cambios.'), { code: 'WORKSPACE_CONFLICT', remoteUpdatedAt: '2026-10-20T15:30:00.000Z' })
+      mocks.saveWorkspaceSnapshot.mockRejectedValue(conflict)
+      const { rerender, result, onHydrate } = await renderHydratedHook()
+      rerenderWithPayload(rerender, { ...emptySnapshot, fechaInicio: '2026-08-01' }, { onHydrate })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(700)
+      })
+
+      expect(result.current.syncStatus).toBe('conflict')
+      expect(result.current.workspaceConflict).toEqual({ remoteUpdatedAt: '2026-10-20T15:30:00.000Z' })
+      expect(mocks.toastError).not.toHaveBeenCalled()
+
+      // Mientras dura el conflicto no se vuelve a intentar pisar.
+      rerenderWithPayload(rerender, { ...emptySnapshot, fechaInicio: '2026-08-02' }, { onHydrate })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000)
+      })
+      expect(mocks.saveWorkspaceSnapshot).toHaveBeenCalledTimes(1)
+
+      const fetchesBefore = mocks.fetchWorkspaceSnapshot.mock.calls.length
+      await act(async () => {
+        await result.current.resolveWorkspaceConflict('reload')
+      })
+      expect(mocks.discardLocalWorkspaceSnapshot).toHaveBeenCalledWith({ institutionId: 'institution-1', workspaceKey: 'main' })
+      expect(mocks.fetchWorkspaceSnapshot.mock.calls.length).toBeGreaterThan(fetchesBefore)
+      expect(result.current.workspaceConflict).toBeNull()
+    })
+
+    it('conflicto: "subir los mios igual" guarda con force y levanta el aviso', async () => {
+      const conflict = Object.assign(new Error('Otra sesion guardo cambios.'), { code: 'WORKSPACE_CONFLICT', remoteUpdatedAt: null })
+      mocks.saveWorkspaceSnapshot.mockRejectedValueOnce(conflict).mockResolvedValue({ updatedAt: '2026-10-20T16:00:00.000Z', source: 'local' })
+      const { rerender, result, onHydrate } = await renderHydratedHook()
+      rerenderWithPayload(rerender, { ...emptySnapshot, fechaInicio: '2026-08-01' }, { onHydrate })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(700)
+      })
+      expect(result.current.syncStatus).toBe('conflict')
+
+      await act(async () => {
+        await result.current.resolveWorkspaceConflict('overwrite')
+      })
+      expect(mocks.saveWorkspaceSnapshot).toHaveBeenLastCalledWith(expect.objectContaining({ force: true }))
+      expect(result.current.workspaceConflict).toBeNull()
     })
   })
 })

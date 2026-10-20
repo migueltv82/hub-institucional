@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
+import { refreshKnownWorkspaceVersion } from './workspaceSnapshot.js'
 
 function clean(value) {
   return String(value ?? '').trim()
@@ -189,6 +190,10 @@ export async function resetStudentAcademicRecords({
 
   if (error) throw new Error(await readFunctionError(error))
   if (data?.error) throw new Error(data.error)
+
+  // La Edge tambien limpia el snapshot del workspace: el panel toma esa version para no avisar un conflicto
+  // por un cambio propio. Best-effort: si falla, a lo sumo aparece el aviso y se resuelve recargando.
+  await refreshKnownWorkspaceVersion({ institutionId, workspaceKey, useRemote }).catch(() => null)
 
   return data
 }

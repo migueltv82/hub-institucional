@@ -174,8 +174,8 @@ describe('admin-users edge function security posture', () => {
     const discard = edgeFunction.slice(edgeFunction.indexOf('async function discardProvisionalInstitutionAdmin('), edgeFunction.indexOf('async function upsertProfile({'))
     expect(discard.indexOf('[ADMIN_PROVISIONING_FLAG] !== true) return false')).toBeGreaterThan(0)
     expect(discard.indexOf('[ADMIN_PROVISIONING_FLAG] !== true) return false')).toBeLessThan(discard.indexOf('deleteUser(userId)'))
-    // Toda reutilizacion de cuentas (admin, docente, alumno) respeta el alta en curso.
-    expect(edgeFunction.match(/assertNotInAdminProvisioning\((existingUser|user)\)/g)).toHaveLength(3)
+    // Toda reutilizacion de cuentas (admin, docente, alumno y la reparacion de accesos) respeta el alta en curso.
+    expect(edgeFunction.match(/assertNotInAdminProvisioning\((existingUser|user)\)/g)).toHaveLength(4)
     for (const handlerName of ['handleCreateTenantWithAdmin', 'handleCreateOrAssignInstitutionUser']) {
       const handler = edgeFunction.slice(edgeFunction.indexOf(`async function ${handlerName}(`))
       const body = handler.slice(0, handler.indexOf('\n}\n'))
@@ -215,6 +215,24 @@ describe('admin-users edge function security posture', () => {
     const teachers = edgeFunction.slice(edgeFunction.indexOf('async function handleBulkCreateTeachers('), edgeFunction.indexOf('function getPayloadRecord('))
     expect(teachers.indexOf('await createOrReuseTeacherAuthUser({')).toBeLessThan(teachers.indexOf('await retryOnWorkspaceBusy(async () => {'))
     expect(teachers.slice(teachers.indexOf('await retryOnWorkspaceBusy(async () => {'))).toContain('persistAndLinkTeacherRecord({')
+  })
+
+  it('reparar accesos incompletos: accion aparte, solo admin institucional y solo cuentas nunca usadas y sin otra identidad', () => {
+    const repair = edgeFunction.slice(edgeFunction.indexOf('async function handleRepairStudentAccess('), edgeFunction.indexOf('async function handleBulkCreateTeachers('))
+    expect(edgeFunction).toContain("repair_student_access: handleRepairStudentAccess")
+    expect(edgeFunction).toContain("|| action === 'repair_student_access'\n        ? await requireInstitutionAdmin(")
+    for (const guard of [
+      'assertNotInAdminProvisioning(user)',
+      'user.app_metadata?.[MUST_CHANGE_PASSWORD_FLAG] !== true',
+      "!['alumno', 'student'].includes(String(profile.account_role).toLowerCase())",
+      "memberships.length !== 1 || memberships[0].institution_id !== institutionId || memberships[0].role !== 'viewer'",
+      'if (records.some((record) => record.profile_id)) {',
+      ".is('profile_id', null)",
+    ]) expect(repair).toContain(guard)
+    // No crea, borra ni cambia cuentas o contrasenas: solo vincula legajos sin duenio.
+    expect(repair).not.toMatch(/createUser|deleteUser|updateUserById|password/)
+    // El alta masiva sigue fallando cerrada ante legajos sin vincular (regla auditada).
+    expect(edgeFunction).toContain('!records.length || records.some((record) => record.profile_id !== user.id)) {')
   })
 
   it('PB.4: el snapshot del portal alumno se escribe despues de la escritura relacional', () => {

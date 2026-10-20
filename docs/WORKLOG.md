@@ -1523,3 +1523,11 @@ Los nombres y DNI de las cuentas se verificaron contra `scripts/buildDemoWorkboo
   - formas que en la interfaz siempre llevan tilde ("más", "elegí", "imprimí", "abrí", "escribí", "subí"): 27 textos.
   - Cada cambio se revisó línea por línea antes de aplicarlo, y se ajustaron las expectativas de los tests.
 - `npm run check` PASS (2717).
+
+## 2026-10-20 — Decisiones de Miguel: suspender en vez de borrar, reparar accesos y aviso de conflicto (Claude)
+
+1. **Suspender en vez de borrar:** "Eliminar institución" se reemplazó por "Suspender / Reactivar". El borrado definitivo de instituciones de prueba queda en el procedimiento I3.
+2. **Reparar accesos incompletos:** nueva acción `repair_student_access` en `admin-users`, acotada y aparte del alta masiva, con su aviso y botón en la sección de accesos.
+3. **Aviso de conflicto en el panel admin:** guardado condicionado por versión, aviso con "Ver los cambios" o "Subir los míos igual", y control de la copia local editada sin conexión.
+
+Las tres se verificaron en el stack local; la evidencia está en `supabase/security/DECISIONES_MIGUEL_20_10_LOCAL_RESULT.md`. `npm run check` PASS (2734). `admin-users` cambió otra vez, así que el redeploy sigue esperando la reauditoría, que ahora incluye este commit.

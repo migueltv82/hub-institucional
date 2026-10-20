@@ -215,6 +215,13 @@ function getAuditTarget(action: string, payload: Record<string, unknown>, result
     }
   }
 
+  if (action === 'repair_student_access') {
+    return {
+      target_type: 'institution',
+      target_id: typeof payload.institution_id === 'string' ? payload.institution_id : null,
+    }
+  }
+
   if (action === 'bulk_create_teachers') {
     return {
       target_type: 'institution',
@@ -1434,6 +1441,82 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof getClient
     results,
     errors,
   }
+}
+
+// Decision de Miguel (20/10): reparar cuentas de alumno que quedaron a medias (la cuenta se creo pero una
+// provision anterior se corto antes de vincular el legajo). Accion explicita y aparte de bulk_create_students,
+// que sigue fallando cerrada ante legajos sin vincular. Solo vincula si la cuenta NUNCA se uso (cambio de
+// contrasena inicial pendiente), es alumno no bloqueado con el mismo email, es miembro lector SOLO de esta
+// institucion y todos sus legajos con ese email estan sin duenio. Cualquier otra cosa se rechaza con su motivo.
+async function handleRepairStudentAccess(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
+  const institutionId = requireString(payload.institution_id, 'La institucion')
+  const emails = Array.isArray(payload.emails)
+    ? [...new Set(payload.emails.flatMap((value) => {
+      try {
+        return [normalizeEmail(value)]
+      } catch {
+        return []
+      }
+    }))]
+    : []
+  if (emails.length === 0) throw badRequest('Indica los emails de los alumnos a reparar.')
+  if (emails.length > 200) throw badRequest('Se reparan hasta 200 alumnos por vez.')
+
+  const usersByEmail = await findStudentProvisioningUsers(adminClient, emails)
+  const repaired: Array<Record<string, unknown>> = []
+  const rejected: Array<Record<string, unknown>> = []
+  let withoutAccount = 0
+
+  for (const email of emails) {
+    try {
+      const user = usersByEmail.get(email)
+      // Sin cuenta no hay nada que reparar: lo resuelve "Crear accesos".
+      if (!user) {
+        withoutAccount += 1
+        continue
+      }
+      assertNotInAdminProvisioning(user)
+      if (user.app_metadata?.[MUST_CHANGE_PASSWORD_FLAG] !== true) {
+        throw new HttpError('La cuenta ya se uso: no se repara automaticamente.', 409)
+      }
+      const { data: profile, error: profileError } = await adminClient.from('profiles')
+        .select('email, account_role, is_global_admin, is_blocked').eq('user_id', user.id).maybeSingle()
+      if (profileError) throw profileError
+      if (!profile || profile.is_global_admin || profile.is_blocked ||
+        !['alumno', 'student'].includes(String(profile.account_role).toLowerCase()) ||
+        profile.email?.trim().toLowerCase() !== email) {
+        throw new HttpError('La cuenta no es de un alumno habilitado con ese email.', 409)
+      }
+      const { data: memberships, error: membershipsError } = await adminClient.from('memberships')
+        .select('institution_id, role').eq('user_id', user.id)
+      if (membershipsError) throw membershipsError
+      if (!memberships || memberships.length !== 1 || memberships[0].institution_id !== institutionId || memberships[0].role !== 'viewer') {
+        throw new HttpError('La cuenta tiene accesos en otra institucion o con otro rol.', 409)
+      }
+      const records = await findStudentProvisioningLinks(adminClient, institutionId, email)
+      if (!records.length) throw new HttpError('No hay legajo con ese email en esta institucion.', 404)
+      if (records.some((record) => record.profile_id)) {
+        throw new HttpError('El legajo ya esta vinculado: no hay nada que reparar.', 409)
+      }
+      const linked = await retryOnWorkspaceBusy(async () => {
+        const { data, error } = await adminClient.from('student_records')
+          .update({ profile_id: user.id, updated_at: new Date().toISOString() })
+          .eq('institution_id', institutionId).eq('email', email).is('profile_id', null)
+          .select('id')
+        if (error) throw error
+        return data?.length ?? 0
+      })
+      repaired.push({ email, user_id: user.id, linked_student_records: linked })
+    } catch (error) {
+      rejected.push({
+        email,
+        error: error instanceof Error ? error.message : 'Error inesperado.',
+        status: error instanceof HttpError ? error.status : 500,
+      })
+    }
+  }
+
+  return { success: rejected.length === 0, repaired: repaired.length, failed: rejected.length, without_account: withoutAccount, results: repaired, errors: rejected }
 }
 
 async function handleBulkCreateTeachers(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
@@ -4205,6 +4288,7 @@ const actionHandlers: Record<string, (
   create_or_assign_institution_user: handleCreateOrAssignInstitutionUser,
   bulk_create_students: handleBulkCreateStudents,
   bulk_create_teachers: handleBulkCreateTeachers,
+  repair_student_access: handleRepairStudentAccess,
   student_portal_mutation: handleStudentPortalMutation,
   reset_student_academic_records: handleResetStudentAcademicRecords,
   teacher_subject_rosters: handleTeacherSubjectRosters,
@@ -4266,7 +4350,7 @@ Deno.serve(async (req) => {
       ? await requireStudentPortalMember(req, typeof payload.institution_id === 'string' ? payload.institution_id : '')
       : action === 'teacher_profile_update' || action === 'teacher_remove_student_subject_records' || action === 'teacher_reset_student_subject_academic_records' || action === 'teacher_subject_rosters'
         ? await requireTeacherPortalMember(req, typeof payload.institution_id === 'string' ? payload.institution_id : '')
-      : action === 'bulk_create_students' || action === 'bulk_create_teachers' || action === 'reset_student_academic_records'
+      : action === 'bulk_create_students' || action === 'bulk_create_teachers' || action === 'reset_student_academic_records' || action === 'repair_student_access'
         ? await requireInstitutionAdmin(req, typeof payload.institution_id === 'string' ? payload.institution_id : '')
       : action === 'complete_initial_password_change'
         ? await getAuthenticatedContext(req)
