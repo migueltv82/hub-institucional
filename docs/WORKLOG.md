@@ -1389,3 +1389,12 @@ Evidencia: `supabase/security/PURGE_INSTITUTION_LOCAL_RESULT.md`.
 - Sin cambios de implementación ni archivos F1; sin SQL remoto/deploy. Implementación alternativa pendiente de I2f conservada en stash al comprobar que Claude publicó `64986f7`; no se superpone con su trabajo ni se declara auditada aquí.
 - Gate final `npm.cmd run check`: PASS, 349 archivos / 2692 tests, lint/build/auditorías (bundle 120 archivos). Primera ejecución con tres fallos por CRLF en comparaciones literales; restaurado LF sin diff funcional ni tests modificados. Typecheck no disponible, navegador no ejecutado; warning preexistente de chunks >500 kB. QUALITY GATE: PASS WITH WARNINGS. P1/P2 originales cerrados; sin nuevos hallazgos en el alcance.
 - Antes del push se integró el avance concurrente `0e0e086` (I3), preservando ambas entradas del WORKLOG. Gate repetido sobre esa base: PASS, 351 archivos / 2699 tests, lint/build/auditorías. I3 no forma parte del alcance auditado.
+
+## 2026-10-20 — I4: checklist del Día D (Claude)
+
+`docs/DIA_D_CHECKLIST.md` es la hoja de ruta de punta a punta para implementar si la directiva aprueba. Cada paso dice quién lo hace y cómo se verifica, y remite al runbook para el detalle técnico. Fases:
+- **A. Días previos:** plan Pro y PITR, dominio, secrets, SMTP, branch protection, auditorías cerradas y prueba en seco de las planillas reales.
+- **B. Actualización de Producción:** SQL pendiente, Edge, frontend, Security 2, limpieza y smoke.
+- **C. Carga de la institución real:** desde la app, en el orden validado en D1.
+- **D. Primera semana.**
+- **E. Qué hacer si algo sale mal.**

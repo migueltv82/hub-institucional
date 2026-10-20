@@ -10,6 +10,8 @@ Convenciones:
 - Toda evidencia se guarda sin secretos, sin tokens y sin datos personales.
 - "Operador" es quien ejecuta en su máquina; "Verificador" es otra persona o agente que confirma con lectura, sin escribir.
 
+Hoja de ruta del Día D (implementación real, de punta a punta): `docs/DIA_D_CHECKLIST.md`. Este runbook tiene el detalle técnico de cada paso.
+
 ## 0. Roles
 
 | Rol | Quién | Hace | No hace |
