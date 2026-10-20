@@ -36,3 +36,17 @@ Las 5 diferencias de policies (`members read` de `student_grades`, `subject_enro
 
 ## Pendiente
 - Redeploy de la Edge `admin-users`. Espera la reauditoría de I2f; la corrección de su FAIL está en `dfcc7ab`.
+
+## Reaplicación del SQL de registro (D2, 20/10 tarde)
+
+Miguel corrió en el SQL Editor la versión nueva de `source_file_storage_register_on_institution.sql`, que crea el snapshot `main` al dar de alta una institución. Claude lo verificó con consultas de solo lectura:
+
+| Control | Resultado |
+|---|---|
+| `instituciones_incompletas` / `instituciones_sin_snapshot` | **0 / 0** |
+| Función `register_source_file_storage_resources_for_institution()` | md5 `dbfc6e1f…` idéntico al de una base local con el archivo del repo |
+| Trigger `source_file_storage_register_institution` | activo |
+| EXECUTE para `authenticated` | no |
+| Datos | sin cambios: 1 institución, 1 snapshot, 6 usuarios, 3 notas |
+
+Sigue pendiente el redeploy de `admin-users` (reintento de "Crear accesos" y corrección de I2f), después de la reauditoría.
