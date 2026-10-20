@@ -24,6 +24,8 @@ Esta guia resume el recorrido minimo para mostrar el producto funcionando con Su
 10. Guardar la contrasena temporal generada.
 11. Cerrar sesion.
 
+> **Datos de demo (D2):** las planillas de `docs/demo-data/` (Instituto Superior del Valle, datos ficticios) reemplazan a los CSV de abajo. El orden de carga y el resultado esperado están en `docs/demo-data/README.md`. El flujo con CSV queda como referencia histórica.
+
 ## Flujo institucional
 
 1. Entrar por `Acceso tenant / Institucion`.

@@ -9,7 +9,7 @@ describe('validateTenantCreationLocal', () => {
   it('induce fallas en el alta del usuario y en la membresia, y verifica que no queden huerfanos', () => {
     expect(FAILURE_TRIGGERS_SQL).toContain('before insert on auth.users')
     expect(FAILURE_TRIGGERS_SQL).toContain('before insert on public.memberships')
-    for (const message of ['Auth failure left an orphan institution', 'Membership failure left an orphan institution', 'Membership failure left an orphan Auth user', 'Membership failure left an orphan profile', 'Rollback deleted a pre-existing user', 'Retry after rollback failed']) {
+    for (const message of ['New institution without workspace snapshot', 'Rollback left an orphan workspace snapshot', 'Auth failure left an orphan institution', 'Membership failure left an orphan institution', 'Membership failure left an orphan Auth user', 'Membership failure left an orphan profile', 'Rollback deleted a pre-existing user', 'Retry after rollback failed']) {
       expect(harness).toContain(message)
     }
   })

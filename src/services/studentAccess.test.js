@@ -94,6 +94,24 @@ describe('studentAccess service', () => {
     expect(mocks.invoke.mock.calls.map(([, args]) => args.body.students.length)).toEqual([20, 20, 5])
   })
 
+  it('D2: manda las tandas de a una (en paralelo, el lock del workspace rechaza escrituras)', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    mocks.invoke.mockImplementation(async (_name, { body }) => {
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((done) => setTimeout(done, 5))
+      inFlight -= 1
+      return { data: { success: true, created: body.students.length, updated: 0, failed: 0, results: [], errors: [] }, error: null }
+    })
+    const students = Array.from({ length: 45 }, (_, index) => ({ email: `alumno-${index + 1}@example.com`, nombre: `Alumno ${index + 1}`, dni: `30000${index + 1}`, carrera: 'Profesorado de Ingles' }))
+
+    const result = await provisionStudentAccess({ institutionId: 'inst-1', useRemote: true, students })
+
+    expect(result.created).toBe(45)
+    expect(maxInFlight).toBe(1)
+  })
+
   it('no reprocesa alumnos que ya tienen acceso vinculado', async () => {
     mocks.invoke.mockResolvedValue({
       data: {

@@ -93,7 +93,9 @@ export async function main() {
     assert.equal(sql(`select role from public.memberships where user_id='${created.body.admin_user_id}' and institution_id='${created.body.institution_id}';`), 'owner');
     assert.equal((await login(ok.admin_email, ok.admin_password)).status, 200, 'New admin cannot log in');
     assert.equal(count('public.source_file_storage_resources', `institution_id='${created.body.institution_id}' and workspace_key='main'`), '9', 'New institution without file resources');
-    checks.created = { status: 200, profile: 'admin_instituto', membership: 'owner', login: 200, fileResources: 9 };
+    // D2: sin snapshot el gateway rechaza la primera carga de planillas (403 "Workspace no autorizado").
+    assert.equal(count('public.workspace_snapshots', `institution_id='${created.body.institution_id}' and workspace_key='main'`), '1', 'New institution without workspace snapshot');
+    checks.created = { status: 200, profile: 'admin_instituto', membership: 'owner', login: 200, fileResources: 9, workspaceSnapshot: 1 };
 
     step = 'duplicate slug writes nothing';
     const usersBefore = count('auth.users', 'true');
@@ -188,6 +190,7 @@ export async function main() {
     assert.match(String(memberFailed.body?.error), /no quedo nada creado/);
     assert.equal(count('public.institutions', `slug='${memberFail.institution_slug}'`), '0', 'Membership failure left an orphan institution');
     assert.equal(count('public.source_file_storage_resources r', 'not exists (select 1 from public.institutions i where i.id = r.institution_id)'), '0', 'Rollback left orphan file resources');
+    assert.equal(count('public.workspace_snapshots', `institution_id not in (select id from public.institutions)`), '0', 'Rollback left an orphan workspace snapshot');
     assert.equal(count('auth.users', `email='${memberFail.admin_email}'`), '0', 'Membership failure left an orphan Auth user');
     assert.equal(count('public.profiles', `email='${memberFail.admin_email}'`), '0', 'Membership failure left an orphan profile');
     assert.equal(count('auth.users', 'true'), usersBeforeMember);

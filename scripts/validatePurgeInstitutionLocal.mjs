@@ -58,8 +58,9 @@ export async function main() {
 
     step = 'schema and fixture';
     sql(readFileSync(resolve('supabase/security/source_file_storage_gateway.sql'), 'utf8'));
-    sql(readFileSync(resolve('supabase/security/source_file_storage_register_on_institution.sql'), 'utf8'));
     sql(fixtureSql(readFileSync(resolve('supabase/baseline/local_ab_rls_rpc_validation.sql'), 'utf8')));
+    // Despues del fixture (que inserta sus propios snapshots): el backfill registra snapshot y recursos de A y B.
+    sql(readFileSync(resolve('supabase/security/source_file_storage_register_on_institution.sql'), 'utf8'));
     sql(EXTRA_FIXTURE_SQL);
     const tables = sql(TABLES_SQL).split(',');
     report.tables = tables.length;

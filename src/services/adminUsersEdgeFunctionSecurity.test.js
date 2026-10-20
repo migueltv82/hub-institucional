@@ -202,6 +202,21 @@ describe('admin-users edge function security posture', () => {
     expect(edgeFunction).not.toContain('createOrReuseAuthUser(')
   })
 
+  it('D2: la provision masiva reintenta solo SOURCE_FILE_WORKSPACE_BUSY y solo sobre escrituras idempotentes', () => {
+    const helper = edgeFunction.slice(edgeFunction.indexOf('function isWorkspaceBusyError('), edgeFunction.indexOf('function assertNotInAdminProvisioning('))
+    expect(helper).toContain("record?.code === '55P03'")
+    expect(helper).toContain("if (attempt >= attempts || !isWorkspaceBusyError(error)) throw error")
+    const students = edgeFunction.slice(edgeFunction.indexOf('async function handleBulkCreateStudents('), edgeFunction.indexOf('async function handleBulkCreateTeachers('))
+    const retried = students.slice(students.indexOf('await retryOnWorkspaceBusy(async () => {'))
+    // La cuenta Auth se crea antes y fuera del reintento: nunca se crea dos veces.
+    expect(students.indexOf('await createOrReuseStudentAuthUser({')).toBeLessThan(students.indexOf('await retryOnWorkspaceBusy(async () => {'))
+    for (const write of ['persistStudentRecord({', 'persistStudentCareerPlan({', 'linkStudentRecordsToProfile({']) expect(retried).toContain(write)
+    expect(retried).not.toContain('createUser(')
+    const teachers = edgeFunction.slice(edgeFunction.indexOf('async function handleBulkCreateTeachers('), edgeFunction.indexOf('function getPayloadRecord('))
+    expect(teachers.indexOf('await createOrReuseTeacherAuthUser({')).toBeLessThan(teachers.indexOf('await retryOnWorkspaceBusy(async () => {'))
+    expect(teachers.slice(teachers.indexOf('await retryOnWorkspaceBusy(async () => {'))).toContain('persistAndLinkTeacherRecord({')
+  })
+
   it('PB.4: el snapshot del portal alumno se escribe despues de la escritura relacional', () => {
     const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleStudentPortalMutation('), edgeFunction.indexOf('async function fetchTeacherRosterTeacherRecords({'))
     const relationalAt = handler.indexOf('relationalResult = await writeStudentPortalRelational({')

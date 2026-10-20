@@ -588,6 +588,25 @@ async function findStudentProvisioningLinks(
   return records
 }
 
+// D2: las tablas del workspace tienen el trigger del gateway de Storage, que toma un lock no bloqueante por
+// workspace y falla con SOURCE_FILE_WORKSPACE_BUSY (55P03) si otra escritura del mismo workspace esta en curso.
+// Las escrituras de provision son idempotentes (upserts y updates), asi que se reintentan con una espera corta.
+function isWorkspaceBusyError(error: unknown) {
+  const record = error as { code?: string; message?: string } | null
+  return record?.code === '55P03' || String(record?.message ?? '').includes('SOURCE_FILE_WORKSPACE_BUSY')
+}
+
+async function retryOnWorkspaceBusy<T>(operation: () => Promise<T>, attempts = 6): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (attempt >= attempts || !isWorkspaceBusyError(error)) throw error
+      await new Promise((done) => setTimeout(done, 120 * attempt + Math.floor(Math.random() * 80)))
+    }
+  }
+}
+
 function assertNotInAdminProvisioning(user: { app_metadata?: Record<string, unknown> | null }) {
   if (user.app_metadata?.[ADMIN_PROVISIONING_FLAG] === true) {
     throw new HttpError('Hay un alta de administrador en curso con ese email. Espera a que termine y volve a intentar.', 409)
@@ -821,9 +840,14 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
     }
   } catch (error) {
     const rollbackErrors: string[] = []
-    // D1: los recursos del gateway de Storage se registran al crear la institucion y su FK no tiene cascada.
+    // D1/D2: al crear la institucion se registran su snapshot 'main' y los recursos del gateway de Storage. Borrar el
+    // snapshot deja una fila de revisiones del gateway; esas tablas no tienen cascada, asi que se limpian antes.
+    const { error: snapshotDeleteError } = await adminClient.from('workspace_snapshots').delete().eq('institution_id', institution.id)
+    if (snapshotDeleteError && !isMissingRelationError(snapshotDeleteError, 'workspace_snapshots')) rollbackErrors.push('snapshot del workspace')
     const { error: resourcesDeleteError } = await adminClient.from('source_file_storage_resources').delete().eq('institution_id', institution.id)
     if (resourcesDeleteError && !isMissingRelationError(resourcesDeleteError, 'source_file_storage_resources')) rollbackErrors.push('recursos de archivos')
+    const { error: revisionsDeleteError } = await adminClient.from('source_file_workspace_revisions').delete().eq('institution_id', institution.id)
+    if (revisionsDeleteError && !isMissingRelationError(revisionsDeleteError, 'source_file_workspace_revisions')) rollbackErrors.push('revisiones de archivos')
     const { error: institutionDeleteError } = await adminClient.from('institutions').delete().eq('id', institution.id)
     if (institutionDeleteError) rollbackErrors.push('institucion')
     if (createdUserId && !(await discardProvisionalInstitutionAdmin(adminClient, createdUserId))) rollbackErrors.push('usuario')
@@ -1329,57 +1353,60 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof getClient
         continue
       }
 
-      if (status === 'created') {
-        const { error: profileError } = await adminClient
-          .from('profiles')
-          .upsert({
-            user_id: user.id,
-            email,
-            display_name: displayName,
-            account_role: 'alumno',
-            is_global_admin: false,
-            is_blocked: false,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' })
+      const provisioned = await retryOnWorkspaceBusy(async () => {
+        if (status === 'created') {
+          const { error: profileError } = await adminClient
+            .from('profiles')
+            .upsert({
+              user_id: user.id,
+              email,
+              display_name: displayName,
+              account_role: 'alumno',
+              is_global_admin: false,
+              is_blocked: false,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id' })
 
-        if (profileError) throw profileError
+          if (profileError) throw profileError
 
-        await assignMemberships({
+          await assignMemberships({
+            adminClient,
+            userId: user.id,
+            institutionIds: [institutionId],
+            role: 'viewer',
+          })
+        }
+
+        const studentRecordId = await persistStudentRecord({
           adminClient,
+          institutionId,
+          student,
+          email,
+          displayName,
           userId: user.id,
-          institutionIds: [institutionId],
-          role: 'viewer',
         })
-      }
+        const studentCareerPlanId = await persistStudentCareerPlan({
+          adminClient,
+          institutionId,
+          student,
+          studentRecordId,
+        })
 
-      const studentRecordId = await persistStudentRecord({
-        adminClient,
-        institutionId,
-        student,
-        email,
-        displayName,
-        userId: user.id,
-      })
-      const studentCareerPlanId = await persistStudentCareerPlan({
-        adminClient,
-        institutionId,
-        student,
-        studentRecordId,
-      })
-
-      const linkedStudentRecords = await linkStudentRecordsToProfile({
-        adminClient,
-        institutionId,
-        email,
-        userId: user.id,
+        const linkedStudentRecords = await linkStudentRecordsToProfile({
+          adminClient,
+          institutionId,
+          email,
+          userId: user.id,
+        })
+        return { linkedStudentRecords, studentRecordId, studentCareerPlanId }
       })
 
       results.push({
         email,
         user_id: user.id,
-        linked_student_records: linkedStudentRecords,
-        student_record_id: studentRecordId,
-        student_career_plan_id: studentCareerPlanId,
+        linked_student_records: provisioned.linkedStudentRecords,
+        student_record_id: provisioned.studentRecordId,
+        student_career_plan_id: provisioned.studentCareerPlanId,
         status,
       })
     } catch (error) {
@@ -1456,36 +1483,38 @@ async function handleBulkCreateTeachers(adminClient: ReturnType<typeof getClient
       })
       authUsersByEmail.set(email, user)
 
-      // I2d: un docente existente conserva su bloqueo; solo el alta nueva arranca desbloqueada.
-      const { error: profileError } = await adminClient
-        .from('profiles')
-        .upsert({
-          user_id: user.id,
+      const teacherRecordId = await retryOnWorkspaceBusy(async () => {
+        // I2d: un docente existente conserva su bloqueo; solo el alta nueva arranca desbloqueada.
+        const { error: profileError } = await adminClient
+          .from('profiles')
+          .upsert({
+            user_id: user.id,
+            email,
+            display_name: displayName,
+            account_role: 'docente',
+            is_global_admin: false,
+            ...(status === 'created' ? { is_blocked: false } : {}),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' })
+
+        if (profileError) throw profileError
+
+        await assignMemberships({
+          adminClient,
+          userId: user.id,
+          institutionIds: [institutionId],
+          role: 'viewer',
+        })
+
+        return await persistAndLinkTeacherRecord({
+          adminClient,
+          institutionId,
+          teacher,
           email,
-          display_name: displayName,
-          account_role: 'docente',
-          is_global_admin: false,
-          ...(status === 'created' ? { is_blocked: false } : {}),
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' })
-
-      if (profileError) throw profileError
-
-      await assignMemberships({
-        adminClient,
-        userId: user.id,
-        institutionIds: [institutionId],
-        role: 'viewer',
-      })
-
-      const teacherRecordId = await persistAndLinkTeacherRecord({
-        adminClient,
-        institutionId,
-        teacher,
-        email,
-        displayName,
-        dni,
-        userId: user.id,
+          displayName,
+          dni,
+          userId: user.id,
+        })
       })
 
       results.push({

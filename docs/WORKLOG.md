@@ -1484,3 +1484,22 @@ Recorrido con Chromium en modo demo local. Se confirmó el modal de alta (etique
 - **Instituciones:** "1 institución activa" en singular y la fecha de creación en formato argentino.
 
 `npm run check` PASS (2711).
+
+## 2026-10-20 — D2: planillas de demo creíbles y dos fallas reales del Día D (Claude)
+
+**Planillas de demo:** `scripts/buildDemoWorkbooks.mjs` genera las 4 planillas oficiales del Instituto Superior del Valle (demo) en `docs/demo-data/`. Son datos ficticios: 2 carreras, 20 materias, 14 docentes, 24 alumnos e historia de 2.º año. El catálogo las valida sin errores ni advertencias. Hay un test que las lee con los parsers de la app.
+
+Al cargarlas en la app real (stack local completo) aparecieron dos fallas que también afectan a la implementación real:
+- **P1, primera carga de planillas de una institución nueva:** fallaba con 403 "Workspace no autorizado", porque el gateway exige el snapshot del workspace y una institución nueva no lo tiene.
+  - El arreglo de D1 había resuelto solo el registro de los recursos.
+  - Ahora `source_file_storage_register_on_institution.sql` también crea el snapshot `main` vacío, con backfill, y su verificación agrega `instituciones_sin_snapshot = 0`.
+  - El rollback del alta (I2f) borra el snapshot y las revisiones del gateway antes de borrar la institución.
+  - Harness de alta: PASS (run `4baeef8cf6057ee7`). Harness de purga: PASS.
+- **P1, "Crear accesos" dejaba alumnos sin vincular:** con 24 alumnos se crearon 21. El frontend mandaba dos lotes en paralelo y el lock del gateway (`SOURCE_FILE_WORKSPACE_BUSY`) rechazaba algunas escrituras. Esas cuentas quedaban creadas sin legajo y "Crear accesos" ya no se podía repetir (409).
+  - Arreglo: `admin-users` reintenta las escrituras idempotentes ante ese error, y el frontend manda los lotes de a uno, tanto de alumnos como de docentes.
+  - La reparación de cuentas que ya quedaron a medias no se hizo: aflojaría una regla auditada (`adminUsersStudentIdentity.test.js`, variante `unlinked-email`). Queda como decisión de Miguel.
+- **Resultado después de los arreglos:** recorrido completo con una institución nueva, sin pasos manuales. 24/24 alumnos y 14/14 docentes con acceso, 20 titularidades, 124 cursadas y 56 filas de historia.
+- **Aula de la mesa:** el aula por defecto ahora también lee la columna `sede` de la planilla de horarios.
+- **Hallazgo anterior a hoy (P2):** "Eliminar institución" del Super Admin falla por FK con los recursos del gateway, que existen en todas las instituciones desde D1. Queda como decisión de Miguel.
+
+`npm run check` PASS (2717). **Producción:** hay que volver a aplicar `source_file_storage_register_on_institution.sql` y redeployar `admin-users` (después de la reauditoría).

@@ -751,7 +751,8 @@ export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], 
   // D1 P3: si la mesa no trae aula, se muestra el aula donde se cursa la materia (planilla de horarios).
   const aulaBySubject = new Map()
   for (const horario of asArray(options.horarios)) {
-    const aula = clean(horario?.aula ?? horario?.ubicacion)
+    // La plantilla de docentes trae la ubicacion en "sede"; otras fuentes, en aula o ubicacion.
+    const aula = clean(horario?.aula) || clean(horario?.ubicacion) || clean(horario?.sede)
     const key = `${clean(horario?.carrera).toUpperCase()}::${clean(horario?.materia).toUpperCase()}`
     if (aula && !AULA_PLACEHOLDERS.has(aula.toLowerCase()) && !aulaBySubject.has(key)) aulaBySubject.set(key, aula)
   }

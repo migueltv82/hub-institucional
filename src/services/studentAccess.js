@@ -2,7 +2,8 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 
 const STUDENT_ACCESS_BATCH_SIZE = 20
 const MIN_STUDENT_ACCESS_BATCH_SIZE = 1
-const STUDENT_ACCESS_CONCURRENCY = 2
+// D2: de a un lote. Dos lotes en paralelo escriben el mismo workspace y el lock del gateway de Storage rechaza a uno.
+const STUDENT_ACCESS_CONCURRENCY = 1
 
 function clean(value) {
   return String(value ?? '').trim()
