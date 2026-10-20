@@ -128,6 +128,22 @@ Hallazgos sin corregir y entregados para corrección por Claude. No aprobar I2a 
 
 ## Corrección (Claude, 2026-10-19)
 
+### Reauditoría independiente de Codex — 2026-10-20
+
+Revisados los correctivos `af9337b` y su estado integrado en `8ea0197`, sin modificar implementación. **P1 y P2 originales: cerrados en la base local.** Este resultado sustituye el FAIL original exclusivamente para esos hallazgos; no acredita aplicación en producción.
+
+- P1 (`07_academic_operations.sql:576`, `:928`, `:1880`; consumidor del acta `08_exam_tables.sql:2175`): identidad y lock de transacción comunes; comprobación de notas docentes dentro del lock; trigger de timestamp con reloj real (`07:566`). Helper interno con `search_path` vacío y sin EXECUTE para PUBLIC/anon/authenticated.
+- Repetí la reproducción propia original, con trigger descartable que demora tres segundos el INSERT histórico y una transacción docente iniciada antes. Ahora la nota `final:libre` queda última (10:41:34.917771 UTC frente a historia 10:41:34.902441), y el RPC devuelve `EXAM_REGULARITY_REQUIRED`, nunca `registered`.
+- P2 (`07:1682–1735`, resolución compartida de DNI): el escenario propio cambia la carrera del legajo a `OTHER CAREER`. Resultado: una rechazada por `ALUMNO_DE_OTRA_CARRERA`, cero importadas y ningún vínculo de nota al legajo.
+- Harness original actualizado: run `883bd9c4fb175786`, PASS, incluidos ambos órdenes concurrentes. Las dos carreras dejan `final:libre` última e inscripción denegada; cleanup de bases = 0.
+- Runner adversarial independiente reutilizado: run `93f10c14314eeeea`, 14 escenarios inspeccionados, cleanup = 0. Además de los dos casos anteriores: elementos escalares, 1001 filas, DNI con puntos/nota con coma, institución suspendida, workspace inexistente, DNI ambiguo, pending docente, owner/admin/editor, bloqueo y superadmin sin membership. Los resultados conservan autorización y aislamiento esperados. El PASS del runner por sí solo no evalúa esos 14 resultados: se revisaron sus valores explícitamente.
+
+Riesgo residual: pruebas locales sobre fixture sintético; no se ejecutó SQL remoto ni deploy, ni recorrido de navegador. No se modificaron archivos F1 ni el motor de vocales. El alcance es la corrección de los dos hallazgos originales, no una auditoría de todas las tarjetas incorporadas desde entonces.
+
+Gate repetido: `npm.cmd run check` PASS (349 archivos / 2692 tests, lint, auditoría del repo, build y auditoría del bundle de 120 archivos). La primera ejecución falló en tres comparaciones literales LF contra un checkout CRLF de `admin-users`; se restauró LF sin diff funcional ni cambios a los tests. Ejecución final con dos workers. Suites solicitadas: 3 archivos / 14 tests PASS. Typecheck no disponible; navegador no ejecutado; aviso preexistente de chunks >500 kB. Sin nuevos hallazgos P0–P3 en este alcance. **QUALITY GATE: PASS WITH WARNINGS** (bundle y verificación exclusivamente local).
+
+Al integrar el avance concurrente I3 (`0e0e086`) antes del push, se repitió `npm.cmd run check`: PASS, 351 archivos / 2699 tests, lint/build/auditorías (120 archivos de bundle). Se conservaron ambas entradas del WORKLOG. No se extiende el alcance de esta auditoría a I3.
+
 Corregido por el implementador. La re-auditoría liviana queda a cargo de quien no escribió el cambio.
 
 **P1 — carrera entre la carga docente y la importación.** Dos cambios en `07_academic_operations.sql`:

@@ -1380,3 +1380,12 @@ Evidencia: `supabase/security/D1_WALKTHROUGH_RESULT.md`.
 - **Runbook:** §8.0. `npm run check` PASS (2699).
 
 Evidencia: `supabase/security/PURGE_INSTITUTION_LOCAL_RESULT.md`.
+
+## AUD.I2a — Reauditoría independiente de correctivos (Codex, 2026-10-20)
+
+- Base sincronizada `release/v1` en `8ea0197`; correctivo auditado `af9337b`. Solo evidencia: `supabase/security/STUDENT_HISTORY_IMPORT_AUDIT.md` y este registro.
+- P1/P2 originales cerrados en local: repetición propia de la carrera docente/historia da `final:libre` última y `EXAM_REGULARITY_REQUIRED`; legajo de otra carrera da `ALUMNO_DE_OTRA_CARRERA`, cero notas importadas/vinculadas.
+- Harness actualizado PASS: `883bd9c4fb175786` (8 casos y 2 carreras); runner independiente `93f10c14314eeeea` (14 escenarios inspeccionados). Cleanup de bases = 0 en ambos. Suites solicitadas: 3 archivos / 14 tests PASS.
+- Sin cambios de implementación ni archivos F1; sin SQL remoto/deploy. Implementación alternativa pendiente de I2f conservada en stash al comprobar que Claude publicó `64986f7`; no se superpone con su trabajo ni se declara auditada aquí.
+- Gate final `npm.cmd run check`: PASS, 349 archivos / 2692 tests, lint/build/auditorías (bundle 120 archivos). Primera ejecución con tres fallos por CRLF en comparaciones literales; restaurado LF sin diff funcional ni tests modificados. Typecheck no disponible, navegador no ejecutado; warning preexistente de chunks >500 kB. QUALITY GATE: PASS WITH WARNINGS. P1/P2 originales cerrados; sin nuevos hallazgos en el alcance.
+- Antes del push se integró el avance concurrente `0e0e086` (I3), preservando ambas entradas del WORKLOG. Gate repetido sobre esa base: PASS, 351 archivos / 2699 tests, lint/build/auditorías. I3 no forma parte del alcance auditado.
