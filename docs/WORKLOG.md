@@ -1474,3 +1474,13 @@ Hay tests nuevos o actualizados para cada uno. `npm run check` PASS (2711). Falt
 - **Tests:** se ajustaron las consultas de Testing Library a los textos nuevos. Los textos que vienen de constantes en `.js` (estados, mensajes del motor) siguen sin tilde y sus tests no cambian.
 - **Pendiente:** un segundo pase con revisión manual para esas constantes y para las formas ambiguas.
 - `npm run check` PASS (2711).
+
+## 2026-10-20 — Fase 2: revisión en navegador real (Claude)
+
+Recorrido con Chromium en modo demo local. Se confirmó el modal de alta (etiquetas accesibles), el orden de Alumnos (catálogo → accesos → cursadas → historia) y que no hay errores en la consola. Se encontraron y corrigieron:
+- **Botones solo-ícono sin ícono** (bloquear y eliminar institución): el `min-w-0` de `.btn-*` comprimía el botón hasta 0 px de contenido. Ahora los íconos no se encogen y el grupo de botones de la tarjeta lleva `shrink-0`.
+- **Lupa sobre el texto en los buscadores:** `.input-base` pisaba el `pl-9`; ahora es `pl-9!` en los tres buscadores.
+- **Tildes:** el barrido ahora incluye las props `helper`, `description`, `eyebrow`, `subtitle` y `hint`, la palabra "padrón" y "Auditoría" del menú: 62 textos más.
+- **Instituciones:** "1 institución activa" en singular y la fecha de creación en formato argentino.
+
+`npm run check` PASS (2711).

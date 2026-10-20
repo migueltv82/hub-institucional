@@ -250,7 +250,7 @@ function SuperAdminAuditPage() {
       toast.success(`Padrones re-sincronizados${syncSummary ? `: ${syncSummary}.` : '.'}`)
       await refetchRosterAudit()
     } catch (syncError) {
-      toast.error(syncError.message || 'No se pudo re-sincronizar el padron.')
+      toast.error(syncError.message || 'No se pudo re-sincronizar el padrón.')
     } finally {
       setIsResyncingRoster(false)
     }
@@ -260,9 +260,9 @@ function SuperAdminAuditPage() {
     <div className="space-y-8">
       <section className="space-y-4">
         <SectionHeader
-          eyebrow="Auditoria"
+          eyebrow="Auditoría"
           title="Control institucional"
-          description="Esta pantalla concentra el monitoreo tecnico. Primero selecciona la institucion y despues revisa sus metricas, drift y sincronizacion."
+          description="Esta pantalla concentra el monitoreo técnico. Primero selecciona la institución y después revisa sus metricas, drift y sincronización."
         />
 
         <article className="soft-card bg-white">
@@ -329,7 +329,7 @@ function SuperAdminAuditPage() {
         <AuditMetricCard
           label="Administradores"
           value={currentInstitution?.admin_count ?? 0}
-          helper="Usuarios con gestion"
+          helper="Usuarios con gestión"
           icon={ShieldCheck}
           tone="slate"
         />
@@ -343,28 +343,28 @@ function SuperAdminAuditPage() {
         <AuditMetricCard
           label="Alumnos"
           value={currentInstitution?.student_count ?? 0}
-          helper="Padron institucional"
+          helper="Padrón institucional"
           icon={Users}
           tone="sky"
         />
         <AuditMetricCard
           label="Docentes"
           value={currentInstitution?.teacher_count ?? 0}
-          helper="Padron docente"
+          helper="Padrón docente"
           icon={UsersRound}
           tone="teal"
         />
         <AuditMetricCard
           label="Diferencias"
           value={rosterDrift}
-          helper={rosterIsAligned ? 'Sin desvio operativo' : 'Requiere revision'}
+          helper={rosterIsAligned ? 'Sin desvio operativo' : 'Requiere revisión'}
           icon={rosterIsAligned ? ShieldCheck : AlertTriangle}
           tone={rosterIsAligned ? 'slate' : 'amber'}
         />
         <AuditMetricCard
           label="Fuente"
           value={sourceLabel}
-          helper={isRemoteSession ? 'Sesion remota' : 'Sesion local'}
+          helper={isRemoteSession ? 'Sesión remota' : 'Sesión local'}
           icon={Database}
           tone="slate"
         />
@@ -393,7 +393,7 @@ function SuperAdminAuditPage() {
             <SummaryTile
               label="Institución"
               value={currentInstitution?.name ?? 'Sin seleccion'}
-              helper={currentInstitution?.slug ?? 'Selecciona una institucion'}
+              helper={currentInstitution?.slug ?? 'Selecciona una institución'}
               tone="cyan"
             />
             <SummaryTile
@@ -543,7 +543,7 @@ function SuperAdminAuditPage() {
             <AuditMetricCard
               label="Diferencias"
               value={rosterDrift}
-              helper={rosterIsAligned ? 'Sin desvio operativo' : 'Requiere revision'}
+              helper={rosterIsAligned ? 'Sin desvio operativo' : 'Requiere revisión'}
               icon={rosterIsAligned ? ShieldCheck : AlertTriangle}
               tone={rosterIsAligned ? 'slate' : 'amber'}
             />
@@ -551,12 +551,12 @@ function SuperAdminAuditPage() {
 
           <section className="grid gap-4 xl:grid-cols-2">
             <DatasetAuditCard
-              title="Padron de alumnos"
+              title="Padrón de alumnos"
               audit={rosterAudit.students}
               formatter={renderStudentAuditItem}
             />
             <DatasetAuditCard
-              title="Padron de docentes"
+              title="Padrón de docentes"
               audit={rosterAudit.teachers}
               formatter={renderTeacherAuditItem}
             />

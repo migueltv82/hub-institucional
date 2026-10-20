@@ -582,7 +582,7 @@ function GeneradorCronograma() {
       }
 
       if (result.failed > 0) {
-        toast.error(`Accesos procesados con ${result.failed} errores. Revisa DNI/email en el padron.`)
+        toast.error(`Accesos procesados con ${result.failed} errores. Revisa DNI/email en el padrón.`)
         return
       }
 
@@ -694,7 +694,7 @@ function GeneradorCronograma() {
       return false
     }
 
-    toast.success('Alumno agregado al padron.')
+    toast.success('Alumno agregado al padrón.')
     return true
   }
 
@@ -788,12 +788,12 @@ function GeneradorCronograma() {
     try {
       await saveSnapshotNow({ ...snapshotPayload, alumnos: nextAlumnos })
     } catch (error) {
-      toast.error(`La baja fue auditada, pero no se pudo guardar el padron actualizado: ${error.message}`)
+      toast.error(`La baja fue auditada, pero no se pudo guardar el padrón actualizado: ${error.message}`)
       return false
     }
 
     setAlumnos(nextAlumnos)
-    toast.success('Alumno eliminado del padron.')
+    toast.success('Alumno eliminado del padrón.')
     return true
   }
 
@@ -831,7 +831,7 @@ function GeneradorCronograma() {
       })
       setAlumnos(nextAlumnos)
       setDeletedPersonRecords((current) => current.filter((entry) => entry.id !== record.id))
-      toast.success('Alumno restaurado en el padron.')
+      toast.success('Alumno restaurado en el padrón.')
       return true
     } catch (error) {
       toast.error(`No se pudo restaurar el alumno: ${error.message}`)
@@ -862,7 +862,7 @@ function GeneradorCronograma() {
       return false
     }
 
-    toast.success('Docente agregado al padron.')
+    toast.success('Docente agregado al padrón.')
     return true
   }
 
@@ -993,7 +993,7 @@ function GeneradorCronograma() {
         cargaHorariaDocente: nextCargaHorariaDocente,
       })
     } catch (error) {
-      toast.error(`La baja fue auditada, pero no se pudo guardar el padron actualizado: ${error.message}`)
+      toast.error(`La baja fue auditada, pero no se pudo guardar el padrón actualizado: ${error.message}`)
       return false
     }
 
@@ -1002,7 +1002,7 @@ function GeneradorCronograma() {
     setDisponibilidadDocente(nextDisponibilidadDocente)
     setCargaHorariaDocente(nextCargaHorariaDocente)
     setRequiereRegeneracion(true)
-    toast.success('Docente eliminado del padron y sus horarios.')
+    toast.success('Docente eliminado del padrón y sus horarios.')
     return true
   }
 
@@ -1041,7 +1041,7 @@ function GeneradorCronograma() {
       setDocentes(nextDocentes)
       setDeletedPersonRecords((current) => current.filter((entry) => entry.id !== record.id))
       setRequiereRegeneracion(true)
-      toast.success('Docente restaurado en el padron.')
+      toast.success('Docente restaurado en el padrón.')
       return true
     } catch (error) {
       toast.error(`No se pudo restaurar el docente: ${error.message}`)
@@ -1613,7 +1613,7 @@ function GeneradorCronograma() {
                     canEditWorkspace={canEditWorkspace}
                     canManageDataSource={isSuperAdmin}
                     isRelationalWorkspaceSource={isRelationalWorkspaceSource}
-                    description="Subi la plantilla academica institucional con carreras, planes, materias y correlatividades."
+                    description="Subi la plantilla académica institucional con carreras, planes, materias y correlatividades."
                     onUploadMaster={onUploadMaster}
                     scope="institution"
                     title="Carga institucional"
@@ -1753,7 +1753,7 @@ function GeneradorCronograma() {
                 <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <h3 className="text-3xl font-bold text-slate-950">
-                      {activeWorkspaceView === 'students' ? 'Padron de alumnos' : 'Padron de docentes'}
+                      {activeWorkspaceView === 'students' ? 'Padrón de alumnos' : 'Padrón de docentes'}
                     </h3>
                     <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
                       {activeWorkspaceView === 'students'
@@ -1884,7 +1884,7 @@ function GeneradorCronograma() {
                         onRestore={restaurarPersonaDesdeBaja}
                         restoringId={restoringDeletedPersonId}
                         title="Alumnos eliminados"
-                        description="Alumnos dados de baja del padron activo. Restaurar recupera los datos guardados antes de la eliminacion."
+                        description="Alumnos dados de baja del padrón activo. Restaurar recupera los datos guardados antes de la eliminación."
                       />
                       {!isRelationalWorkspaceSource && (
                         <StudentSubjectEnrollmentSection
@@ -1904,7 +1904,7 @@ function GeneradorCronograma() {
                     canEditWorkspace={canEditWorkspace}
                     canManageDataSource={isSuperAdmin}
                     isRelationalWorkspaceSource={isRelationalWorkspaceSource}
-                    description="Subi o reemplaza la plantilla de docentes, titularidades, horarios y disponibilidad desde este modulo."
+                    description="Subi o reemplaza la plantilla de docentes, titularidades, horarios y disponibilidad desde este módulo."
                     onUploadTeachers={onUploadTeachers}
                     scope="teachers"
                     title="Carga docente"
@@ -1947,7 +1947,7 @@ function GeneradorCronograma() {
                     onRestore={restaurarPersonaDesdeBaja}
                     restoringId={restoringDeletedPersonId}
                     title="Docentes eliminados"
-                    description="Docentes dados de baja del padron activo. Restaurar recupera el perfil docente guardado antes de la eliminacion."
+                    description="Docentes dados de baja del padrón activo. Restaurar recupera el perfil docente guardado antes de la eliminación."
                   />
                 </>
               )}

@@ -233,7 +233,7 @@ function EnrollmentsSection({ model }) {
   return (
     <section className="space-y-3" aria-labelledby="course-preview-enrollments-title">
       <div>
-        <p className="soft-title">Padron de cursada</p>
+        <p className="soft-title">Padrón de cursada</p>
         <h3 className="mt-1 text-xl font-extrabold text-slate-950" id="course-preview-enrollments-title">Inscripciones registradas</h3>
       </div>
       <div className="overflow-x-auto rounded-md border border-slate-200">

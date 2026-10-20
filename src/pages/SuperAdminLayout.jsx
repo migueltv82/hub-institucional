@@ -26,7 +26,7 @@ const navItems = [
   },
   {
     to: '/super-admin/auditoria',
-    label: 'Auditoria',
+    label: 'Auditoría',
     icon: Database,
   },
 ]

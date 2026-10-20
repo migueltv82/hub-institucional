@@ -423,7 +423,7 @@ export default function StudentAcademicStatusPage() {
         <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Progreso" value={`${summary.progress}%`} helper={`${summary.approved} de ${summary.total} aprobadas`} tone="emerald" />
           <StatCard label="Regulares" value={summary.regular} helper="Con regularidad cargada" tone="sky" />
-          <StatCard label="Pendientes" value={summary.pending} helper="Todavia no aprobadas" tone="amber" />
+          <StatCard label="Pendientes" value={summary.pending} helper="Todavía no aprobadas" tone="amber" />
           <StatCard label="Creditos" value={`${summary.approvedCredits}/${summary.totalCredits}`} helper="Aprobados sobre el plan" />
         </section>
 

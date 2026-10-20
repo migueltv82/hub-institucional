@@ -21,7 +21,7 @@ function TeacherAccessSection({
             Accesos docentes
           </p>
           <h3 className="mt-2 text-xl font-extrabold text-slate-950">
-            Crear cuentas docentes desde padron
+            Crear cuentas docentes desde padrón
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Se toma la ficha desde la planilla de docentes. Materias y horas se cruzan automáticamente con horarios docentes.

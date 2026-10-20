@@ -330,14 +330,14 @@ function InstitutionAdminOverview({
           icon={GraduationCap}
           label="Docentes"
           value={overview.totals.teachers}
-          helper="Docentes unicos del padron"
+          helper="Docentes unicos del padrón"
           tone="metric-card--teal"
         />
         <InstitutionMetric
           icon={UsersRound}
           label="Alumnos"
           value={overview.totals.students}
-          helper="Registros del padron"
+          helper="Registros del padrón"
           tone="metric-card--blue"
         />
         <InstitutionMetric
@@ -488,7 +488,7 @@ function InstitutionAdminOverview({
                     ? `Carreras sin docentes asignados: ${overview.quality.careersWithoutTeachers.join(', ')}. `
                     : ''}
                   {overview.quality.teachersWithoutCareer > 0
-                    ? `${overview.quality.teachersWithoutCareer} docentes no tienen carrera asignada en el padron o no pudieron cruzarse con horarios. `
+                    ? `${overview.quality.teachersWithoutCareer} docentes no tienen carrera asignada en el padrón o no pudieron cruzarse con horarios. `
                     : ''}
                   {overview.quality.studentsWithoutCareer > 0
                     ? `${overview.quality.studentsWithoutCareer} alumnos no tienen carrera asignada.`

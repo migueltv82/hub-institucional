@@ -79,7 +79,7 @@ function StudentFinancialStatusSection({ institutionId, workspaceKey, useRemoteW
       </div>
 
       {isLoading ? (
-        <p className="mt-4 text-sm text-slate-500">Cargando padron...</p>
+        <p className="mt-4 text-sm text-slate-500">Cargando padrón...</p>
       ) : students.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">No hay alumnos sincronizados todavía.</p>
       ) : (

@@ -1129,7 +1129,7 @@ function TeacherSectionFilterBar({
         <p className="text-sm font-semibold text-slate-700">
           {displayedCount} de {filteredCount} docentes en filtro
         </p>
-        <p className="text-sm text-slate-500">Total padron: {totalCount}</p>
+        <p className="text-sm text-slate-500">Total padrón: {totalCount}</p>
       </div>
     </div>
   )
@@ -2285,7 +2285,7 @@ function TeacherSubjectAssignmentsPanel({
               <div>
                 <p className="text-xs font-extrabold uppercase text-amber-700">Licencia por materia</p>
                 <h3 className="mt-2 text-xl font-extrabold text-slate-950">Definir reemplazo de {getTeacherFullName(teacher)}</h3>
-                <p className="mt-2 text-sm text-slate-600">El reemplazante recibira inmediatamente acceso al padron, notas y asistencias de las materias elegidas.</p>
+                <p className="mt-2 text-sm text-slate-600">El reemplazante recibira inmediatamente acceso al padrón, notas y asistencias de las materias elegidas.</p>
               </div>
               <button type="button" className="btn-secondary px-3 py-2" onClick={() => setLeaveDraft(null)} title="Cerrar"><X className="h-4 w-4" /></button>
             </div>
@@ -2910,7 +2910,7 @@ function TeacherRosterSection({
             {filteredTeachers.length === 0 && (
               <div className="p-6 text-sm text-slate-500">
                 {teachers.length === 0
-                  ? 'No hay docentes cargados en el padron.'
+                  ? 'No hay docentes cargados en el padrón.'
                   : 'No se encontraron docentes con esos criterios.'}
               </div>
             )}

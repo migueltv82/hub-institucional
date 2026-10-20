@@ -34,7 +34,7 @@ describe('StudentRosterSection con plantilla nueva', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Nuevo alumno/i }))
 
-    expect(screen.getByRole('heading', { name: /Datos del padron/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Datos del padrón/i })).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Ana' } })
     fireEvent.change(screen.getByLabelText('Apellido'), { target: { value: 'Perez' } })
@@ -274,7 +274,7 @@ describe('StudentRosterSection con plantilla nueva', () => {
     expect(screen.queryByText('Otra Carrera')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByText('Ana Perez'))
-    expect(screen.getByRole('heading', { name: 'Datos del padron' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Datos del padrón' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Marcar adeuda cuota' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Ver ficha académica' })).toBeInTheDocument()
   })

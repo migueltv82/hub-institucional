@@ -543,6 +543,8 @@ textarea:focus-visible {
 .btn-primary svg,
 .btn-secondary svg,
 .btn-danger svg {
+  /* Fase 2: en botones solo-icono con poco espacio el icono se encogia a 0 px. */
+  flex-shrink: 0;
   transition: transform 180ms ease;
 }
 

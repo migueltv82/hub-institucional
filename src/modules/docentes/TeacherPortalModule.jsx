@@ -831,7 +831,7 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
         <section className="teacher-portal-alert rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p className="flex items-center gap-2 font-semibold">
             <AlertCircle className="h-4 w-4" />
-            No se encontro una coincidencia exacta entre tu usuario y el padron docente. Por seguridad, no se muestran datos de otros docentes.
+            No se encontro una coincidencia exacta entre tu usuario y el padrón docente. Por seguridad, no se muestran datos de otros docentes.
           </p>
         </section>
       )}

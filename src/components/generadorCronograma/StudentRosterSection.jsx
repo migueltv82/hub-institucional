@@ -702,7 +702,7 @@ function StudentEditModal({
             <p className="text-xs font-extrabold uppercase text-sky-700">
               {isCreating ? 'Nuevo alumno' : 'Editar alumno'}
             </p>
-            <h3 className="mt-2 text-2xl font-extrabold text-slate-950">Datos del padron</h3>
+            <h3 className="mt-2 text-2xl font-extrabold text-slate-950">Datos del padrón</h3>
           </div>
           <button type="button" className="btn-secondary px-3 py-2" onClick={onClose} title="Cerrar">
             <X className="h-4 w-4" />
@@ -1718,7 +1718,7 @@ function StudentRosterSection({
             </p>
             <h3 className="mt-2 text-xl font-extrabold text-slate-950">Listado, edicion y alta manual de alumnos</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Administra el padron cargado desde la planilla de alumnos. Los cambios se guardan en el workspace activo.
+              Administra el padrón cargado desde la planilla de alumnos. Los cambios se guardan en el workspace activo.
             </p>
           </div>
           <button

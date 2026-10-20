@@ -145,7 +145,7 @@ function SuperAdminOverviewPage() {
         <SectionHeader
           eyebrow="Vision general"
           title="Dashboard ejecutivo"
-          description="Esta portada muestra solo el estado global del sistema. El detalle institucional, los usuarios por rol y la auditoria viven en sus modulos."
+          description="Esta portada muestra solo el estado global del sistema. El detalle institucional, los usuarios por rol y la auditoría viven en sus módulos."
         />
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -197,7 +197,7 @@ function SuperAdminOverviewPage() {
             <SummaryTile
               label="Fuente"
               value={sourceLabel}
-              helper={isRemoteSession ? 'Sesion remota' : 'Sesion local'}
+              helper={isRemoteSession ? 'Sesión remota' : 'Sesión local'}
               tone="teal"
             />
           </div>
@@ -230,7 +230,7 @@ function SuperAdminOverviewPage() {
             <SummaryTile
               label="Auditoría"
               value="Por institucion"
-              helper="Metricas, drift y sincronizacion"
+              helper="Metricas, drift y sincronización"
               tone="amber"
             />
           </div>
@@ -241,7 +241,7 @@ function SuperAdminOverviewPage() {
         <SectionHeader
           eyebrow="Accesos"
           title="Entrar al módulo correcto"
-          description="Cada boton abre una vista enfocada. Asi evitamos repetir bloques y mantener todo amontonado en una sola pantalla."
+          description="Cada botón abre una vista enfocada. Asi evitamos repetir bloques y mantener todo amontonado en una sola pantalla."
         />
 
         <div className="grid gap-4 xl:grid-cols-3">
@@ -254,7 +254,7 @@ function SuperAdminOverviewPage() {
           <AccessCard
             to="/super-admin/usuarios"
             title="Usuarios y accesos"
-            description="Directorio de usuarios dividido por rol, con busqueda y gestion de accesos."
+            description="Directorio de usuarios dividido por rol, con búsqueda y gestión de accesos."
             icon={Users}
           />
           <AccessCard

@@ -21,7 +21,7 @@ function StudentAccessSection({
             Accesos de alumnos
           </p>
           <h3 className="mt-2 text-xl font-extrabold text-slate-950">
-            Crear usuarios desde el padron cargado
+            Crear usuarios desde el padrón cargado
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             Se creara una cuenta por alumno usando el email como usuario y el DNI como contraseña inicial.

@@ -146,7 +146,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
       <section className="soft-card">
         <h2 className="text-2xl font-bold text-slate-950">Selecciona una institución</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Usa la barra lateral para abrir el padron de alumnos o docentes de una institución.
+          Usa la barra lateral para abrir el padrón de alumnos o docentes de una institución.
         </p>
       </section>
     )
@@ -221,7 +221,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {isRelationalSource
               ? 'Esta vista lee directo el schema relacional académico nuevo.'
-              : 'Esta vista usa el snapshot institucional como respaldo para mantener el padron visible.'}
+              : 'Esta vista usa el snapshot institucional como respaldo para mantener el padrón visible.'}
           </p>
 
           <p className="mt-4 rounded-lg border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-600">
@@ -240,14 +240,14 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
         <StatTile
           label={audience === 'teachers' ? 'Docentes' : 'Alumnos'}
           value={items.length}
-          helper={audience === 'teachers' ? 'Registros visibles en el padron' : 'Registros visibles en el padron'}
+          helper={audience === 'teachers' ? 'Registros visibles en el padrón' : 'Registros visibles en el padrón'}
           icon={audience === 'teachers' ? UsersRound : GraduationCap}
           tone={audience === 'teachers' ? 'teal' : 'blue'}
         />
         <StatTile
           label="Activos"
           value={activeCount}
-          helper="Segun el estado operativo del padron"
+          helper="Segun el estado operativo del padrón"
           icon={ShieldCheck}
           tone="slate"
         />
@@ -261,7 +261,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
         <StatTile
           label={audience === 'teachers' ? 'Con teléfono' : 'Años'}
           value={tertiaryMetric}
-          helper={audience === 'teachers' ? 'Docentes con contacto visible' : 'Anios academicos representados'}
+          helper={audience === 'teachers' ? 'Docentes con contacto visible' : 'Años académicos representados'}
           icon={Phone}
           tone="teal"
         />
@@ -270,7 +270,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
       <section className="soft-card">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <span className="soft-title">Padron</span>
+            <span className="soft-title">Padrón</span>
             <h3 className="mt-2 text-2xl font-bold text-slate-950">{title}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Usa la búsqueda para filtrar nombres, carreras, contacto o identificadores.
@@ -280,7 +280,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
           <label className="relative w-full lg:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
-              className="input-base pl-9"
+              className="input-base pl-9!"
               placeholder={audience === 'teachers' ? 'Buscar docente, DNI o carrera' : 'Buscar alumno, email o carrera'}
               type="search"
               value={searchTerm}
@@ -294,7 +294,7 @@ export default function SuperAdminInstitutionRosterPage({ audience = 'students' 
 
         {error && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {error.message || 'No se pudo cargar el padron institucional.'}
+            {error.message || 'No se pudo cargar el padrón institucional.'}
           </div>
         )}
 

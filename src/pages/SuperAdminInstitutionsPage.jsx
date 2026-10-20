@@ -175,7 +175,7 @@ function SuperAdminInstitutionsPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               aria-label="Buscar por nombre, slug o plan"
-              className="input-base pl-9"
+              className="input-base pl-9!"
               placeholder="Nombre, slug o plan"
               type="search"
               value={searchTerm}
@@ -196,7 +196,7 @@ function SuperAdminInstitutionsPage() {
       <div className="rounded-lg border border-slate-200 bg-white/86 px-4 py-3 text-sm text-slate-600">
         {total === 0
           ? 'No hay instituciones activas para el criterio aplicado.'
-          : `Mostrando ${institutions.length} instituciones activas en esta página. Cada tarjeta resume alumnos, docentes, carreras y administradores.`}
+          : `Mostrando ${institutions.length} ${institutions.length === 1 ? 'institución activa' : 'instituciones activas'} en esta página. Cada tarjeta resume alumnos, docentes, carreras y administradores.`}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -227,11 +227,11 @@ function SuperAdminInstitutionsPage() {
                   </div>
                   <p className="mt-2 text-sm text-slate-500">{institution.slug}</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Creada {institution.created_at ? new Date(institution.created_at).toLocaleDateString() : 'N/D'}
+                    Creada {institution.created_at ? new Date(institution.created_at).toLocaleDateString('es-AR') : 'N/D'}
                   </p>
                 </div>
 
-                <div className="flex gap-2 self-start">
+                <div className="flex shrink-0 gap-2 self-start">
                   <button
                     className={`btn-secondary p-2 ${
                       institution.status === 'active'
@@ -263,7 +263,7 @@ function SuperAdminInstitutionsPage() {
                 <SummaryTile
                   label="Administradores"
                   value={institution.admin_count ?? 0}
-                  helper="Usuarios con acceso de gestion"
+                  helper="Usuarios con acceso de gestión"
                   tone="slate"
                 />
                 <SummaryTile
@@ -275,13 +275,13 @@ function SuperAdminInstitutionsPage() {
                 <SummaryTile
                   label="Alumnos"
                   value={institution.student_count ?? 0}
-                  helper="Personas en padron"
+                  helper="Personas en padrón"
                   tone="blue"
                 />
                 <SummaryTile
                   label="Docentes"
                   value={institution.teacher_count ?? 0}
-                  helper="Personas en padron"
+                  helper="Personas en padrón"
                   tone="teal"
                 />
               </div>

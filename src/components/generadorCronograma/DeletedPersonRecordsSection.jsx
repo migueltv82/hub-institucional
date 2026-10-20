@@ -82,7 +82,7 @@ function DeletedPersonRecordsSection({
                         className="btn-secondary px-3 py-2"
                         disabled={!canRestore || restoringId === record.id}
                         onClick={() => onRestore?.(record)}
-                        title={canRestore ? 'Restaurar en el padron activo' : 'La restauración de administrativos requiere superadmin/Auth'}
+                        title={canRestore ? 'Restaurar en el padrón activo' : 'La restauración de administrativos requiere superadmin/Auth'}
                       >
                         <RotateCcw className="h-4 w-4" />
                         {restoringId === record.id ? 'Restaurando...' : 'Restaurar'}
