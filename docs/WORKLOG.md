@@ -1441,3 +1441,11 @@ El portal alumno infería "Aprobada" desde 6 cuando una nota final no traía con
 - **Harness:** `validateTenantCreationLocal` reproduce los tres escenarios de la auditoría con Auth y Edge reales: PASS, run `2f1af00344ba0b0f`, cleanup 0. Contra la Edge anterior falla en el P1 (control negativo).
 - **Evidencia:** `TENANT_CREATION_LOCAL_RESULT.md`. Riesgo residual en `docs/SECURITY.md`.
 - **Pendiente:** reauditoría de Codex (I2f). El redeploy de `admin-users` espera esa reauditoría y el SQL de Producción.
+
+## 2026-10-20 — Producción: 07, 08 y registro de recursos aplicados y verificados (Miguel aplica, Claude verifica)
+
+- Miguel corrió 07 (con 03.5c), 08 y `source_file_storage_register_on_institution.sql` en el SQL Editor.
+- Claude verificó con una huella de 99 objetos contra una base local con los mismos archivos: 99/99. Las 5 diferencias de policies resultaron ser solo de impresión (`auth.uid()` contra `uid()`).
+- 03.5c validado, RPC de mesas con 14 parámetros, `instituciones_incompletas = 0`, datos sin cambios.
+- Evidencia: `supabase/security/PRODUCTION_APPLY_2026-10-20.md`.
+- Falta el redeploy de `admin-users`, que espera la reauditoría de I2f.
