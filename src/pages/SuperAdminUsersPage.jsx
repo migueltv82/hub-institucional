@@ -262,7 +262,7 @@ function SuperAdminUsersPage() {
         <div className="max-w-3xl">
           <h2 className="text-3xl font-bold text-slate-950">Usuarios y accesos</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Esta vista queda dedicada al directorio de usuarios por rol. Primero elegi el grupo y después filtra por nombre,
+            Esta vista queda dedicada al directorio de usuarios por rol. Primero elegí el grupo y después filtra por nombre,
             apellido, DNI o institución para ubicar rápido cada acceso.
           </p>
         </div>
@@ -336,7 +336,7 @@ function SuperAdminUsersPage() {
       {!selectedRole && (
         <section className="soft-card bg-white">
           <span className="soft-title">Selección guiada</span>
-          <h3 className="mt-2 text-2xl font-bold text-slate-950">Elegi un rol para empezar</h3>
+          <h3 className="mt-2 text-2xl font-bold text-slate-950">Elegí un rol para empezar</h3>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
             Superadmins, administradores, docentes y alumnos viven en el mismo directorio, pero se consultan por separado
             para no mezclar perfiles distintos en una sola lista.

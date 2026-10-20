@@ -156,7 +156,7 @@ function buildOperationalBuckets({ feasibility = {}, calendar = {}, identity = {
       bucket: 'MINIMUM_REVIEW_CANDIDATES',
       count: minimum,
       percentage: total > 0 ? Number((minimum / total).toFixed(4)) : 0,
-      description: 'Mesas minimas con un vocal o revision institucional.',
+      description: 'Mesas minimas con un vocal o revisión institucional.',
       recommendedAction: 'Revisar manualmente criterio de tribunal minimo.',
     },
     {
@@ -177,7 +177,7 @@ function buildOperationalBuckets({ feasibility = {}, calendar = {}, identity = {
       bucket: 'IDENTITY_V2_BLOCKED',
       count: identityBlocked,
       percentage: identity.totalSubjects > 0 ? Number((identityBlocked / identity.totalSubjects).toFixed(4)) : 0,
-      description: 'Materias con identidad v2 pendiente de confirmacion.',
+      description: 'Materias con identidad v2 pendiente de confirmación.',
       recommendedAction: 'Cerrar homonimias antes de comparacion final compactada.',
     },
   ]

@@ -367,7 +367,7 @@ function buildUserRoleSummary(users) {
     {
       key: 'administrators',
       label: 'Administradores',
-      description: 'Usuarios con gestion institucional.',
+      description: 'Usuarios con gestión institucional.',
       count: counts.administrators,
     },
     {

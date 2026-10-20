@@ -138,7 +138,7 @@ function DiagnosticSection({ model, mode }) {
           <p className="font-extrabold">No existe un vinculo carrera-plan seleccionable.</p>
           <p className="mt-1">
             {mode === 'admin'
-              ? 'Administración puede preparar un alta explicita mediante la RPC auditada disponible mas abajo.'
+              ? 'Administración puede preparar un alta explicita mediante la RPC auditada disponible más abajo.'
               : 'Solicita a Administración que revise y vincule tu identidad académica.'}
           </p>
         </div>

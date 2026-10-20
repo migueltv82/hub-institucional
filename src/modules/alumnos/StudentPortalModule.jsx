@@ -31,7 +31,7 @@ import { useStudentStore } from './stores/studentStore.js'
 
 const baseNavItems = [
   { to: '/app/dashboard', label: 'Dashboard', icon: GraduationCap },
-  { to: '/app/estado-academico', label: 'Estado academico', icon: ListChecks },
+  { to: '/app/estado-academico', label: 'Estado académico', icon: ListChecks },
   { to: '/app/materias', label: 'Materias', icon: BookOpenCheck },
   { to: '/app/companeros', label: 'Compañeros', icon: UsersRound },
   { to: '/app/calificaciones', label: 'Calificaciones', icon: ClipboardList },
@@ -138,7 +138,7 @@ function StudentPortalLayout({
 
   const navItems = [...baseNavItems, ...(showCourseEnrollmentPreview ? [{
     to: '/app/inscripcion-cursado-preview',
-    label: 'Inscripcion al cursado',
+    label: 'Inscripción al cursado',
     icon: BookMarked,
   }] : [])]
 

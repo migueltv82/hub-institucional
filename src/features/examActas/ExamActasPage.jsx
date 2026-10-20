@@ -211,7 +211,7 @@ function SpecialEnrollmentDialog({ mesa, students, onClose, onConfirm, busy }) {
           required
           value={studentRecordId}
         >
-          <option value="">{careerStudents.length ? 'Elegi un alumno' : 'No hay alumnos de esta carrera'}</option>
+          <option value="">{careerStudents.length ? 'Elegí un alumno' : 'No hay alumnos de esta carrera'}</option>
           {careerStudents.map((student) => (
             <option key={student.record_id} value={student.record_id}>
               {clean(student.apellido) ? `${student.apellido}, ${student.nombre}` : student.full_name} · DNI {student.dni || '-'}
@@ -435,7 +435,7 @@ function ExamActasPage({
               Mesas y actas
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Elegi el día, revisa las mesas por carrera y año, e imprimi las actas volantes. Las mesas sin alumnos inscriptos no generan acta.
+              Elegí el día, revisa las mesas por carrera y año, e imprimí las actas volantes. Las mesas sin alumnos inscriptos no generan acta.
             </p>
           </div>
           <button className="btn-secondary" disabled={loading} onClick={reload} type="button">

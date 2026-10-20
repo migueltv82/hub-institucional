@@ -471,7 +471,7 @@ function InteractiveVocalSelectionPanel({
 
           {teacherLoadSummary.length > 0 && (
             <section className="soft-card">
-              <p className="soft-title">Carga docente (mitad mas uno)</p>
+              <p className="soft-title">Carga docente (mitad más uno)</p>
               <div className="mt-3 overflow-hidden rounded-md border border-slate-200">
                 <div className="max-h-64 overflow-auto">
                   <table className="min-w-full divide-y divide-slate-200 bg-white">

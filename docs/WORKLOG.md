@@ -1512,3 +1512,14 @@ Al cargarlas en la app real (stack local completo) aparecieron dos fallas que ta
 - **Material de apoyo:** frases clave, preguntas frecuentes con respuestas verificadas y qué no mostrar todavía.
 
 Los nombres y DNI de las cuentas se verificaron contra `scripts/buildDemoWorkbooks.mjs`.
+
+## 2026-10-20 — Fase 2: segundo pase de tildes y corrección del check (Claude)
+
+- **Error mío en `4fadd6b`:** se versionaron los `.xlsx` de `docs/demo-data/` y la auditoría del repo no admite binarios fuera de `public/plantillas`. `npm run check` quedó en rojo en `4fadd6b` y `ea80d55`; el PASS anterior se había corrido antes de agregarlos a git.
+  - Corrección: los `.xlsx` dejan de versionarse (`.gitignore`) y se generan con `node scripts/buildDemoWorkbooks.mjs`.
+  - No se tocó la lista de binarios permitidos de la auditoría.
+- **Tildes, segundo pase:**
+  - textos en constantes de objetos (`label`, `title`, `description`…), como los menús "Estado académico" e "Inscripción al cursado": 31 textos;
+  - formas que en la interfaz siempre llevan tilde ("más", "elegí", "imprimí", "abrí", "escribí", "subí"): 27 textos.
+  - Cada cambio se revisó línea por línea antes de aplicarlo, y se ajustaron las expectativas de los tests.
+- `npm run check` PASS (2717).

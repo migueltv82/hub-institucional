@@ -53,7 +53,7 @@ describe('buildRegularExamComparisonAuditSummary', () => {
 
     expect(summary).toMatchObject({
       status: 'OK',
-      title: 'Resumen de auditoria comparativa - OK',
+      title: 'Resumen de auditoría comparativa - OK',
       metrics: {
         totalLegacyMesas: 3,
         totalNewMesas: 3,

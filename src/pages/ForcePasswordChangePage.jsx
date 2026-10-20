@@ -45,7 +45,7 @@ function ForcePasswordChangePage() {
         </h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           {user?.email ? <>Ingresaste como <strong>{user.email}</strong>. </> : null}
-          Tu contraseña inicial es tu DNI. Antes de seguir, elegi una nueva de al menos 8 caracteres que no contenga tu DNI.
+          Tu contraseña inicial es tu DNI. Antes de seguir, elegí una nueva de al menos 8 caracteres que no contenga tu DNI.
         </p>
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>

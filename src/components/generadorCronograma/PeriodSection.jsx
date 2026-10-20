@@ -84,7 +84,7 @@ function PeriodSection({
             {isRegularExam ? 'Llamados regulares' : 'Rango de mesas especiales'}
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Elegi si el período es regular o especial. Las mesas especiales quedan pensadas para pedidos puntuales y carga manual.
+            Elegí si el período es regular o especial. Las mesas especiales quedan pensadas para pedidos puntuales y carga manual.
           </p>
         </div>
         <span className="status-chip w-fit border-amber-200 bg-amber-50 text-amber-800">

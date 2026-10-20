@@ -1472,7 +1472,7 @@ function GeneradorCronograma() {
     {
       key: 'overview',
       label: 'Inicio',
-      helper: 'Institucion',
+      helper: 'Institución',
       icon: Home,
     },
     {
@@ -1484,7 +1484,7 @@ function GeneradorCronograma() {
     ...(showAdvancedSection ? [{
       key: 'advanced',
       label: 'Avanzado',
-      helper: devAuditRoleAuthorized ? 'Auditoria tecnica' : 'Diagnostico DEV',
+      helper: devAuditRoleAuthorized ? 'Auditoría técnica' : 'Diagnóstico DEV',
       icon: Wrench,
     }] : []),
   ]
@@ -1613,7 +1613,7 @@ function GeneradorCronograma() {
                     canEditWorkspace={canEditWorkspace}
                     canManageDataSource={isSuperAdmin}
                     isRelationalWorkspaceSource={isRelationalWorkspaceSource}
-                    description="Subi la plantilla académica institucional con carreras, planes, materias y correlatividades."
+                    description="Subí la plantilla académica institucional con carreras, planes, materias y correlatividades."
                     onUploadMaster={onUploadMaster}
                     scope="institution"
                     title="Carga institucional"
@@ -1904,7 +1904,7 @@ function GeneradorCronograma() {
                     canEditWorkspace={canEditWorkspace}
                     canManageDataSource={isSuperAdmin}
                     isRelationalWorkspaceSource={isRelationalWorkspaceSource}
-                    description="Subi o reemplaza la plantilla de docentes, titularidades, horarios y disponibilidad desde este módulo."
+                    description="Subí o reemplaza la plantilla de docentes, titularidades, horarios y disponibilidad desde este módulo."
                     onUploadTeachers={onUploadTeachers}
                     scope="teachers"
                     title="Carga docente"

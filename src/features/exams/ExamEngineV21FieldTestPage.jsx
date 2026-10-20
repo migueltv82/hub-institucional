@@ -53,7 +53,7 @@ import { runExamEngineV21DraftWorkflowInWorker } from '../../workers/examEngineV
 // especial se muestra solo el formulario manual. La rama se decide por
 // engineData.examCallConfig.tipoPeriodo, fijado al entrar a este paso.
 const WIZARD_STEPS = [
-  { id: 'config', title: 'Configurar llamado', description: 'Fechas, tipo de llamado y alcance del periodo de mesas.' },
+  { id: 'config', title: 'Configurar llamado', description: 'Fechas, tipo de llamado y alcance del período de mesas.' },
   { id: 'armar', title: 'Armar mesas', description: 'Precronograma, combinar y completar tribunales (o cargarlas a mano si es especial).' },
   { id: 'review', title: 'Envío a docentes', description: 'Publicá el precronograma completo para que lo confirmen.' },
   { id: 'final', title: 'Cronograma final', description: 'Revisá las confirmaciones y publicá la versión definitiva.' },
@@ -931,7 +931,7 @@ function ExamEngineV21FieldTestPage({
               Cronograma de mesas de examen
             </h3>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-              {isPreview ? 'Elegi las fechas y el alcance para probar el armado de mesas con los datos de tu institución.' : 'Configura el llamado, arma el precronograma con sus agrupaciones y vocales, envialo a los docentes y aplica solamente los cambios solicitados antes de publicar.'}
+              {isPreview ? 'Elegí las fechas y el alcance para probar el armado de mesas con los datos de tu institución.' : 'Configura el llamado, arma el precronograma con sus agrupaciones y vocales, envialo a los docentes y aplica solamente los cambios solicitados antes de publicar.'}
             </p>
           </div>
           <button

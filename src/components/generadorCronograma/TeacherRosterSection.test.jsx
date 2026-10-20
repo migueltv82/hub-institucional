@@ -356,7 +356,7 @@ describe('TeacherRosterSection fechas bloqueadas', () => {
     }
 
     expectStat('Docentes', '2')
-    expectStat('Dias', '2')
+    expectStat('Días', '2')
     expectStat('Franjas', '3')
     expectStat('Horas catedra', '7')
     expect(within(summary).getByText('Ana Diaz')).toBeInTheDocument()

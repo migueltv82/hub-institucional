@@ -72,14 +72,14 @@ function PwaInstallPrompt({ isAuthenticated }) {
             Descargar Institutional Hub
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            Accede mas rápido, trabaja en ventana independiente y conserva la experiencia lista
+            Accede más rápido, trabaja en ventana independiente y conserva la experiencia lista
             para operar cada vez que entres.
           </p>
         </div>
 
         {!canInstall && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-            Si el botón no aparece en este navegador, abri el menú de Chrome o Edge y elegi
+            Si el botón no aparece en este navegador, abrí el menú de Chrome o Edge y elegí
             <strong> Instalar app</strong>.
           </div>
         )}

@@ -33,7 +33,7 @@ function WorkspaceSidebar({
     {
       key: 'dashboard',
       label: 'Inicio',
-      helper: dataReady ? 'Institucion lista' : 'Completar datos base',
+      helper: dataReady ? 'Institución lista' : 'Completar datos base',
       icon: Home,
       accent: 'text-sky-300',
     },

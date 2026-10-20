@@ -84,7 +84,7 @@ function StudentAccessSection({
           </ul>
           {resultErrors.length > 6 && (
             <p className="mt-2 font-semibold">
-              Hay {resultErrors.length - 6} errores mas en el resultado del proceso.
+              Hay {resultErrors.length - 6} errores más en el resultado del proceso.
             </p>
           )}
         </div>

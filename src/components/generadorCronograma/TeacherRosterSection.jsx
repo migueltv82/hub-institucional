@@ -55,7 +55,7 @@ const TURN_OPTIONS = ['MANANA', 'TARDE', 'NOCHE']
 const LOAD_ROLE_OPTIONS = ['TITULAR', 'CO_DOCENTE', 'AUXILIAR', 'SUPLENTE', 'REEMPLAZO']
 const LOAD_STATUS_OPTIONS = ['ACTIVO', 'LICENCIA', 'RENUNCIA', 'BAJA', 'REEMPLAZADO']
 const TEACHER_ADMIN_TABS = [
-  { key: 'roster', label: 'Padron' },
+  { key: 'roster', label: 'Padrón' },
   { key: 'diagnostics', label: 'Control de datos' },
   { key: 'availability', label: 'Disponibilidad' },
   { key: 'blocked-dates', label: 'Bloqueos' },
@@ -79,16 +79,16 @@ function buildTeacherRosterCareerOptions(careerOptions = [], teachers = []) {
 }
 const TEACHER_ADMIN_TAB_HEADERS = {
   roster: {
-    title: 'Padron docente',
-    description: 'Datos personales, contacto y resumen academico de cada docente.',
+    title: 'Padrón docente',
+    description: 'Datos personales, contacto y resumen académico de cada docente.',
   },
   diagnostics: {
     title: 'Control de datos docentes',
-    description: 'Validacion de fuentes, titularidades, disponibilidad y materias del alcance.',
+    description: 'Validación de fuentes, titularidades, disponibilidad y materias del alcance.',
   },
   availability: {
     title: 'Disponibilidad docente',
-    description: 'Dias y franjas declaradas para asistencia al instituto.',
+    description: 'Días y franjas declaradas para asistencia al instituto.',
   },
   'blocked-dates': {
     title: 'Bloqueos docentes',
@@ -787,7 +787,7 @@ function summarizeAvailabilityRows(rows = []) {
 function AvailabilityStatStrip({ stats }) {
   const items = [
     { label: 'Docentes', value: stats.docentes, tone: 'text-teal-700' },
-    { label: 'Dias', value: stats.dias, tone: 'text-sky-700' },
+    { label: 'Días', value: stats.dias, tone: 'text-sky-700' },
     { label: 'Franjas', value: stats.bloques, tone: 'text-lime-700' },
     { label: 'Horas catedra', value: formatCatedraHours(stats.horas), tone: 'text-orange-700' },
   ]
@@ -1394,7 +1394,7 @@ function AvailabilityAdminPanel({
           )}
           {visibleScheduleAvailabilityRows.length > 0 && scheduleAvailabilityRowsToDisplay.length === 0 && (
             <div className="p-6 text-sm font-semibold text-slate-500">
-              La grilla esta oculta. Elegi 5, 10, 20 o todos para mostrar docentes.
+              La grilla esta oculta. Elegí 5, 10, 20 o todos para mostrar docentes.
             </div>
           )}
         </div>
@@ -1508,7 +1508,7 @@ function AvailabilityAdminPanel({
         {disponibilidadDocente.length === 0 && (
           <div className="p-6 text-sm text-slate-500">
             {manualTotalCount > 0
-              ? 'La grilla esta oculta. Elegi 5, 10, 20 o todos para mostrar disponibilidad.'
+              ? 'La grilla esta oculta. Elegí 5, 10, 20 o todos para mostrar disponibilidad.'
               : 'No hay disponibilidad docente cargada.'}
           </div>
         )}
@@ -1660,7 +1660,7 @@ function TeacherBlockedDatesAdminPanel({
         {fechasBloqueadasDocente.length === 0 && (
           <div className="p-6 text-sm text-slate-500">
             {totalRowsCount > 0
-              ? 'La grilla esta oculta. Elegi 5, 10, 20 o todos para mostrar bloqueos.'
+              ? 'La grilla esta oculta. Elegí 5, 10, 20 o todos para mostrar bloqueos.'
               : 'No hay fechas bloqueadas cargadas.'}
           </div>
         )}
@@ -1848,7 +1848,7 @@ function LoadAdminPanel({
         {cargaHorariaDocente.length === 0 && (
           <div className="p-6 text-sm text-slate-500">
             {totalRowsCount > 0
-              ? 'La grilla esta oculta. Elegi 5, 10, 20 o todos para mostrar cargas horarias.'
+              ? 'La grilla esta oculta. Elegí 5, 10, 20 o todos para mostrar cargas horarias.'
               : 'No hay carga horaria docente cargada.'}
           </div>
         )}
@@ -2185,7 +2185,7 @@ function TeacherSubjectAssignmentsPanel({
         <h4 className="font-extrabold text-slate-950">Materias asignadas</h4>
       </div>
       <p className="mt-1 text-sm text-slate-600">
-        Elegi las materias del docente y su condición. Habilita al docente a cargar asistencia y notas desde su portal.
+        Elegí las materias del docente y su condición. Habilita al docente a cargar asistencia y notas desde su portal.
       </p>
 
       {!teacherEmail && (
@@ -2916,7 +2916,7 @@ function TeacherRosterSection({
             )}
             {filteredTeachers.length > 0 && rosterTeachersToDisplay.length === 0 && (
               <div className="p-6 text-sm font-semibold text-slate-500">
-                La grilla esta oculta. Elegi 5, 10, 20 o todos para mostrar docentes.
+                La grilla esta oculta. Elegí 5, 10, 20 o todos para mostrar docentes.
               </div>
             )}
           </div>

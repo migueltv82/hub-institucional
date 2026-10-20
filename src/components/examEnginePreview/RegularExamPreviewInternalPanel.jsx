@@ -591,7 +591,7 @@ export function RegularExamPreviewInternalPanel(props) {
       <section className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-3" aria-label="Alertas institucionales del preview">
         <h4 className="text-sm font-extrabold uppercase text-sky-900">Alertas institucionales</h4>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-bold text-slate-700">
-          <li>Mitad mas uno activa; no se relaja por defecto.</li>
+          <li>Mitad más uno activa; no se relaja por defecto.</li>
           <li>Toda mesa con 1 vocal requiere revisión manual y se marca como TRIBUNAL_UN_VOCAL.</li>
           <li>{completionRate >= 0.8 ? 'El escenario actual supera 80%.' : 'Calendario actual insuficiente si no supera 80%.'}</li>
           <li>No usar para publicación oficial.</li>

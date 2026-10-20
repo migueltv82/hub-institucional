@@ -873,7 +873,7 @@ function ResetAcademicRecordsDialog({
 
         <label className="mt-5 block">
           <span className="text-sm font-bold text-slate-800">
-            Escribi {RESET_CONFIRMATION_TEXT} para confirmar
+            Escribí {RESET_CONFIRMATION_TEXT} para confirmar
           </span>
           <input
             className="input-base mt-2"
@@ -991,7 +991,7 @@ function StudentAcademicDetailPage({
     const availableRowsHeight = footerTop - tableTop - headerHeight
     const rowHeight = Math.max(2.4, Math.min(4.2, availableRowsHeight / Math.max(rows.length, 1)))
     const columns = [
-      { key: 'year', label: 'ANIO', width: 10 },
+      { key: 'year', label: 'AÑO', width: 10 },
       { key: 'subject', label: 'MATERIA', width: 65 },
       { key: 'score', label: 'NUM.', width: 13 },
       { key: 'letters', label: 'LETRAS', width: 16 },
@@ -1814,7 +1814,7 @@ function StudentRosterSection({
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
-            Escribi un nombre, apellido, DNI, carrera, año o email para buscar entre los {alumnos.length} alumnos cargados.
+            Escribí un nombre, apellido, DNI, carrera, año o email para buscar entre los {alumnos.length} alumnos cargados.
           </div>
         )}
       </div>

@@ -9,7 +9,13 @@ Datos inventados pero creíbles para mostrar la app: el **Instituto Superior del
 | `demo-alumnos.xlsx` | 24 alumnos de 1.º y 2.º año, con 124 inscripciones a materias |
 | `demo-historia-academica.xlsx` | Historia de los alumnos de 2.º año: 46 aprobadas (notas de 4 a 10), 8 regulares para rendir en la mesa y 2 libres, para mostrar el rechazo |
 
-Se generan con `node scripts/buildDemoWorkbooks.mjs`, que siempre arma el mismo contenido. `scripts/buildDemoWorkbooks.test.js` las lee con los mismos parsers que usa la app.
+**Los `.xlsx` no se versionan**: la auditoría del repo no admite binarios fuera de `public/plantillas`. Para generarlos, desde la carpeta del repo:
+
+```powershell
+node scripts/buildDemoWorkbooks.mjs
+```
+
+Quedan en esta carpeta, siempre con el mismo contenido. `scripts/buildDemoWorkbooks.test.js` los lee con los mismos parsers que usa la app.
 
 ## Orden de carga
 

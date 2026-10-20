@@ -55,7 +55,7 @@ function LimitNotice({ shown, total, onShowMore, label }) {
     <p>
       Mostrando {shown} de {total}.{' '}
       <button type="button" onClick={onShowMore}>
-        Ver mas {label}
+        Ver más {label}
       </button>
     </p>
   )

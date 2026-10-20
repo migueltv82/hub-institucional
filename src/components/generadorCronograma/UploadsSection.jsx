@@ -8,7 +8,7 @@ const UPLOAD_ITEMS = {
     description: 'Carreras, planes, materias, afinidades y correlatividades.',
     inputId: 'upload-master-workbook',
     label: 'Carga recomendada',
-    title: 'Plantilla academica',
+    title: 'Plantilla académica',
   },
   docentesWorkbook: {
     description: 'Docentes, titularidades, materias, horarios y disponibilidad.',

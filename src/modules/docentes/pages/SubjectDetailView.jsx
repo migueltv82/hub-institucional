@@ -26,9 +26,9 @@ const DETAIL_TABS = [
 
 const GRADE_SLOTS = [
   { key: 'partial-1', label: 'Parcial 1', gradeType: 'partial', attemptNumber: 1 },
-  { key: 'makeup-1', label: 'Recuperacion 1', gradeType: 'makeup', attemptNumber: 1 },
+  { key: 'makeup-1', label: 'Recuperación 1', gradeType: 'makeup', attemptNumber: 1 },
   { key: 'partial-2', label: 'Parcial 2', gradeType: 'partial', attemptNumber: 2 },
-  { key: 'makeup-2', label: 'Recuperacion 2', gradeType: 'makeup', attemptNumber: 2 },
+  { key: 'makeup-2', label: 'Recuperación 2', gradeType: 'makeup', attemptNumber: 2 },
   { key: 'final', label: 'Nota final', gradeType: 'final', attemptNumber: 1 },
 ]
 

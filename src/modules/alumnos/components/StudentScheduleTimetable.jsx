@@ -51,7 +51,7 @@ export default function StudentScheduleTimetable({ schedules = [], institutionNa
   function handlePrint(group) {
     try {
       imprimirHorarioCursada(group, {
-        title: `${institutionName || 'Institucion'} - ${studentName || 'Alumno'} - ${group.carrera}`,
+        title: `${institutionName || 'Institución'} - ${studentName || 'Alumno'} - ${group.carrera}`,
       })
     } catch (error) {
       toast.error(error.message || 'No se pudo imprimir el horario.')

@@ -45,7 +45,7 @@ describe('RegularExamComparisonAudit', () => {
 
     const summary = screen.getByRole('region', { name: 'Resumen de auditoría' })
     expect(summary).toBeInTheDocument()
-    expect(within(summary).getByText(/Resumen de auditoria comparativa/)).toBeInTheDocument()
+    expect(within(summary).getByText(/Resumen de auditoría comparativa/)).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Export interno serializable' })).toBeInTheDocument()
   })
 

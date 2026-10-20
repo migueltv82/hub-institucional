@@ -113,7 +113,7 @@ function AuditDiffBlock({ title, items = EMPTY_ARRAY, formatter }) {
             <p key={`${title}-${formatter(item)}-${index}`}>{formatter(item)}</p>
           ))}
           {items.length > 5 && (
-            <p className="font-semibold text-slate-500">+ {items.length - 5} registros mas</p>
+            <p className="font-semibold text-slate-500">+ {items.length - 5} registros más</p>
           )}
         </div>
       )}

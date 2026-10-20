@@ -57,7 +57,7 @@ function ExamActaEditor({ institutionId, workspaceKey = 'main', examKey, roster,
       {closed && (
         <p className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           <Lock className="h-4 w-4" />
-          Acta cerrada.{isStaff ? ' Para corregir una nota escribi el motivo y guarda.' : ' Si hay un error, avisale a secretaria.'}
+          Acta cerrada.{isStaff ? ' Para corregir una nota escribí el motivo y guarda.' : ' Si hay un error, avisale a secretaria.'}
         </p>
       )}
       {!closed && !roster?.puedeCargarNotas && (
@@ -123,7 +123,7 @@ function ExamActaEditor({ institutionId, workspaceKey = 'main', examKey, roster,
         </table>
         <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-600">
           {summary.total} inscriptos: {summary.aprobados} aprobados, {summary.desaprobados} desaprobados, {summary.ausentes} ausentes
-          {summary.sinCargar ? `, ${summary.sinCargar} sin cargar` : ''}. Se aprueba con 4 o mas; sin nota final se toma el promedio de escrito y oral.
+          {summary.sinCargar ? `, ${summary.sinCargar} sin cargar` : ''}. Se aprueba con 4 o más; sin nota final se toma el promedio de escrito y oral.
         </p>
       </div>
       {editable && (

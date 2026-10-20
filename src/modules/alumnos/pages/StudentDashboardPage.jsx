@@ -274,22 +274,22 @@ function buildAcademicLabel(status) {
     },
     libre: {
       label: 'Libre',
-      description: 'Debe regularizar su situacion academica.',
+      description: 'Debe regularizar su situación académica.',
       tone: 'amber',
     },
     promoted: {
       label: 'Promocionado',
-      description: 'Tiene condiciones academicas destacadas.',
+      description: 'Tiene condiciones académicas destacadas.',
       tone: 'emerald',
     },
     suspended: {
       label: 'Suspendido',
-      description: 'Requiere revision administrativa.',
+      description: 'Requiere revisión administrativa.',
       tone: 'red',
     },
     inactive: {
       label: 'Inactivo',
-      description: 'No registra actividad academica reciente.',
+      description: 'No registra actividad académica reciente.',
       tone: 'slate',
     },
   }
@@ -832,7 +832,7 @@ function StudentDashboardContent({
     const availableRowsHeight = footerTop - tableTop - headerHeight
     const rowHeight = Math.max(2.4, Math.min(4.2, availableRowsHeight / Math.max(rows.length, 1)))
     const columns = [
-      { key: 'year', label: 'ANIO', width: 9 },
+      { key: 'year', label: 'AÑO', width: 9 },
       { key: 'name', label: 'MATERIA', width: 56 },
       { key: 'regularityDate', label: 'REG.', width: 22 },
       { key: 'score', label: 'NOTA', width: 13 },
