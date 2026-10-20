@@ -1398,3 +1398,7 @@ Evidencia: `supabase/security/PURGE_INSTITUTION_LOCAL_RESULT.md`.
 - **C. Carga de la institución real:** desde la app, en el orden validado en D1.
 - **D. Primera semana.**
 - **E. Qué hacer si algo sale mal.**
+
+## 2026-10-20 — Tests robustos a CRLF en Windows (Claude, hallazgo de la reauditoría de Codex)
+
+La reauditoría de I2a vio 3 fallas con `npm.cmd run check` en Windows: los tests estáticos de I2d, I2f y PB.4 comparaban `\n` literal contra `admin-users` con checkout CRLF. Ahora `adminUsersEdgeFunctionSecurity.test.js` normaliza a LF al leer el archivo. Verificado con una copia del repo con **todos** los archivos de texto en CRLF: 351 archivos / 2699 tests PASS.

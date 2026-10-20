@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+// Git puede entregar CRLF en Windows: las comparaciones de este archivo usan LF.
 const edgeFunction = readFileSync(
   join(process.cwd(), 'supabase/functions/admin-users/index.ts'),
   'utf8',
-)
+).replace(/\r\n/g, '\n')
 const supabaseConfig = readFileSync(
   join(process.cwd(), 'supabase/config.toml'),
   'utf8',
