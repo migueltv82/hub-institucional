@@ -1503,3 +1503,12 @@ Al cargarlas en la app real (stack local completo) aparecieron dos fallas que ta
 - **Hallazgo anterior a hoy (P2):** "Eliminar institución" del Super Admin falla por FK con los recursos del gateway, que existen en todas las instituciones desde D1. Queda como decisión de Miguel.
 
 `npm run check` PASS (2717). **Producción:** hay que volver a aplicar `source_file_storage_register_on_institution.sql` y redeployar `admin-users` (después de la reauditoría).
+
+## 2026-10-20 — D3: guion de presentación (Claude)
+
+`docs/GUION_PRESENTACION.md` es un recorrido de 25 minutos con la institución de demo (D2):
+- **Preparación del día anterior:** primer ingreso de las cuentas, llamado publicado que incluye el día de la demo, y una alumna inscripta a una mesa de ese día antes del cierre de 24 h.
+- **Recorrido en vivo:** secretaría, mesas y actas, alumna (inscripción en vivo y rechazo por materia libre), docente (acta del día) y cierre.
+- **Material de apoyo:** frases clave, preguntas frecuentes con respuestas verificadas y qué no mostrar todavía.
+
+Los nombres y DNI de las cuentas se verificaron contra `scripts/buildDemoWorkbooks.mjs`.
