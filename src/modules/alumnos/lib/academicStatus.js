@@ -1,7 +1,9 @@
 // Resolucion de estado academico (regular/aprobada/etc.) compartida entre
 // examEligibility.js y prerequisites.js. Vive en un modulo propio para que
 // ninguno de los dos importe del otro (evita un import circular).
-const PASSING_SCORE = 6
+// Nota minima de aprobacion de un final: la misma del acta (EXAM_APPROVAL_MIN_GRADE en
+// src/services/examActaResults.js y el CHECK de exam_results en 08). Un test las ata.
+export const PASSING_SCORE = 4
 
 export const ACADEMIC_STATUS_LABELS = {
   pending: 'Pendiente',

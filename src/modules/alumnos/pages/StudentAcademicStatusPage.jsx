@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
+import { PASSING_SCORE } from '../lib/academicStatus.js'
 import { getAcademicStatusLabel, normalizeAcademicStatus } from '../lib/examEligibility.js'
 import { getEnrollmentGrades } from '../lib/gradeMatching.js'
 import { useStudentStore } from '../stores/studentStore'
@@ -226,7 +227,7 @@ function subjectStatus(enrollment, grades) {
     }
   }
 
-  if (['completed', 'approved', 'passed'].includes(status) || (finalScore !== null && finalScore >= 6)) {
+  if (['completed', 'approved', 'passed'].includes(status) || (finalScore !== null && finalScore >= PASSING_SCORE)) {
     return {
       label: 'Aprobada',
       className: 'bg-emerald-100 text-emerald-800 ring-emerald-200',

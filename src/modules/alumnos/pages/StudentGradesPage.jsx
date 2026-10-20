@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { PASSING_SCORE } from '../lib/academicStatus.js'
 import { getAcademicStatusLabel, normalizeAcademicStatus } from '../lib/examEligibility.js'
 import { getEnrollmentGrades } from '../lib/gradeMatching.js'
 import { useStudentStore } from '../stores/studentStore'
@@ -52,7 +53,7 @@ function getAcademicStatus({ grade, enrollment }) {
 function gradeClass(score) {
   if (score === null) return 'text-slate-500'
   if (score >= 8) return 'text-emerald-700'
-  if (score >= 6) return 'text-sky-700'
+  if (score >= PASSING_SCORE) return 'text-sky-700'
   return 'text-red-700'
 }
 
@@ -84,7 +85,7 @@ export default function StudentGradesPage() {
         finalScore,
         status: hasExplicitStatus
           ? getAcademicStatusLabel(academicStatus)
-          : finalScore === null ? 'Sin final' : finalScore >= 6 ? 'Aprobada' : 'Desaprobada'
+          : finalScore === null ? 'Sin final' : finalScore >= PASSING_SCORE ? 'Aprobada' : 'Desaprobada'
       }
     })
   }, [enrollments, grades])

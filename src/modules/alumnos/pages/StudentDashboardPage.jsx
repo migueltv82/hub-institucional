@@ -28,6 +28,7 @@ import {
   getAcademicStatusLabel,
   getLatestAcademicStatusForSubject,
   normalizeAcademicStatus,
+  PASSING_SCORE,
 } from '../lib/academicStatus.js'
 
 const EMPTY_ARRAY = []
@@ -349,7 +350,7 @@ function getCertificateAcademicStatus({ subject, enrollment, grade, grades, prog
   if (latestGradeStatus !== 'pending') return latestGradeStatus
 
   const score = getGradeScore(grade)
-  if (score !== null && score >= 6) return 'approved'
+  if (score !== null && score >= PASSING_SCORE) return 'approved'
   if (score !== null) return 'failed'
 
   return 'pending'

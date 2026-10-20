@@ -1422,3 +1422,13 @@ La reauditoría de I2a vio 3 fallas con `npm.cmd run check` en Windows: los test
 - Dos P2 reproducidos: perfil ausente aceptado como admin y democión concurrente a alumno sobrescrita como admin/owner. Runs `57d8936f23e3e4b2`, `af0109758336fb9b`. La primera variante de democión con demora8s no reprodujo; la repetición3s sí. Todos los stacks con cleanup bases/contenedores/temporales=0.
 - Revisor CHIEF CODE AUDITOR independiente read-only coincide. Harness secuencial de regresión PASS; 2 suites / 25 tests PASS. QUALITY GATE: FAIL por P1 abierto. Sin cambios funcionales, sin SQL remoto ni deploy; corrección a cargo del implementador.
 - `npm.cmd run check` PASS: 351 archivos / 2702 tests, lint/build/auditorías (bundle 120 archivos). Typecheck no disponible; navegador no ejecutado; warning preexistente de chunks >500 kB. El gate automatizado verde no modifica el veredicto FAIL de I2f.
+
+## 2026-10-20 — Portal alumno: aprobación desde 4, igual que el acta (Claude, decisión de Miguel)
+
+El portal alumno infería "Aprobada" desde 6 cuando una nota final no traía condición, y el acta (F1) aprueba desde 4. Ahora:
+- `PASSING_SCORE = 4` vive exportado en `src/modules/alumnos/lib/academicStatus.js`.
+- Calificaciones, Estado académico y el tablero del alumno usan esa constante, también para el color de la nota.
+- `academicStatus.test.js` la ata a `EXAM_APPROVAL_MIN_GRADE` y al CHECK de `exam_results`, y falla si una página vuelve a comparar contra 6.
+- `npm run check` PASS (2705).
+
+**Producción, 20/10:** el conector de Supabase corta a los 60 s y no alcanza para 07/08. Se aplicó solo la parte idempotente inicial de 07 (tablas y columnas si faltan): sin cambios reales, nada a medias. Miguel decidió aplicar 07, 08 y el SQL de registro desde el SQL Editor; Claude verifica después con una consulta de huella (funciones, constraints, índices, policies, triggers y privilegios contra una base local con los mismos archivos). El redeploy de `admin-users` va después del SQL.
