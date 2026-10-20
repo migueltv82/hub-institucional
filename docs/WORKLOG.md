@@ -1370,3 +1370,13 @@ Se corrigieron 4 hallazgos: 3 P1 y 1 P2.
 Quedan 9 detalles P3 y una decisión (umbral inferido de aprobación) para la Fase 2. Harness integrado e historia PASS. `npm run check` PASS (2692).
 
 Evidencia: `supabase/security/D1_WALKTHROUGH_RESULT.md`.
+
+## 2026-10-20 — I3: limpieza de una institución de prueba (Claude)
+
+- **Script:** `scripts/buildPurgeInstitutionSql.mjs` genera el SQL para el SQL Editor, en simulación (solo cuenta) o con `--ejecutar`.
+- **Qué borra:** todas las filas con `institution_id` de esa institución, en pasadas hasta cero, la institución y los usuarios que eran solo de ella. Nunca un Super Admin ni a quien tenga algo en otra institución. Conserva la auditoría.
+- **Archivos:** aborta si quedan archivos en Storage; se borran antes desde el Dashboard.
+- **Pruebas:** el harness sobre el fixture A/B + gateway pasa en PASS: A queda vacía, B idéntica y los usuarios protegidos se conservan.
+- **Runbook:** §8.0. `npm run check` PASS (2699).
+
+Evidencia: `supabase/security/PURGE_INSTITUTION_LOCAL_RESULT.md`.

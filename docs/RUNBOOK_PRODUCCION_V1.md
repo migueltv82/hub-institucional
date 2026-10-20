@@ -247,6 +247,25 @@ El portal alumno lee carreras, planes y materias del **catálogo relacional**. S
 
 Límites: no borra nada; una materia que se saca de la planilla queda en el catálogo. Para renombrar una carrera hay que hacerlo a mano junto con sus inscripciones (v1.1). No carga horarios relacionales, así que el portal alumno todavía no muestra horarios. El portal lista las materias de todos los planes de la carrera, incluidos los cerrados. Evidencia: `supabase/security/ACADEMIC_CATALOG_LOCAL_RESULT.md` y `supabase/security/PUBLISH_CATALOG_LOCAL_RESULT.md` (I2c).
 
+## 8.0 Limpieza de datos de prueba antes de cargar datos reales (I3)
+
+Va **antes** del §8.1 y una sola vez por cada institución de prueba. Borra la institución completa: datos académicos, legajos, snapshot, catálogo, mesas y actas, y los usuarios que eran **solo** de esa institución. Nunca borra un Super Admin ni a nadie con membresía o legajo en otra institución. Los registros de auditoría se conservan.
+
+1. **Backup:** el del §3, del mismo día. Sin backup no se borra.
+2. **Archivos:** Supabase → Storage → bucket `workspace-source-files` → borrar la carpeta cuyo nombre es el id de la institución de prueba. Storage no deja borrar archivos por SQL, y la purga se niega a correr si quedan archivos.
+3. **Simulación:** en la PC de Miguel, desde `release/v1`:
+   ```powershell
+   node scripts/buildPurgeInstitutionSql.mjs --institucion "<nombre exacto de la institución de prueba>" --salida purga-simulacion.sql
+   ```
+   Pegar todo en el SQL Editor y Run. No modifica nada: lista cuántas filas borraría por tabla, cuántos usuarios borra y cuántos conserva, y cuántos archivos quedan en Storage (tiene que ser 0). Revisar que sea la institución correcta.
+4. **Borrado:** con OK de Miguel, generar el mismo archivo con `--ejecutar` (`--salida purga.sql`), pegarlo y Run. Es una sola transacción: si algo falla, no borra nada.
+   - Si quedan archivos: `PURGE_STORAGE_FILES_PENDING`.
+   - Si el nombre no coincide exactamente con una institución: `PURGE_INSTITUTION_NOT_FOUND`.
+   - Antes de confirmar, verifica que no quede ninguna fila. La tabla final dice `BORRADA: <nombre>`.
+5. Crear la institución real desde Super Admin (I2f) y seguir con el §8.1.
+
+Evidencia: `supabase/security/PURGE_INSTITUTION_LOCAL_RESULT.md`.
+
 ## 9. Rollback
 
 Decide Miguel. El Verificador propone el nivel según qué falló. Se revierte **del componente más externo al más interno** y solo lo necesario.
