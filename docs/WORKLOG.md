@@ -1531,3 +1531,11 @@ Los nombres y DNI de las cuentas se verificaron contra `scripts/buildDemoWorkboo
 3. **Aviso de conflicto en el panel admin:** guardado condicionado por versión, aviso con "Ver los cambios" o "Subir los míos igual", y control de la copia local editada sin conexión.
 
 Las tres se verificaron en el stack local; la evidencia está en `supabase/security/DECISIONES_MIGUEL_20_10_LOCAL_RESULT.md`. `npm run check` PASS (2734). `admin-users` cambió otra vez, así que el redeploy sigue esperando la reauditoría, que ahora incluye este commit.
+
+## 2026-10-20 — Modelo de datos: titularidades respetan estado y vigencia; diagnóstico de materias huérfanas (Claude)
+
+- Revisión de las seis observaciones de Miguel sobre el modelo de datos y de la respuesta de Codex. Lo de diseño (vocabulario canónico, referencia validada a `study_plan_subjects`, modelo de asignación docente, foto, mensajería, matriz de permisos) queda en una tarjeta de Trello para decidirlo con Miguel; no se tocó schema.
+- Bug confirmado (lo señaló Codex sobre I2b): "Aplicar titularidades" ignoraba `estado_asignacion` y la vigencia de `docente_materia`; una fila RENUNCIA, BAJA o REEMPLAZADO entraba como titularidad activa. Ahora `planTeacherAssignmentRows` (`src/services/bulkRoster.js`) las omite con motivo, igual que una vigencia vencida o futura; LICENCIA se aplica con rol licencia; un estado desconocido se rechaza. Las filas descartadas cuentan en el reporte y no se mandan a la RPC. Sin cambio de SQL: no requiere aplicar nada en Prod. Si ya estaba asignado, la baja se hace desde la ficha del docente (la planilla nunca borra).
+- Nuevo `supabase/security/subject_reference_orphans_diagnostic.sql`, de solo lectura: filas que nombran una materia por texto que no resuelve en el catálogo. Corrido en Prod (lectura): 11 filas en 5 tablas, 0 huérfanas. Las mesas (`exam_table_subjects`) ya tienen FK al plan.
+- Tests: 3 nuevos (bulkRoster y BulkRosterSection). `npm run check` PASS: 358 archivos, 2737 tests.
+- Pendiente de auditoría independiente (Codex).

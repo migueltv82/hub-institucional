@@ -26,6 +26,17 @@ describe('BulkRosterSection', () => {
     expect(mocks.teachers).toHaveBeenCalledWith(expect.objectContaining({ institutionId: 'i1', rows: [{ fila: '1', dni: '20111222', carrera: 'P', materia: 'ING01', rol: 'TITULAR' }] }))
   })
 
+  it('una renuncia de la planilla no se manda a la base: se informa como omitida', async () => {
+    mocks.teachers.mockImplementation(async ({ skipped }) => ({ procesadas: 2, creadas: 1, actualizadas: 0, sin_cambios: 0, omitidas: skipped.length, rechazadas: 0, problemas: skipped }))
+    const docenteMateria = [...props.docenteMateria, { dni: '20333444', carrera: 'P', materia: 'ING02', estado_asignacion: 'RENUNCIA' }]
+    render(<BulkRosterSection {...props} docenteMateria={docenteMateria} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar titularidades (1)' }))
+    expect(await screen.findByText(/renuncia, baja o reemplazado/)).toBeInTheDocument()
+    const call = mocks.teachers.mock.calls[0][0]
+    expect(call.rows.map((row) => row.materia)).toEqual(['ING01'])
+    expect(call.skipped).toEqual([{ fila: '2', estado: 'omitida', motivo: 'ASIGNACION_NO_VIGENTE', dni: '20333444', materia: 'ING02' }])
+  })
+
   it('inscribe cursadas y explica las filas con problema', async () => {
     mocks.students.mockResolvedValue({ procesadas: 2, creadas: 1, actualizadas: 0, sin_cambios: 0, omitidas: 0, rechazadas: 1, problemas: [{ fila: '2', dni: '30222333', materia: 'ING01', estado: 'rechazada', motivo: 'ALUMNO_SIN_CUENTA' }] })
     render(<BulkRosterSection {...props} />)

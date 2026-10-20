@@ -5,7 +5,7 @@ import {
   applyStudentEnrollments,
   applyTeacherAssignments,
   buildStudentEnrollmentRows,
-  buildTeacherAssignmentRows,
+  planTeacherAssignmentRows,
   describeBulkRosterReason,
 } from '../../services/bulkRoster.js'
 
@@ -14,7 +14,8 @@ function BulkRosterSection({ canEditWorkspace, docenteMateria, inscripcionesAlum
   const [running, setRunning] = useState('')
   const [progress, setProgress] = useState(null)
   const [result, setResult] = useState(null)
-  const teacherRows = buildTeacherAssignmentRows(docenteMateria)
+  const teacherPlan = planTeacherAssignmentRows(docenteMateria)
+  const teacherRows = teacherPlan.rows
   const studentRows = buildStudentEnrollmentRows(inscripcionesAlumnos)
   const canRun = canEditWorkspace && useRemoteWorkspace && Boolean(institutionId) && !running
 
@@ -25,7 +26,8 @@ function BulkRosterSection({ canEditWorkspace, docenteMateria, inscripcionesAlum
     setResult(null)
     setProgress({ done: 0, total: rows.length })
     try {
-      const report = await apply({ institutionId, workspaceKey, rows, onProgress: setProgress })
+      const skipped = kind === 'teachers' ? teacherPlan.skipped : []
+      const report = await apply({ institutionId, workspaceKey, rows, skipped, onProgress: setProgress })
       setResult({ kind, report })
       toast.success(`${kind === 'teachers' ? 'Titularidades' : 'Cursadas'}: ${report.creadas} nuevas, ${report.actualizadas} actualizadas.`)
     } catch (error) {
@@ -51,11 +53,12 @@ function BulkRosterSection({ canEditWorkspace, docenteMateria, inscripcionesAlum
           <h3 className="mt-2 text-xl font-extrabold text-slate-950">Aplicar las planillas de una vez</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             Asigna cada docente a sus materias (hoja docente_materia) e inscribe a cada alumno en sus cursadas
-            (hoja alumnos_inscripciones). Primero crea los accesos. Repetir no duplica y nada se borra.
+            (hoja alumnos_inscripciones). Primero crea los accesos. Repetir no duplica y nada se borra. Las filas
+            marcadas como renuncia, baja o reemplazado, o con la vigencia vencida, no se asignan.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-secondary" disabled={!canRun || !teacherRows.length} onClick={() => run('teachers')} type="button">
+          <button className="btn-secondary" disabled={!canRun || !(teacherRows.length || teacherPlan.skipped.length)} onClick={() => run('teachers')} type="button">
             <UserCheck className="h-4 w-4" />
             {running === 'teachers' && progress ? `Asignando ${progress.done} de ${progress.total}...` : `Aplicar titularidades (${teacherRows.length})`}
           </button>
