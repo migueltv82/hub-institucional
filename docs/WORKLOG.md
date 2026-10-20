@@ -1402,3 +1402,15 @@ Evidencia: `supabase/security/PURGE_INSTITUTION_LOCAL_RESULT.md`.
 ## 2026-10-20 — Tests robustos a CRLF en Windows (Claude, hallazgo de la reauditoría de Codex)
 
 La reauditoría de I2a vio 3 fallas con `npm.cmd run check` en Windows: los tests estáticos de I2d, I2f y PB.4 comparaban `\n` literal contra `admin-users` con checkout CRLF. Ahora `adminUsersEdgeFunctionSecurity.test.js` normaliza a LF al leer el archivo. Verificado con una copia del repo con **todos** los archivos de texto en CRLF: 351 archivos / 2699 tests PASS.
+
+## 2026-10-20 — D1 ítem 7: docentes fantasma en el motor de mesas (Claude)
+
+"Docentes adaptados: 8" con 4 docentes era un bug real (P2), no un detalle visual.
+- **Causa:** las titularidades relacionales ("Aplicar titularidades") se mezclaban en el snapshot con el id del legajo docente y sin DNI. El padrón de la planilla usa otro id, así que el motor veía a cada docente dos veces: el original y un "fantasma" sin nombre ni DNI. Podía poner al mismo docente como titular y como otro vocal.
+- **Arreglo:**
+  - `fetchSubjectTeacherAssignments` suma el DNI y el nombre del legajo, en una consulta y best-effort.
+  - `mergeSubjectTeacherAssignmentsIntoSnapshot` usa la identidad del padrón cuando encuentra al docente, y la clave de mezcla la prioriza: la titularidad relacional reemplaza a la fila de la planilla en lugar de sumarse.
+- **Pruebas:**
+  - test con el adaptador del motor: 1 docente con el arreglo y 2 sin él;
+  - navegador real: "Docentes adaptados: 4";
+  - integrado y BulkRoster PASS; `npm run check` PASS (2702).

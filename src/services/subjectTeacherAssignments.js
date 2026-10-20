@@ -72,7 +72,33 @@ export async function fetchSubjectTeacherAssignments({ institutionId, workspaceK
     throw new Error(`No se pudieron cargar las titularidades de materias. ${error.message}`)
   }
 
-  return data ?? []
+  return attachTeacherRecordIdentity(institutionId, data ?? [])
+}
+
+// D1: la titularidad relacional identifica al docente por ids (perfil y legajo) que el padron de la planilla no
+// conoce. Sin el DNI, el motor de mesas lo trataba como otro docente (un "fantasma" sin nombre ni DNI). Se suma
+// el DNI y el nombre del legajo docente para que se vincule con el padron. Si la lectura falla, sigue sin ellos.
+async function attachTeacherRecordIdentity(institutionId, rows) {
+  const recordIds = [...new Set(rows.map((row) => clean(row?.teacher_record_id)).filter(Boolean))]
+  if (!recordIds.length) return rows
+
+  const { data: records, error } = await supabase
+    .from('teacher_records')
+    .select('id, dni, full_name')
+    .eq('institution_id', institutionId)
+    .in('id', recordIds)
+  if (error || !Array.isArray(records)) return rows
+
+  const byId = new Map(records.map((record) => [clean(record.id), record]))
+  return rows.map((row) => {
+    const record = byId.get(clean(row?.teacher_record_id))
+    if (!record) return row
+    return {
+      ...row,
+      dni_docente: clean(row.dni_docente) || clean(record.dni),
+      teacher_display_name: clean(row.teacher_display_name) || clean(record.full_name),
+    }
+  })
 }
 
 // La cuenta del docente puede estar con el email tecnico (DNI@docentes.<institucion>.local, el que crea

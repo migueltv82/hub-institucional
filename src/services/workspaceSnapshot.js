@@ -351,8 +351,10 @@ function mapSubjectTeacherAssignmentToSnapshotRow({
     assignment_id: clean(assignment.id),
     teacher_id: teacherId,
     teacher_record_id: teacherRecordId,
-    docenteId: teacherRecordId || teacherId,
-    docente_id: teacherRecordId || teacherId,
+    // D1: si el docente esta en el padron de la planilla, la fila usa esa identidad; si no, el motor de mesas
+    // lo veia como otro docente (sin nombre ni DNI). teacher_record_id conserva el id relacional.
+    docenteId: teacher?.id || teacherRecordId || teacherId,
+    docente_id: teacher?.id || teacherRecordId || teacherId,
     docente: teacherName,
     profesor: teacherName,
     full_name: teacherName,
@@ -377,11 +379,13 @@ function mapSubjectTeacherAssignmentToSnapshotRow({
 }
 
 function docenteMateriaMergeKey(row = {}) {
+  // La identidad del padron va primero: asi la titularidad relacional reemplaza a la fila de la planilla del
+  // mismo docente y materia en lugar de sumarse como otra.
   const teacherKey = firstClean(
-    row.teacher_record_id,
-    row.teacherRecordId,
     row.docenteId,
     row.docente_id,
+    row.teacher_record_id,
+    row.teacherRecordId,
     row.teacher_id,
     row.teacherId,
     row.dni_docente,

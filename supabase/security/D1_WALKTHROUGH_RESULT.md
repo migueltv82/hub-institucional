@@ -22,7 +22,6 @@ Fecha: 2026-10-19. Ejecutó: Claude. Staging y Producción: **NONE**.
 | 4 | Admin | Publica el catálogo (I2c) | **0 alumnos con plan** (P1, corregido: hallazgo B) → "3 de 3 alumnos con plan" |
 | 5 | Admin | Crea accesos de alumnos y de docentes | OK: 3 + 4 cuentas, todas con cambio obligatorio de contraseña (I2d) |
 | 6 | Admin | Aplica titularidades e inscribe cursadas (I2b) | OK: 4 titularidades y 9 cursadas |
-| 7 | Admin | Importa la historia académica (I2a) | OK: 2 + 2 regularidades |
 | 8 | Admin | Arma el llamado (26–30/10), genera el precronograma, autocompleta tribunales, confirma y publica | OK, 2 mesas publicadas. ING01 quedó sin titular por los datos de prueba (dos titulares), y el motor lo marca bien como "requiere revisión" |
 | 9 | Alumna | Primer ingreso con DNI → cambio obligatorio → se inscribe a Fonética I | OK; tabla y snapshot con la inscripción |
 | 10 | Docente titular | Primer ingreso → Mesas → "Ver inscriptos" | OK, ve a la alumna con DNI y carrera; en la mesa donde es vocal no hay lista |
@@ -38,6 +37,8 @@ Fecha: 2026-10-19. Ejecutó: Claude. Staging y Producción: **NONE**.
 - **B (P1). El catálogo no vinculaba a ningún alumno con su plan:** el estado del legajo es `activo` y se filtraba `active`, en la RPC y en el SQL de CAT.1. Commit `308af28`.
 - **C (P1). El final del acta no aparecía en el portal del alumno:** el portal no reconocía `final_exam` como nota final.
 - **D (P2). Fechas de la historia importada:** la regularidad mostraba la fecha de importación y además una "Fecha final" sin final.
+
+- **E (P2, 20/10). Docentes fantasma en el motor de mesas:** "Docentes adaptados: 8" con 4 docentes. La titularidad relacional ("Aplicar titularidades") llegaba al snapshot sin el DNI y con el id del legajo, así que el motor la tomaba como otro docente, sin nombre ni DNI. El mismo docente podía terminar como titular y como "otro" vocal. `fetchSubjectTeacherAssignments` ahora suma DNI y nombre del legajo, y la mezcla usa la identidad del padrón. Verificado en el navegador real: "Docentes adaptados: 4".
 
 C y D se arreglaron en `mapStudentPortalGrade`: la condición importada no cuenta como final y las fechas salen de `grading_period`. Calificaciones usa la condición cuando no hay final.
 

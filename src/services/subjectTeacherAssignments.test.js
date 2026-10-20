@@ -7,6 +7,7 @@ function createQueryBuilder(result) {
     select: vi.fn(() => builder),
     eq: vi.fn(() => builder),
     is: vi.fn(() => builder),
+    in: vi.fn(() => builder),
     order: vi.fn(() => builder),
     insert: vi.fn(() => builder),
     update: vi.fn(() => builder),
@@ -105,6 +106,32 @@ describe('subjectTeacherAssignments service', () => {
     expect(queryBuilder.eq).toHaveBeenCalledWith('status', 'active')
     expect(queryBuilder.is).toHaveBeenCalledWith('deleted_at', null)
     expect(result).toEqual(rows)
+  })
+
+  it('D1: suma DNI y nombre del legajo docente para que el motor no cree docentes fantasma', async () => {
+    const rows = [
+      { id: 'a1', subject_id: 'ING01', teacher_id: 'u1', teacher_record_id: 'r1', status: 'active' },
+      { id: 'a2', subject_id: 'ING02', teacher_id: 'u2', teacher_record_id: 'r-sin-legajo', status: 'active' },
+    ]
+    const { fetchSubjectTeacherAssignments, from, queryBuilder } = await loadService({
+      fromResult: [{ data: rows, error: null }, { data: [{ id: 'r1', dni: '20111001', full_name: 'Diaz Ana' }], error: null }],
+    })
+
+    const result = await fetchSubjectTeacherAssignments({ institutionId: 'inst-1' })
+
+    expect(from).toHaveBeenCalledWith('teacher_records')
+    expect(queryBuilder.in).toHaveBeenCalledWith('id', ['r1', 'r-sin-legajo'])
+    expect(result[0]).toMatchObject({ dni_docente: '20111001', teacher_display_name: 'Diaz Ana' })
+    expect(result[1]).toEqual(rows[1])
+  })
+
+  it('D1: si no puede leer los legajos devuelve las titularidades igual', async () => {
+    const rows = [{ id: 'a1', subject_id: 'ING01', teacher_id: 'u1', teacher_record_id: 'r1', status: 'active' }]
+    const { fetchSubjectTeacherAssignments } = await loadService({
+      fromResult: [{ data: rows, error: null }, { data: null, error: { message: 'boom' } }],
+    })
+
+    await expect(fetchSubjectTeacherAssignments({ institutionId: 'inst-1' })).resolves.toEqual(rows)
   })
 
   it('carga titularidades con fallback si la base aun no tiene deleted_at', async () => {

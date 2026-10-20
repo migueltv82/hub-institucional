@@ -7,6 +7,7 @@ import {
   normalizeWorkspaceSnapshot,
   saveWorkspaceSnapshot,
 } from './workspaceSnapshot.js'
+import { buildRegularExamInputFromWorkspaceSnapshot } from '../utils/examEngine/comparison/buildRegularExamInputFromWorkspaceSnapshot.js'
 
 describe('workspaceSnapshot service', () => {
   beforeEach(() => {
@@ -165,6 +166,25 @@ describe('workspaceSnapshot service', () => {
         source: 'subject_teacher_assignments',
       }),
     ])
+  })
+
+  it('D1: una titularidad relacional con el DNI del legajo se vincula al docente de la planilla (sin fantasmas en el motor)', () => {
+    const snapshot = normalizeWorkspaceSnapshot({
+      docentes: [{ id: 'd-1', docente_id: 'd-1', apellido: 'Diaz', nombre: 'Ana', dni_docente: '20111001', docente: 'Ana Diaz' }],
+      planesEstudio: [{ plan_id: 'ING-2024', carrera: 'PROFESORADO DE INGLES', materia: 'ING01', materia_id: 'm-ing01', nombreMateria: 'Lengua Inglesa I', anio_cursada: '1' }],
+      docenteMateria: [{ plan_id: 'ING-2024', carrera: 'PROFESORADO DE INGLES', materia_id: 'm-ing01', materia_codigo: 'ING01', materia: 'ING01', docente_id: 'd-1', docente: 'Ana Diaz', dni: '20111001', rol_en_materia: 'TITULAR' }],
+      horariosDocentes: [{ plan_id: 'ING-2024', carrera: 'PROFESORADO DE INGLES', materia_id: 'm-ing01', materia_codigo: 'ING01', materia: 'ING01', docente_id: 'd-1', docente: 'Ana Diaz', profesor: 'Ana Diaz', dni: '20111001', dia: 'Lunes', hora_inicio: '08:00', hora_fin: '10:00', inicio: '08:00', fin: '10:00' }],
+    })
+    const relational = { id: 'a1', teacher_id: 'u-auth-1', teacher_record_id: 'f60b13d6-0e4d-49e7-b618-f21550c95d66', program_id: 'PROFESORADO DE INGLES', subject_id: 'ING01', role: 'titular', status: 'active' }
+    const engineTeachers = (merged) => buildRegularExamInputFromWorkspaceSnapshot({ ...merged, fechaInicio: '2026-10-26', fechaFin: '2026-10-30', examType: 'regular', regularCallRanges: { first: { start: '2026-10-26', end: '2026-10-30' } } }).docentes
+
+    const withIdentity = mergeSubjectTeacherAssignmentsIntoSnapshot(snapshot, [{ ...relational, dni_docente: '20111001', teacher_display_name: 'Diaz Ana' }])
+    expect(withIdentity.docenteMateria).toEqual([expect.objectContaining({ docenteId: 'd-1', source: 'subject_teacher_assignments' })])
+    expect(engineTeachers(withIdentity).map((teacher) => teacher.id)).toEqual(['d-1'])
+
+    // Sin DNI ni nombre (la lectura anterior), la titularidad quedaba con el id del legajo: un docente fantasma.
+    const withoutIdentity = mergeSubjectTeacherAssignmentsIntoSnapshot(snapshot, [relational])
+    expect(engineTeachers(withoutIdentity)).toHaveLength(2)
   })
 
   it('preserva decisiones administrativas del flujo experimental', async () => {
