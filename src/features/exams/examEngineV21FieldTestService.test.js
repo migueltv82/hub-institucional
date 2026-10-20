@@ -385,6 +385,19 @@ describe('examEngineV21FieldTestService', () => {
     expect(csv).toBe('fecha,materiaMesa\n2026-11-27,"Geografia, Regional"')
   })
 
+  it('D1 P3: sin aula en la mesa usa el aula de cursada de la materia; si no hay, "A confirmar"', () => {
+    const mesa = (materiaId, extra = {}) => ({ id: `mesa-${materiaId}`, carrera: 'PROFESORADO DE INGLES', materiaId, fechaSugerida: '2026-11-02', estadoFinal: 'FINAL_CONFIRMED', ...extra })
+    const cronograma = buildPublishedCronogramaFromFinalTribunals([mesa('ING01'), mesa('ING02'), mesa('ING03', { aula: 'Aula Magna' })], {
+      horarios: [
+        { carrera: 'Profesorado de Ingles', materia: 'ing01', aula: 'Sede Centro - Aula 4' },
+        { carrera: 'PROFESORADO DE INGLES', materia: 'ING02', aula: 'A definir' },
+        { carrera: 'PROFESORADO DE INGLES', materia: 'ING03', aula: 'Aula 9' },
+      ],
+    })
+
+    expect(cronograma.map((row) => row.aula)).toEqual(['Sede Centro - Aula 4', 'A confirmar', 'Aula Magna'])
+  })
+
   it('publica con el codigo de materia del catalogo, no con el id interno del motor (EX.6)', () => {
     const cronograma = buildPublishedCronogramaFromFinalTribunals([{
       id: 'draft:profesorado de prueba uat::uat01:PRIMER_LLAMADO',

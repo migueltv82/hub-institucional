@@ -830,6 +830,7 @@ function ExamEngineV21FieldTestPage({
       generatedAt: new Date().toISOString(),
       materias: engineData?.materias,
       docentes: engineData?.docentes,
+      horarios: workspaceSnapshot.horariosDocentes,
     })
 
     if (!publishedCronograma.length) {

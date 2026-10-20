@@ -1449,3 +1449,17 @@ El portal alumno infería "Aprobada" desde 6 cuando una nota final no traía con
 - 03.5c validado, RPC de mesas con 14 parámetros, `instituciones_incompletas = 0`, datos sin cambios.
 - Evidencia: `supabase/security/PRODUCTION_APPLY_2026-10-20.md`.
 - Falta el redeploy de `admin-users`, que espera la reauditoría de I2f.
+
+## 2026-10-20 — Fase 2: detalles P3 de la demo (Claude)
+
+Los 8 detalles P3 del recorrido D1 (1–6, 8 y 9) están resueltos; el detalle de cada uno está en `D1_WALKTHROUGH_RESULT.md`:
+- accesibilidad del modal de alta;
+- toasts que no tapan botones;
+- buscador de Instituciones;
+- "Modo base de datos" en Opciones avanzadas;
+- orden de las secciones de Alumnos igual al del Día D;
+- estado vacío de inscripciones que explica lo pendiente;
+- panel del docente sin funciones deshabilitadas;
+- aula de cursada como aula por defecto de la mesa.
+
+Hay tests nuevos o actualizados para cada uno. `npm run check` PASS (2711). Falta revisarlo en el navegador real (queda para el próximo recorrido de la demo).

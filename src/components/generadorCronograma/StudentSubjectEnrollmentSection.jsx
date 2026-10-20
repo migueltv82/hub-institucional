@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { BookOpenCheck, Trash2 } from 'lucide-react'
+import { buildStudentEnrollmentRows } from '../../services/bulkRoster.js'
 import {
   createSubjectEnrollment,
   dropSubjectEnrollment,
@@ -52,10 +53,13 @@ function StudentSubjectEnrollmentSection({
   activeInstitution,
   alumnos = [],
   canEditWorkspace = false,
+  inscripcionesAlumnos = [],
   isRelationalWorkspaceSource = false,
   planesEstudio = [],
   workspaceKey = 'main',
 }) {
+  // D1 P3: la planilla puede traer inscripciones que todavia no se aplicaron; se explica en vez de decir "no hay".
+  const pendingSheetEnrollments = buildStudentEnrollmentRows(inscripcionesAlumnos).length
   const queryClient = useQueryClient()
   const [enrollments, setEnrollments] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -350,7 +354,15 @@ function StudentSubjectEnrollmentSection({
           </tbody>
         </table>
         {!isLoading && enrollments.length === 0 && (
-          <div className="p-6 text-sm text-slate-500">No hay inscripciones cargadas.</div>
+          <div className="p-6 text-sm text-slate-500">
+            No hay inscripciones cargadas.
+            {pendingSheetEnrollments > 0 && (
+              <span className="mt-1 block">
+                La planilla de alumnos trae {pendingSheetEnrollments} {pendingSheetEnrollments === 1 ? 'inscripción' : 'inscripciones'} a materias.
+                Se aplican con «Inscribir cursadas», en la sección Cursadas y titulares.
+              </span>
+            )}
+          </div>
         )}
         {isLoading && (
           <div className="p-6 text-sm text-slate-500">Cargando inscripciones...</div>

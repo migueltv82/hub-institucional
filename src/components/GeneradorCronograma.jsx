@@ -1833,6 +1833,14 @@ function GeneradorCronograma() {
                     </>
                   ) : (
                     <>
+                      {/* D1 P3: mismo orden que el Dia D (docs/DIA_D_CHECKLIST.md): catalogo (C5), accesos (C6),
+                          titularidades y cursadas (C7), historia (C8). */}
+                      <AcademicCatalogPublishSection
+                        canPublish={Boolean(isSuperAdmin || ['owner', 'admin'].includes(activeInstitution?.role))}
+                        inscripcionesAlumnos={academicSnapshotData.inscripcionesAlumnos}
+                        institutionId={activeInstitutionId}
+                        useRemoteWorkspace={useRemoteWorkspace}
+                      />
                       <StudentAccessSection
                         alumnos={alumnos}
                         extraActions={(
@@ -1848,12 +1856,6 @@ function GeneradorCronograma() {
                         isLoading={isProvisioningStudents}
                         lastResult={studentAccessResult}
                         onProvisionStudents={crearAccesosAlumnos}
-                        useRemoteWorkspace={useRemoteWorkspace}
-                      />
-                      <AcademicCatalogPublishSection
-                        canPublish={Boolean(isSuperAdmin || ['owner', 'admin'].includes(activeInstitution?.role))}
-                        inscripcionesAlumnos={academicSnapshotData.inscripcionesAlumnos}
-                        institutionId={activeInstitutionId}
                         useRemoteWorkspace={useRemoteWorkspace}
                       />
                       <BulkRosterSection
@@ -1889,6 +1891,7 @@ function GeneradorCronograma() {
                           activeInstitution={activeInstitution}
                           alumnos={alumnos}
                           canEditWorkspace={canEditWorkspace}
+                          inscripcionesAlumnos={academicSnapshotData.inscripcionesAlumnos}
                           planesEstudio={planesEstudio}
                         />
                       )}

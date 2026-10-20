@@ -134,8 +134,8 @@ function UploadsSection({
           {isRelationalWorkspaceSource && (
             <p className="mt-2">
               {canManageDataSource
-                ? 'Para cargar archivos, desactivá «Schema relacional en panel admin» en Instituciones y volvé a abrir el panel.'
-                : 'Un superadmin debe desactivar «Schema relacional en panel admin» para volver al modo de carga de planillas.'}
+                ? 'Para cargar archivos, desactivá «Modo base de datos» en Instituciones › Opciones avanzadas y volvé a abrir el panel.'
+                : 'Un superadmin tiene que desactivar «Modo base de datos» (Instituciones › Opciones avanzadas) para volver a cargar planillas.'}
             </p>
           )}
           {isRelationalWorkspaceSource && canManageDataSource && (

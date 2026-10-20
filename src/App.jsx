@@ -101,8 +101,10 @@ function App() {
   return (
     <div className="min-h-dvh w-full text-slate-900">
       <ThemeToggle onToggle={toggleTheme} theme={theme} />
+      {/* D1 P3: arriba al centro, para no tapar los botones de las cabeceras (por ejemplo "Volver al workspace"). */}
       <Toaster
-        position="top-right"
+        position="top-center"
+        containerStyle={{ top: 12 }}
         toastOptions={{
           style: theme === 'dark'
             ? { background: '#172320', color: '#f1f5f9', border: '1px solid #33413d' }

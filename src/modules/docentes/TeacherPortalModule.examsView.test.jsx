@@ -90,10 +90,11 @@ describe('DashboardView - grilla horaria', () => {
 })
 
 describe('ExamsView - precronograma en revision', () => {
-  it('sin mesas publicadas muestra el estado vacio', () => {
+  it('sin mesas en preparacion no muestra la seccion ni anuncia funciones deshabilitadas (D1 P3)', () => {
     render(<ExamsView data={{}} examAssignments={[]} institutionId="inst-1" />)
 
-    expect(screen.getByText('No hay mesas publicadas para tu revision por el momento.')).toBeInTheDocument()
+    expect(screen.queryByText('Mesas en preparación')).not.toBeInTheDocument()
+    expect(screen.queryByText(/no esta habilitada/)).not.toBeInTheDocument()
   })
 
   it('muestra la mesa publicada con su rol y estado sin controles de decision', () => {
@@ -104,7 +105,8 @@ describe('ExamsView - precronograma en revision', () => {
     expect(screen.getByText(/10 de ago de 2026/)).toBeInTheDocument()
     expect(screen.getByText(/Tu rol: Vocal 1/)).toBeInTheDocument()
     expect(screen.getByText('Pendiente de tu confirmacion')).toBeInTheDocument()
-    expect(screen.getByText('La gestion de decisiones sobre mesas no esta habilitada en esta version.')).toBeInTheDocument()
+    expect(screen.getByText('Tus mesas del próximo llamado. Las confirmaciones las gestiona secretaría.')).toBeInTheDocument()
+    expect(screen.queryByText(/no esta habilitada/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(confirmTeacherExamAssignment).not.toHaveBeenCalled()

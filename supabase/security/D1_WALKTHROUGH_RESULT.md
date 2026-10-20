@@ -61,3 +61,16 @@ C y D se arreglaron en `mapStudentPortalGrade`: la condición importada no cuent
 
 - El 404 inicial a `source_file_storage_resources` fue del stack local, que todavía no tenía el gateway. Producción lo tiene.
 - Los scripts del recorrido y las capturas quedaron en el entorno de trabajo de la sesión, no en el repo. Si se quiere repetir D1, el siguiente paso es convertirlos en un harness del repo.
+
+## Fase 2 — detalles P3 resueltos (2026-10-20)
+
+| # | Arreglo |
+|---|---|
+| 1 | Modal "Nueva institución": cada etiqueta tiene su `htmlFor`/`id` y los botones de ícono tienen `aria-label`. También se corrigieron las tildes y "Dar de alta Tenant" pasó a "Dar de alta la institución". Test con `getByLabelText`. |
+| 2 | Los toasts ahora salen arriba al centro (`App.jsx`) y ya no tapan "Volver al workspace" ni otros botones de las cabeceras. |
+| 3 | Buscador de Instituciones: más ancho, con el placeholder corto "Nombre, slug o plan" y el texto completo en `aria-label`. |
+| 4 | "Schema relacional en panel admin" pasó a "Modo base de datos", dentro de "Opciones avanzadas" (plegado). El aviso de la carga de planillas usa el nombre nuevo. |
+| 5 | Admin > Alumnos sigue el orden del Día D: catálogo (C5), accesos (C6), cursadas y titulares (C7), historia (C8). |
+| 6 | "No hay inscripciones cargadas" ahora aclara cuántas inscripciones trae la planilla y que se aplican con «Inscribir cursadas». |
+| 8 | Docente > Mesas: el panel de precronograma solo aparece si hay mesas en preparación y ya no anuncia una función deshabilitada. |
+| 9 | Al publicar, una mesa sin aula toma el aula de cursada de la materia (planilla de horarios). "A confirmar" queda solo si no hay ninguna. |

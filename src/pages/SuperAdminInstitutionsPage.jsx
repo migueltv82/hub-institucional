@@ -171,11 +171,12 @@ function SuperAdminInstitutionsPage() {
         </div>
 
         <div className="flex w-full flex-col gap-3 lg:w-auto sm:flex-row">
-          <label className="relative w-full sm:max-w-sm">
+          <label className="relative w-full sm:w-72">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
+              aria-label="Buscar por nombre, slug o plan"
               className="input-base pl-9"
-              placeholder="Buscar por nombre, slug o plan"
+              placeholder="Nombre, slug o plan"
               type="search"
               value={searchTerm}
               onChange={(event) => {

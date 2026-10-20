@@ -637,18 +637,17 @@ export function ExamsView({ data, examAssignments = EMPTY_ARRAY }) {
 
   return (
     <div className="space-y-6">
-      <Section title="Precronograma en revision" icon={CalendarDays}>
-        <p className="mb-4 text-sm text-slate-600">La gestion de decisiones sobre mesas no esta habilitada en esta version.</p>
-        {examAssignments.length > 0 ? (
+      {/* D1 P3: solo aparece si hay mesas en preparacion; es de lectura y no anuncia funciones deshabilitadas. */}
+      {examAssignments.length > 0 && (
+        <Section title="Mesas en preparación" icon={CalendarDays}>
+          <p className="mb-4 text-sm text-slate-600">Tus mesas del próximo llamado. Las confirmaciones las gestiona secretaría.</p>
           <div className="grid gap-4 lg:grid-cols-2">
             {examAssignments.map((assignment) => (
               <ExamAssignmentCard key={assignment.id} assignment={assignment} />
             ))}
           </div>
-        ) : (
-          <EmptyBlock>No hay mesas publicadas para tu revision por el momento.</EmptyBlock>
-        )}
-      </Section>
+        </Section>
+      )}
 
       <Section title="Mesas asignadas" icon={CalendarDays}>
         {exams.length > 0 ? (
