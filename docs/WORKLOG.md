@@ -1414,3 +1414,11 @@ La reauditoría de I2a vio 3 fallas con `npm.cmd run check` en Windows: los test
   - test con el adaptador del motor: 1 docente con el arreglo y 2 sin él;
   - navegador real: "Docentes adaptados: 4";
   - integrado y BulkRoster PASS; `npm run check` PASS (2702).
+
+## AUD.I2f — Auditoría independiente de implementación de Claude (Codex, 2026-10-20)
+
+- Base `c4fabb3`, implementación `64986f7`; no se aplicó la alternativa de Codex preservada en stash. Solo informe `TENANT_CREATION_INDEPENDENT_AUDIT.md` y WORKLOG.
+- P1 reproducido con Auth + Edge reales: A crea cuenta, B la reutiliza y devuelve 200, A falla en membership y borra Auth; B queda con institución=1, miembros=0, login400. Run `14dcda00425780c8`. Cascadas confirmadas; no corregido por el auditor.
+- Dos P2 reproducidos: perfil ausente aceptado como admin y democión concurrente a alumno sobrescrita como admin/owner. Runs `57d8936f23e3e4b2`, `af0109758336fb9b`. La primera variante de democión con demora8s no reprodujo; la repetición3s sí. Todos los stacks con cleanup bases/contenedores/temporales=0.
+- Revisor CHIEF CODE AUDITOR independiente read-only coincide. Harness secuencial de regresión PASS; 2 suites / 25 tests PASS. QUALITY GATE: FAIL por P1 abierto. Sin cambios funcionales, sin SQL remoto ni deploy; corrección a cargo del implementador.
+- `npm.cmd run check` PASS: 351 archivos / 2702 tests, lint/build/auditorías (bundle 120 archivos). Typecheck no disponible; navegador no ejecutado; warning preexistente de chunks >500 kB. El gate automatizado verde no modifica el veredicto FAIL de I2f.
