@@ -2003,6 +2003,7 @@ declare
   v_teacher_profile_id uuid;
   v_teacher_matches integer;
   v_existing_role text;
+  v_inserted_id uuid;
   created_count integer := 0;
   updated_count integer := 0;
   unchanged_count integer := 0;
@@ -2079,13 +2080,44 @@ begin
       and assignment.status = 'active'
     for update;
 
+    v_inserted_id := null;
     if not found then
+      -- AUD.I2b P2: otra carga (u otro panel) puede crear la misma asignacion entre la lectura y el insert. El
+      -- FOR UPDATE de arriba no lo evita cuando la fila todavia no existe, y un 23505 revertia el lote entero.
+      -- ON CONFLICT DO NOTHING espera a que la otra transaccion termine; si la fila quedo, se relee y se
+      -- clasifica por su estado real (mismo rol: sin cambios; otro rol: se actualiza), sin suponer nada.
       insert into public.subject_teacher_assignments (
         institution_id, workspace_key, subject_id, program_id, teacher_id, teacher_record_id, source, status, role, metadata
       ) values (
         p_institution_id, clean_workspace_key, v_subject_code, v_career_name, v_teacher_profile_id, v_teacher_record_id,
         'planilla', 'active', clean_role, jsonb_build_object('imported_by', (select auth.uid()))
-      );
+      )
+      on conflict (institution_id, workspace_key, subject_id, program_id, teacher_id)
+        where deleted_at is null and status = 'active'
+      do nothing
+      returning id into v_inserted_id;
+
+      if v_inserted_id is null then
+        select assignment.role
+        into v_existing_role
+        from public.subject_teacher_assignments assignment
+        where assignment.institution_id = p_institution_id
+          and assignment.workspace_key = clean_workspace_key
+          and assignment.subject_id = v_subject_code
+          and assignment.program_id = v_career_name
+          and assignment.teacher_id = v_teacher_profile_id
+          and assignment.deleted_at is null
+          and assignment.status = 'active'
+        for update;
+        if not found then
+          issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', 'CONFLICTO_CONCURRENTE', 'dni', raw_dni, 'materia', v_subject_code));
+          rejected_count := rejected_count + 1;
+          continue;
+        end if;
+      end if;
+    end if;
+
+    if v_inserted_id is not null then
       created_count := created_count + 1;
     elsif v_existing_role is distinct from clean_role then
       update public.subject_teacher_assignments assignment
@@ -2133,6 +2165,7 @@ declare
   v_record_id uuid;
   v_profile_id uuid;
   existing_row record;
+  v_inserted_id uuid;
   created_count integer := 0;
   unchanged_count integer := 0;
   skipped_count integer := 0;
@@ -2186,13 +2219,39 @@ begin
       and enrollment.student_id = v_profile_id
     for update;
 
+    v_inserted_id := null;
     if existing_row.id is null then
+      -- AUD.I2b P2: mismo caso que en titularidades. Otra carga o el portal del alumno pueden crear la cursada
+      -- entre la lectura y el insert; se espera a la otra transaccion y, si la fila quedo, se clasifica por su
+      -- estado real (activa: sin cambios; de baja o borrada: no se reactiva).
       insert into public.subject_enrollments (
         institution_id, workspace_key, subject_id, program_id, student_id, student_record_id, status, metadata
       ) values (
         p_institution_id, clean_workspace_key, v_subject_code, v_career_name, v_profile_id, v_record_id, 'active',
         jsonb_build_object('source', 'planilla', 'imported_by', (select auth.uid()))
-      );
+      )
+      on conflict (institution_id, workspace_key, subject_id, program_id, student_id) do nothing
+      returning id into v_inserted_id;
+
+      if v_inserted_id is null then
+        select enrollment.id, enrollment.status, enrollment.deleted_at
+        into existing_row
+        from public.subject_enrollments enrollment
+        where enrollment.institution_id = p_institution_id
+          and enrollment.workspace_key = clean_workspace_key
+          and enrollment.subject_id = v_subject_code
+          and enrollment.program_id = v_career_name
+          and enrollment.student_id = v_profile_id
+        for update;
+        if existing_row.id is null then
+          issues := issues || jsonb_build_array(jsonb_build_object('fila', row_label, 'estado', 'rechazada', 'motivo', 'CONFLICTO_CONCURRENTE', 'dni', raw_dni, 'materia', v_subject_code));
+          rejected_count := rejected_count + 1;
+          continue;
+        end if;
+      end if;
+    end if;
+
+    if v_inserted_id is not null then
       created_count := created_count + 1;
     elsif existing_row.deleted_at is null and existing_row.status in ('active', 'enrolled') then
       unchanged_count := unchanged_count + 1;

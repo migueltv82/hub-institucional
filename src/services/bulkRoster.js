@@ -25,6 +25,7 @@ export const BULK_ROSTER_REASONS = Object.freeze({
   ALUMNO_DE_OTRA_CARRERA: 'El alumno con ese DNI tiene legajo en otra carrera.',
   ALUMNO_SIN_CUENTA: 'El alumno todavia no tiene acceso: crealo desde "Crear accesos".',
   CURSADA_DADA_DE_BAJA: 'La cursada esta dada de baja: no se reactiva desde la planilla.',
+  CONFLICTO_CONCURRENTE: 'Otra carga cambio esta fila al mismo tiempo: volve a aplicar la planilla.',
   ASIGNACION_NO_VIGENTE: 'La planilla la marca como renuncia, baja o reemplazado: no se asigna. Si ya estaba asignado, darlo de baja desde la ficha del docente.',
   VIGENCIA_VENCIDA: 'La vigencia de la asignacion ya termino: no se asigna.',
   VIGENCIA_FUTURA: 'La vigencia de la asignacion todavia no empezo: se aplica cuando arranque.',
@@ -139,13 +140,25 @@ export function emptyBulkRosterReport() {
   return { procesadas: 0, creadas: 0, actualizadas: 0, sin_cambios: 0, omitidas: 0, rechazadas: 0, problemas: [] }
 }
 
+// En Prod el gateway de Storage serializa las escrituras de un workspace con un lock no bloqueante: si otra
+// carga (u otro guardado) esta en curso, la RPC falla entera con 55P03 sin escribir nada. Cada lote es atomico
+// e idempotente, asi que reintentarlo es seguro (AUD.I2b P2).
+export const BULK_ROSTER_BUSY_ATTEMPTS = 6
+
+function isWorkspaceBusy(error) {
+  return error?.code === '55P03' || String(error?.message ?? '').includes('SOURCE_FILE_WORKSPACE_BUSY')
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 function translateError(error) {
+  if (isWorkspaceBusy(error)) return 'Hay otra carga o guardado en curso en esta institucion. Espera unos segundos y volve a aplicar.'
   if (error?.code === '42501') return 'Solo el owner, admin o editor de la institucion puede hacer cargas masivas.'
   if (error?.code === 'PGRST202') return 'Falta actualizar la base de datos para las cargas masivas. Avisale al responsable tecnico.'
   return 'No se pudo completar la carga masiva.'
 }
 
-async function runBulk(rpcName, { institutionId, workspaceKey = 'main', rows = [], skipped = [], onProgress }) {
+async function runBulk(rpcName, { institutionId, workspaceKey = 'main', rows = [], skipped = [], onProgress, busyRetryDelayMs = 500 }) {
   if (!isSupabaseConfigured || !supabase) throw new Error('Las cargas masivas requieren Supabase configurado.')
   if (!clean(institutionId)) throw new Error('No hay una institucion activa.')
   const report = emptyBulkRosterReport()
@@ -157,7 +170,11 @@ async function runBulk(rpcName, { institutionId, workspaceKey = 'main', rows = [
   }
   for (let start = 0; start < rows.length; start += BULK_ROSTER_CHUNK_SIZE) {
     const chunk = rows.slice(start, start + BULK_ROSTER_CHUNK_SIZE)
-    const { data, error } = await supabase.rpc(rpcName, { p_institution_id: institutionId, p_workspace_key: workspaceKey, p_rows: chunk })
+    let { data, error } = await supabase.rpc(rpcName, { p_institution_id: institutionId, p_workspace_key: workspaceKey, p_rows: chunk })
+    for (let attempt = 1; isWorkspaceBusy(error) && attempt < BULK_ROSTER_BUSY_ATTEMPTS; attempt += 1) {
+      await wait(busyRetryDelayMs * attempt)
+      ;({ data, error } = await supabase.rpc(rpcName, { p_institution_id: institutionId, p_workspace_key: workspaceKey, p_rows: chunk }))
+    }
     if (error) {
       const failure = new Error(translateError(error))
       failure.partialReport = report

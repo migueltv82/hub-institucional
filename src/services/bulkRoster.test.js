@@ -87,4 +87,29 @@ describe('bulkRoster (I2b)', () => {
     expect(service.describeBulkRosterReason('CURSADA_DADA_DE_BAJA')).toContain('no se reactiva')
     expect(service.describeBulkRosterReason('DOCENTE_SIN_CUENTA')).toContain('Crear accesos docentes')
   })
+
+  it('AUD.I2b P2: si el workspace esta ocupado (55P03 del gateway) reintenta el mismo lote', async () => {
+    const busy = { data: null, error: { code: '55P03', message: 'SOURCE_FILE_WORKSPACE_BUSY' } }
+    const rpc = vi.fn()
+      .mockResolvedValueOnce(busy)
+      .mockResolvedValueOnce(busy)
+      .mockResolvedValueOnce({ data: { procesadas: 2, creadas: 1, sin_cambios: 1, problemas: [] }, error: null })
+    const service = await loadService(rpc)
+    const report = await service.applyTeacherAssignments({ institutionId: 'i1', rows: [{ fila: '1' }, { fila: '2' }], busyRetryDelayMs: 0 })
+    expect(rpc).toHaveBeenCalledTimes(3)
+    expect(new Set(rpc.mock.calls.map(([, args]) => JSON.stringify(args.p_rows))).size).toBe(1)
+    expect(report).toMatchObject({ procesadas: 2, creadas: 1, sin_cambios: 1 })
+  })
+
+  it('AUD.I2b P2: si sigue ocupado se rinde con un mensaje claro y no reintenta otros errores', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: { code: '55P03', message: 'SOURCE_FILE_WORKSPACE_BUSY' } })
+    const service = await loadService(rpc)
+    await expect(service.applyStudentEnrollments({ institutionId: 'i1', rows: [{}], busyRetryDelayMs: 0 })).rejects.toThrow('otra carga o guardado en curso')
+    expect(rpc).toHaveBeenCalledTimes(service.BULK_ROSTER_BUSY_ATTEMPTS)
+
+    const denied = vi.fn().mockResolvedValue({ data: null, error: { code: '42501' } })
+    const other = await loadService(denied)
+    await expect(other.applyStudentEnrollments({ institutionId: 'i1', rows: [{}], busyRetryDelayMs: 0 })).rejects.toThrow('owner, admin o editor')
+    expect(denied).toHaveBeenCalledTimes(1)
+  })
 })

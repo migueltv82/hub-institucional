@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BookOpenCheck, UserCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -11,35 +11,57 @@ import {
 
 // I2b: titularidades y cursadas desde las planillas cargadas, de una vez. Antes se hacian de a una.
 function BulkRosterSection({ canEditWorkspace, docenteMateria, inscripcionesAlumnos, institutionId, useRemoteWorkspace, workspaceKey = 'main' }) {
-  const [running, setRunning] = useState('')
+  // AUD.I2b P2: lo que se ve (en curso, progreso, resultado) queda atado a la institucion y el workspace donde
+  // se lanzo la carga. Si se cambia de institucion, no se muestra lo de la anterior (DNI, materias, avisos).
+  // Una carga ya enviada sigue en la base de la institucion original: no se cancela, solo deja de mostrarse.
+  const contextKey = `${institutionId ?? ''}:${workspaceKey}`
+  const currentContextRef = useRef(contextKey)
+  useEffect(() => {
+    currentContextRef.current = contextKey
+  }, [contextKey])
+  const [running, setRunning] = useState(null)
   const [progress, setProgress] = useState(null)
   const [result, setResult] = useState(null)
   const teacherPlan = planTeacherAssignmentRows(docenteMateria)
   const teacherRows = teacherPlan.rows
   const studentRows = buildStudentEnrollmentRows(inscripcionesAlumnos)
+  const runningHere = running?.contextKey === contextKey ? running.kind : ''
   const canRun = canEditWorkspace && useRemoteWorkspace && Boolean(institutionId) && !running
 
   async function run(kind) {
     const rows = kind === 'teachers' ? teacherRows : studentRows
     const apply = kind === 'teachers' ? applyTeacherAssignments : applyStudentEnrollments
-    setRunning(kind)
+    const startedIn = contextKey
+    const label = kind === 'teachers' ? 'Titularidades' : 'Cursadas'
+    setRunning({ kind, contextKey: startedIn })
     setResult(null)
-    setProgress({ done: 0, total: rows.length })
+    setProgress({ done: 0, total: rows.length, contextKey: startedIn })
     try {
       const skipped = kind === 'teachers' ? teacherPlan.skipped : []
-      const report = await apply({ institutionId, workspaceKey, rows, skipped, onProgress: setProgress })
-      setResult({ kind, report })
-      toast.success(`${kind === 'teachers' ? 'Titularidades' : 'Cursadas'}: ${report.creadas} nuevas, ${report.actualizadas} actualizadas.`)
+      const report = await apply({
+        institutionId,
+        workspaceKey,
+        rows,
+        skipped,
+        onProgress: (next) => setProgress({ ...next, contextKey: startedIn }),
+      })
+      setResult({ kind, report, contextKey: startedIn })
+      if (currentContextRef.current === startedIn) {
+        toast.success(`${label}: ${report.creadas} nuevas, ${report.actualizadas} actualizadas.`)
+      } else {
+        toast('Termino la carga de la institucion anterior. Volve a ella para ver el resultado.')
+      }
     } catch (error) {
-      if (error.partialReport) setResult({ kind, report: error.partialReport })
-      toast.error(error.message)
+      if (error.partialReport) setResult({ kind, report: error.partialReport, contextKey: startedIn })
+      toast.error(currentContextRef.current === startedIn ? error.message : `La carga de la institucion anterior fallo: ${error.message}`)
     } finally {
-      setRunning('')
+      setRunning(null)
       setProgress(null)
     }
   }
 
-  const report = result?.report
+  const visibleProgress = progress?.contextKey === contextKey ? progress : null
+  const report = result?.contextKey === contextKey ? result.report : null
   const problems = Array.isArray(report?.problemas) ? report.problemas : []
 
   return (
@@ -60,14 +82,20 @@ function BulkRosterSection({ canEditWorkspace, docenteMateria, inscripcionesAlum
         <div className="flex flex-wrap gap-2">
           <button className="btn-secondary" disabled={!canRun || !(teacherRows.length || teacherPlan.skipped.length)} onClick={() => run('teachers')} type="button">
             <UserCheck className="h-4 w-4" />
-            {running === 'teachers' && progress ? `Asignando ${progress.done} de ${progress.total}...` : `Aplicar titularidades (${teacherRows.length})`}
+            {runningHere === 'teachers' && visibleProgress ? `Asignando ${visibleProgress.done} de ${visibleProgress.total}...` : `Aplicar titularidades (${teacherRows.length})`}
           </button>
           <button className="btn-primary" disabled={!canRun || !studentRows.length} onClick={() => run('students')} type="button">
             <BookOpenCheck className="h-4 w-4" />
-            {running === 'students' && progress ? `Inscribiendo ${progress.done} de ${progress.total}...` : `Inscribir cursadas (${studentRows.length})`}
+            {runningHere === 'students' && visibleProgress ? `Inscribiendo ${visibleProgress.done} de ${visibleProgress.total}...` : `Inscribir cursadas (${studentRows.length})`}
           </button>
         </div>
       </div>
+
+      {running && !runningHere && (
+        <p className="mt-3 text-sm font-semibold text-slate-600" role="status">
+          Termina una carga que se lanzo en otra institucion. Cuando termine, se pueden aplicar las de esta.
+        </p>
+      )}
 
       {report && (
         <div className="mt-4 space-y-3" role="status">

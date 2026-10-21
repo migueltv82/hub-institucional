@@ -1593,3 +1593,17 @@ Las tres se verificaron en el stack local; la evidencia está en `supabase/secur
 - Tests nuevos en `src/services/bulkRosterSheetDates.test.js`. Incluyen la reproducción de Codex con ExcelJS y el importador real: vencida y futura como `Date` ya no se asignan.
 - Control negativo: con el `bulkRoster.js` anterior fallan los 3 tests. `npm run check` PASS: 360 archivos y 2746 tests.
 - Siguen abiertos los dos P2 de AUD.I2b: concurrencia de lotes (23505 revierte el lote entero) y resultado de otra institución en `BulkRosterSection`. Se pide reauditoría del P1.
+
+## 2026-10-21 — Correctivos de los dos P2 de AUD.I2b (Claude, tarjeta I2b.C2)
+
+- **Lotes concurrentes:**
+  - Las RPC de titularidades y cursadas insertan con `ON CONFLICT DO NOTHING`. Si la fila la creó otro, la releen y la clasifican por su estado real; un 23505 ya no revierte el lote.
+  - Con el gateway de Prod, la segunda carga recibe 55P03 sin escribir nada y el front reintenta el mismo lote, hasta 6 veces.
+- **Resultado de otra institución:** `BulkRosterSection` ata en curso, progreso y resultado a la institución y el workspace donde se lanzó la carga.
+- **Pruebas:**
+  - El harness de I2b reproduce el escenario de Codex con dos conexiones reales y además prueba con gateway.
+  - Control negativo: con el 07 anterior, 23505 en los 3 casos.
+  - Tests del front con la reproducción de Codex; control negativo: los 5 tests nuevos fallan con el código anterior.
+  - `npm run check` PASS: 360 archivos y 2751 tests.
+- Evidencia: sección nueva en `supabase/security/BULK_ROSTER_LOCAL_RESULT.md`.
+- Pendiente: reauditoría completa de Codex. Cambia el 07, así que se aplica en Prod junto con el punto 1.

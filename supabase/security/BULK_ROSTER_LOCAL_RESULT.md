@@ -56,3 +56,48 @@ Fecha: 2026-10-19. Ejecutó: Claude. Entorno: base descartable sobre `supabase_d
 ## Producción
 
 No aplicado. Hay que correr `07_academic_operations.sql` (idempotente) con el OK de Miguel.
+
+## Correctivos de AUD.I2b (Claude, 2026-10-21)
+
+Responde a `BULK_ROSTER_INDEPENDENT_AUDIT.md` (Codex). Staging y Producción: **NONE**.
+
+### P1 — Vigencias con fecha nativa de Excel (commit `37961e4`)
+
+`parseSheetDate` acepta `Date` (en UTC), número de serie de Excel, ISO con hora y DD/MM/AAAA, y valida la fecha de calendario. Un valor no vacío que no es fecha se rechaza con `VIGENCIA_INVALIDA`. Tests en `src/services/bulkRosterSheetDates.test.js`, con la reproducción de Codex (ExcelJS + importador real) y control negativo.
+
+### P2 — Dos cargas concurrentes abortaban el lote entero (`07_academic_operations.sql`)
+
+- **Causa:** el `FOR UPDATE` no serializa nada cuando la clave todavía no existe, y el INSERT sin manejo de conflicto daba 23505, que revertía también las filas ajenas al conflicto.
+- **Corrección** en `academic_admin_bulk_assign_teachers` y `academic_admin_bulk_enroll_students`:
+  - el INSERT usa `ON CONFLICT … DO NOTHING RETURNING id`, que espera a la otra transacción;
+  - si la fila la creó otro, se **relee con `FOR UPDATE` y se clasifica por su estado real**: mismo rol = sin cambios; otro rol = se actualiza; cursada activa = sin cambios; cursada de baja o borrada = no se reactiva;
+  - no se supone que el conflicto sea una fila equivalente;
+  - si la fila desaparece entre el conflicto y la relectura, se informa `CONFLICTO_CONCURRENTE` en esa fila, sin abortar el lote.
+- **Con el gateway de Storage (como en Prod)** las dos cargas no llegan a chocar en la tabla: el trigger del gateway toma un lock no bloqueante por workspace y la segunda falla entera con 55P03 sin escribir nada. Por eso `runBulk` (`src/services/bulkRoster.js`) reintenta ese lote hasta 6 veces con espera creciente. Es seguro porque cada lote es atómico e idempotente. Si sigue ocupado, explica que hay otra carga en curso. Cualquier otro error no se reintenta.
+
+Harness `validateBulkRosterLocal.mjs` ampliado con la reproducción de Codex: dos conexiones psql reales; A deja la transacción abierta con `pg_sleep(3)`.
+
+| Caso | Antes (07 anterior, control negativo) | Ahora |
+|---|---|---|
+| Titularidades: A crea FIX-A-01; B manda [AUDIT-A-02, FIX-A-01] | B: 23505, sin AUDIT-A-02 | B: 1 creada y 1 sin cambios; quedan 2 activas |
+| Titularidades: A deja rol suplente; B pide titular | B: 23505 | B: 1 creada y 1 actualizada; queda titular |
+| Cursadas: mismo escenario | B: 23505 (`subject_enrollments_current_key`) | B: 1 creada y 1 sin cambios |
+| Con gateway: mismo escenario | — | B: 55P03 sin escribir nada (queda 1 activa) |
+| Con gateway: reintentar el lote de B | — | 1 creada y 1 sin cambios; quedan 2 activas |
+
+Run final `95af58eba6092162`: PASS (13 casos originales, punta a punta y 5 de concurrencia), cleanup 0.
+
+### P2 — El resultado de la institución anterior seguía visible (`BulkRosterSection.jsx`)
+
+- En curso, progreso y resultado quedan atados a `institución:workspace` del momento en que se lanzó la carga, y solo se muestran en ese contexto.
+- Si la carga de A termina estando en B, no se muestra nada de A. Aparece un aviso neutro ("terminó la carga de la institución anterior"); si falló, el error se presenta como de la institución anterior.
+- Una carga ya enviada no se cancela: sigue en la base de A.
+- Mientras corre una carga de otra institución, los botones quedan deshabilitados y se explica por qué.
+
+Tests en `BulkRosterSection.test.jsx`, con la reproducción de Codex: carga pendiente en A, cambio a B y resolución de A con DNI 30111222 / MATERIA-A, que no aparecen en B y sí al volver a A. También: resultado terminado, cambio de workspace y error de la anterior. Servicio: reintento ante 55P03 con el mismo lote, rendición con mensaje claro y ningún reintento ante otros errores. Control negativo: con el componente y el servicio anteriores fallan los 5 tests nuevos.
+
+### Gate
+
+- `npm run check`: PASS, 360 archivos y 2751 tests.
+- Regresión local en PASS: catálogo de referencias `5c4d228cbc2c555a`, historia académica `e653337cee320376`, modelo docente `2bdeb10a342deeaf` y publicación de catálogo `6cbba1453e6426af`.
+- Pendiente: reauditoría completa de Codex (cambia SQL del 07).

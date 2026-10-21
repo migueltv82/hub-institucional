@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -156,7 +156,63 @@ exception when others then
 end $$;
 select current_setting('bulk.e2e');
 rollback;`).split('\n').filter(Boolean).pop();
+    step = 'concurrency (AUD.I2b P2)';
+    // Reproduccion de Codex: A crea FIX-A-01 y deja la transaccion abierta; B manda [AUDIT-A-02, FIX-A-01].
+    // Antes: B recibia 23505 y perdia tambien AUDIT-A-02. Ahora B espera a A y clasifica FIX-A-01 por su estado real.
+    sql(`insert into public.subjects (id, institution_id, code, name) values ('a5000000-0000-4000-8000-0000000000a2', '${STUDENT.institution}', 'AUDIT-A-02', 'Audit A 02');
+insert into public.study_plan_subjects (institution_id, plan_id, subject_id) values ('${STUDENT.institution}', 'a4000000-0000-4000-8000-000000000001', 'a5000000-0000-4000-8000-0000000000a2');`);
+    // Con salto de linea final: psql no ejecuta la ultima linea hasta recibirlo o ver EOF.
+    const holdThenCommit = text => text.replace(/commit;\s*$/, 'select pg_sleep(3);\ncommit;\n');
+    const runConcurrent = async (fn, rowsA, rowsB) => {
+      const first = spawn('docker', ['exec', '-i', SOURCE, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'supabase_admin', '-d', database, '-At'], { stdio: ['pipe', 'pipe', 'pipe'] });
+      let firstOut = '';
+      first.stdout.on('data', chunk => { firstOut += chunk; });
+      const firstDone = new Promise(resolve => first.on('close', resolve));
+      first.stdin.end(holdThenCommit(bulkSql(fn, ACTORS.adminA, rowsA)));
+      // Dejar correr el event loop para que el stdin de A se escriba y se cierre antes de las llamadas sincronicas.
+      await new Promise(resolve => setTimeout(resolve, 200));
+      step = `concurrency ${fn}: waiting for A`;
+      const deadline = Date.now() + 10000;
+      while (sql(`select count(*) from pg_stat_activity where datname = '${database}' and query like '%pg_sleep(3)%' and pid <> pg_backend_pid();`) === '0') {
+        if (Date.now() > deadline) throw new Error('first transaction never reached its sleep');
+      }
+      step = `concurrency ${fn}: B`;
+      const second = JSON.parse(sql(bulkSql(fn, ACTORS.adminA, rowsB)).split('\n').filter(Boolean).pop());
+      step = `concurrency ${fn}: after B`;
+      await firstDone;
+      return { first: JSON.parse(firstOut.split('\n').filter(Boolean).pop()), second };
+    };
+    sql(`delete from public.subject_teacher_assignments where institution_id = '${STUDENT.institution}';
+delete from public.subject_enrollments where institution_id = '${STUDENT.institution}' and student_id = '${STUDENT.userId}';`);
+    const countWhere = (table, where) => sql(`select count(*) from public.${table} where institution_id = '${STUDENT.institution}' and ${where};`);
+    report.concurrency = [];
+    const teachers = await runConcurrent('academic_admin_bulk_assign_teachers', [teacherRow({ fila: 'A' })], [teacherRow({ fila: 'B1', materia: 'AUDIT-A-02' }), teacherRow({ fila: 'B2' })]);
+    report.concurrency.push({ name: 'titularidades: misma clave nueva en dos cargas', ...teachers,
+      ok: teachers.first.creadas === 1 && teachers.second.creadas === 1 && teachers.second.sin_cambios === 1 && !teachers.second.error
+        && countWhere('subject_teacher_assignments', `status = 'active' and deleted_at is null`) === '2' });
+    sql(`delete from public.subject_teacher_assignments where institution_id = '${STUDENT.institution}';`);
+    const roles = await runConcurrent('academic_admin_bulk_assign_teachers', [teacherRow({ fila: 'A', rol: 'suplente' })], [teacherRow({ fila: 'B1', materia: 'AUDIT-A-02' }), teacherRow({ fila: 'B2', rol: 'titular' })]);
+    report.concurrency.push({ name: 'titularidades: la otra carga dejo otro rol', ...roles,
+      ok: roles.second.creadas === 1 && roles.second.actualizadas === 1 && !roles.second.error
+        && sql(`select role from public.subject_teacher_assignments where institution_id = '${STUDENT.institution}' and subject_id = '${STUDENT.subjectId}' and status = 'active';`) === 'titular' });
+    const enrollments = await runConcurrent('academic_admin_bulk_enroll_students', [studentRow({ fila: 'A' })], [studentRow({ fila: 'B1', materia: 'AUDIT-A-02' }), studentRow({ fila: 'B2' })]);
+    report.concurrency.push({ name: 'cursadas: misma clave nueva en dos cargas', ...enrollments,
+      ok: enrollments.first.creadas === 1 && enrollments.second.creadas === 1 && enrollments.second.sin_cambios === 1 && !enrollments.second.error
+        && countWhere('subject_enrollments', `student_id = '${STUDENT.userId}'`) === '2' });
+    // Como en Prod, con el gateway de Storage: su trigger toma un lock no bloqueante por workspace, asi que la
+    // segunda carga no espera: falla entera con 55P03 sin escribir nada. El front reintenta ese lote (bulkRoster.js).
+    step = 'concurrency with Storage gateway';
+    sql(readFileSync(resolve('supabase/security/source_file_storage_gateway.sql'), 'utf8'));
+    sql(`delete from public.subject_teacher_assignments where institution_id = '${STUDENT.institution}';`);
+    const busy = await runConcurrent('academic_admin_bulk_assign_teachers', [teacherRow({ fila: 'A' })], [teacherRow({ fila: 'B1', materia: 'AUDIT-A-02' }), teacherRow({ fila: 'B2' })]);
+    report.concurrency.push({ name: 'con gateway: la segunda carga recibe 55P03 y no escribe nada', ...busy,
+      ok: busy.first.creadas === 1 && busy.second.sqlstate === '55P03'
+        && countWhere('subject_teacher_assignments', `status = 'active' and deleted_at is null`) === '1' });
+    const retried = JSON.parse(sql(bulkSql('academic_admin_bulk_assign_teachers', ACTORS.adminA, [teacherRow({ fila: 'B1', materia: 'AUDIT-A-02' }), teacherRow({ fila: 'B2' })])).split('\n').filter(Boolean).pop());
+    report.concurrency.push({ name: 'con gateway: reintentar el mismo lote despues es seguro', first: null, second: retried,
+      ok: retried.creadas === 1 && retried.sin_cambios === 1 && countWhere('subject_teacher_assignments', `status = 'active' and deleted_at is null`) === '2' });
     report.failed = report.cases.filter(item => item.failures.length).map(item => item.name);
+    for (const item of report.concurrency) if (!item.ok) report.failed.push(item.name);
     if (report.endToEnd !== 'saved') report.failed.push('end to end');
     step = 'assertions';
     assert.deepEqual(report.failed, [], 'Bulk roster cases failed');
