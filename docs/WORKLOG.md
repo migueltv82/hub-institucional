@@ -1715,3 +1715,14 @@ Decisión de Miguel: Codex sin tokens. Tres agentes auditores corrieron en paral
 - Detalle: `supabase/security/PRODUCTION_APPLY_2026-10-21.md`.
 - Pendiente: publicar el front; redeploy de admin-users después de los ítems 5–6 de AUDITAR; re-gate de Codex de los ítems 1–3 sobre lo aplicado.
 - 2026-10-21 · Ítem 4 de AUDITAR: fechas Excel sobre 0bc6640, PASS WITH WARNINGS; 2 archivos/11 tests focales PASS, parser sin cambios desde 37961e4, P1 cerrado y P3 de sufijo ISO heredado documentado. Evidencia BULK_ROSTER_SHEET_DATES_INDEPENDENT_AUDIT.md; solo local, sin correcciones ni check completo. Ítems 1–3 esperan GATE_C_FIXES_AGENT_REAUDIT.md, ausente al tomar la tarea.
+
+## 2026-10-21 — Reauditoría del agente sobre las correcciones del gate (8120b35)
+
+- **PASS WITH WARNINGS.** Los 4 hallazgos de Codex cierran en SQL y en el hook. El auditor probó 23 casos de vigencia con RPC reales; con el esquema anterior su matriz daba 23 diferencias.
+- **Nuevos:**
+  - N1 (P2): la Edge da lectura del padrón vía snapshot sin mirar vigencia.
+  - N2 (P3): la Edge con metadata malformada concede.
+  - N3 (P2): otros handlers del panel tienen el mismo patrón A→B (borrar workspace, crear/reparar accesos).
+  - N4 (P3): resultados visuales de otra institución y cruces de estado de sincronización.
+  - N5 (P3): los avisos al alumno castean `::date` y fallan con metadata malformada.
+- Informe: `supabase/security/GATE_C_FIXES_AGENT_REAUDIT.md`. Se corrigen antes del re-gate de Codex y del redeploy de admin-users.
