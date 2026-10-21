@@ -189,6 +189,30 @@ where not exists (select 1 from public.subject_enrollments where institution_id 
     check('una suplencia que no empezo se cancela con fin = inicio', cancelled.value?.cancelledBeforeStart === true && cancelledRow?.status === 'inactive' && cancelledRow?.ends_on === cancelledRow?.starts_on && cancelledRow?.metadata?.cancelled_before_start === true, { cancelled, cancelledRow });
     expectState('igual se rechaza una fecha de fin futura enviada a mano', call('adminA', endCall(futureParent, 'renuncia', 'current_date + 1')), '22023');
 
+    step = 'access follows the validity period (Gate Codex P1)';
+    // Una sola regla temporal: suplente solo dentro de su periodo; titular en licencia solo fuera del de la licencia.
+    const canManage = (actor, subject) => call(actor, `public.academic_can_manage_subject('${INSTITUTION}', 'main', '${subject}', '${STUDENT.programId}')`).value;
+    const leaveScenario = (subject, startsOn, endsOn) => {
+      sql(`insert into public.subject_teacher_assignments (institution_id, workspace_key, subject_id, program_id, teacher_id, teacher_record_id, role, status) values ('${INSTITUTION}', 'main', '${subject}', '${STUDENT.programId}', '${ACTORS.teacherA}', '${RECORDS.teacherA}', 'titular', 'active');`);
+      const parent = sql(`select id from public.subject_teacher_assignments where subject_id = '${subject}' and teacher_id = '${ACTORS.teacherA}' and status = 'active';`);
+      const created = call('adminA', leaveCall([parent], startsOn, endsOn));
+      if (!created.value) throw new Error(`leave for ${subject} failed: ${JSON.stringify(created)}`);
+      return { titular: canManage('teacherA', subject), replacement: canManage('replacementA', subject) };
+    };
+    const futureLeave = leaveScenario('FIX-VIG-FUTURE', 'current_date + 3', 'current_date + 10');
+    check('licencia futura: el titular sigue, el suplente todavia no', futureLeave.titular === true && futureLeave.replacement === false, futureLeave);
+    const current = leaveScenario('FIX-VIG-NOW', 'current_date - 1', 'current_date + 5');
+    check('licencia en curso: el suplente si, el titular no', current.titular === false && current.replacement === true, current);
+    const past = leaveScenario('FIX-VIG-PAST', 'current_date - 10', 'current_date - 2');
+    check('licencia vencida: el titular vuelve, el suplente ya no', past.titular === true && past.replacement === false, past);
+    const edges = leaveScenario('FIX-VIG-EDGE', 'current_date', 'current_date');
+    check('limites inclusivos: licencia que empieza y termina hoy -> suplente si, titular no', edges.titular === false && edges.replacement === true, edges);
+    const openEnded = leaveScenario('FIX-VIG-OPEN', 'current_date - 1', 'null');
+    check('licencia sin fecha de fin: el suplente sigue, el titular no', openEnded.titular === false && openEnded.replacement === true, openEnded);
+    check('el padron del suplente vencido queda vacio', call('replacementA', `(select count(*) from public.academic_get_teacher_subject_rosters('${INSTITUTION}', 'main') r where r."subjectId" = 'FIX-VIG-PAST')`).value === 0, 'roster');
+    const helperApi = JSON.parse(sql(`select json_build_object('anon', has_function_privilege('anon', 'public.academic_teacher_assignment_grants_access(public.subject_teacher_assignments, date)', 'execute'), 'authenticated', has_function_privilege('authenticated', 'public.academic_teacher_assignment_grants_access(public.subject_teacher_assignments, date)', 'execute'))::text;`));
+    check('la regla temporal no es invocable desde la API', !helperApi.anon && !helperApi.authenticated, helperApi);
+
     step = 'backfill and rerun';
     // Datos de antes de las columnas nuevas: suplencia vinculada solo por metadata y una baja sin motivo.
     sql(`alter table public.subject_teacher_assignments drop constraint subject_teacher_assignments_end_reason_check;

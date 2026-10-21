@@ -8,9 +8,9 @@ import {
   useCronogramaFiles,
 } from './useCronogramaFiles.js'
 
-const mocks = vi.hoisted(() => ({ toastError: vi.fn(), toastSuccess: vi.fn() }))
+const mocks = vi.hoisted(() => ({ toast: vi.fn(), toastError: vi.fn(), toastSuccess: vi.fn() }))
 vi.mock('react-hot-toast', () => ({
-  default: { error: mocks.toastError, success: mocks.toastSuccess },
+  default: Object.assign(mocks.toast, { error: mocks.toastError, success: mocks.toastSuccess }),
 }))
 
 function props(overrides = {}) {
@@ -481,5 +481,69 @@ describe('useCronogramaFiles', () => {
     expect(mocks.toastError).toHaveBeenCalledWith(
       'No se pudo cargar la plantilla maestra: fallo de base',
     )
+  })
+
+  describe('Gate Codex P2: una importacion pendiente de A no se publica en B', () => {
+    function pendingParser() {
+      let resolve
+      const promise = new Promise((done) => { resolve = done })
+      return { parser: vi.fn(() => promise), resolve }
+    }
+    const teacherDatasets = {
+      datasets: {
+        docentes: [{ docente_id: 'IMPORT-A', apellido: 'De A', nombre: 'Docente' }],
+        docenteMateria: [{ docente_id: 'IMPORT-A', materia_id: 'A01', carrera_id: 'A', rol_en_materia: 'TITULAR' }],
+        disponibilidadDocente: [],
+        horariosDocentes: [],
+      },
+    }
+
+    it('reproduccion de Codex: la planilla de A termina estando en B -> se guarda en A y no toca la pantalla', async () => {
+      const { parser, resolve } = pendingParser()
+      const settingsA = props({ activeInstitutionId: 'inst-A' })
+      settingsA.fileHandlers = { ...settingsA.fileHandlers, parseTemplateV2TeachersWorkbook: parser }
+      const { result, rerender } = renderHook((hookProps) => useCronogramaFiles(hookProps), { initialProps: settingsA })
+      const event = { target: { files: [new File(['x'], 'docentes-a.xlsx')], value: 'selected' } }
+
+      let pending
+      act(() => { pending = result.current.onUploadTeachers(event) })
+      rerender({ ...settingsA, activeInstitutionId: 'inst-B', snapshotPayload: { uploadedFiles: {}, docentes: [{ docente_id: 'DE-B' }] } })
+      await act(async () => { resolve(teacherDatasets); await pending })
+
+      expect(settingsA.fileHandlers.saveSourceFile).toHaveBeenCalledWith(expect.objectContaining({ institutionId: 'inst-A', datasetKey: 'docentesWorkbook' }))
+      expect(settingsA.persistWorkspaceSnapshot).toHaveBeenCalledWith(expect.objectContaining({ docentes: [expect.objectContaining({ docente_id: 'IMPORT-A' })] }))
+      for (const setter of ['setDocentes', 'setDocenteMateria', 'setHorariosDocentes', 'setDisponibilidadDocente', 'setCargaHorariaDocente', 'setUploadedFiles', 'setRequiereRegeneracion']) {
+        expect(settingsA[setter]).not.toHaveBeenCalled()
+      }
+      expect(mocks.toastSuccess).not.toHaveBeenCalled()
+      expect(mocks.toast).toHaveBeenCalledWith(expect.stringContaining('institucion anterior'))
+    })
+
+    it('lo mismo con la planilla de alumnos', async () => {
+      const { parser, resolve } = pendingParser()
+      const settingsA = props({ activeInstitutionId: 'inst-A' })
+      settingsA.fileHandlers = { ...settingsA.fileHandlers, parseTemplateV2StudentsWorkbook: parser }
+      const { result, rerender } = renderHook((hookProps) => useCronogramaFiles(hookProps), { initialProps: settingsA })
+      let pending
+      act(() => { pending = result.current.onUploadStudents({ target: { files: [new File(['x'], 'alumnos-a.xlsx')], value: 'selected' } }) })
+      rerender({ ...settingsA, activeInstitutionId: 'inst-B' })
+      await act(async () => { resolve({ datasets: { alumnos: [{ alumno_id: 'IMPORT-A', dni: '30111222' }] } }); await pending })
+      expect(settingsA.setAlumnos).not.toHaveBeenCalled()
+      expect(settingsA.setStudentEnrollmentImports).not.toHaveBeenCalled()
+      expect(mocks.toast).toHaveBeenCalledWith(expect.stringContaining('institucion anterior'))
+    })
+
+    it('si se queda en la misma institucion, publica como siempre', async () => {
+      const { parser, resolve } = pendingParser()
+      const settingsA = props({ activeInstitutionId: 'inst-A' })
+      settingsA.fileHandlers = { ...settingsA.fileHandlers, parseTemplateV2TeachersWorkbook: parser }
+      const { result, rerender } = renderHook((hookProps) => useCronogramaFiles(hookProps), { initialProps: settingsA })
+      let pending
+      act(() => { pending = result.current.onUploadTeachers({ target: { files: [new File(['x'], 'docentes-a.xlsx')], value: 'selected' } }) })
+      rerender({ ...settingsA })
+      await act(async () => { resolve(teacherDatasets); await pending })
+      expect(settingsA.setDocentes).toHaveBeenCalled()
+      expect(mocks.toast).not.toHaveBeenCalled()
+    })
   })
 })

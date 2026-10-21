@@ -193,6 +193,24 @@ insert into public.study_plan_subjects (id, institution_id, plan_id, subject_id)
     const forgedAgain = as('adminA', `update public.subject_class_sessions set study_plan_subject_id = '${CATALOG.planSubject}' where subject_id = 'LATE2-01'`);
     check('y un valor a mano en un update que no toca el texto igual se pisa', forgedAgain.value === 'ok' && refOf('subject_class_sessions', `subject_id = 'LATE2-01'`) === 'a6000000-0000-4000-8000-0000000000f4', forgedAgain);
 
+    step = 'ambiguous career (Gate Codex P2)';
+    // Otra carrera cuyo NOMBRE coincide con el CODIGO de la carrera A: el texto 'FIX-A' es ambiguo.
+    sql(`insert into public.careers (id, institution_id, external_code, name) values ('a3000000-0000-4000-8000-0000000000f9', '${A}', 'OTHER-CODE', 'FIX-A');`);
+    // LATE-01 esta en un solo plan: con el resolver anterior se elegia ese plan aunque la carrera fuera ambigua.
+    const ambiguousResolver = sql(`select coalesce(public.academic_resolve_plan_subject_id('${A}', 'FIX-A', 'LATE-01', null)::text, 'NULL');`);
+    const catalogResolver = sql(`select outcome from public.academic_resolve_catalog_subject('${A}', 'FIX-A', 'LATE-01');`);
+    check('carrera ambigua: el resolver devuelve NULL, igual que la resolucion de la carga masiva', ambiguousResolver === 'NULL' && catalogResolver === 'CARRERA_AMBIGUA', { ambiguousResolver, catalogResolver });
+    // LATE-01 esta en un solo plan (FIX-A-01 ya esta en dos planes activos a esta altura del harness).
+    check('por nombre sin ambiguedad sigue resolviendo', sql(`select coalesce(public.academic_resolve_plan_subject_id('${A}', 'Fixture Career A', 'LATE-01', null)::text, 'NULL');`) === CATALOG.latePlanSubject, 'name');
+    check('una carrera vacia nunca resuelve', sql(`select coalesce(public.academic_resolve_plan_subject_id('${A}', '', 'FIX-A-01', null)::text, 'NULL');`) === 'NULL', 'empty');
+    sql(`delete from public.careers where id = 'a3000000-0000-4000-8000-0000000000f9';`);
+
+    step = 'renamed subject code (Gate Codex P3)';
+    // Reproduccion de Codex: renombrar el codigo en el catalogo y repetir el ON CONFLICT de clases.
+    sql(`update public.subjects set code = 'GATE-RENAMED' where id = 'a5000000-0000-4000-8000-0000000000f4';`);
+    const renamedSession = as('teacherA', `perform public.academic_teacher_create_class_session('${A}', 'main', 'LATE2-01', 'Fixture Career A', current_date - 5, 'renombrada')`);
+    check('el atajo del trigger no conserva una referencia a un codigo que ya no coincide', renamedSession.value === 'ok' && refOf('subject_class_sessions', `subject_id = 'LATE2-01'`) === 'NULL', { renamedSession, ref: refOf('subject_class_sessions', `subject_id = 'LATE2-01'`) });
+
     step = 'normal updates keep working';
     const regrade = as('teacherA', `perform public.academic_teacher_upsert_student_grade('${A}', 'main', '${STUDENT.userId}', '${STUDENT.recordId}', null, 'FIX-A-01', 'Fixture Career A', 'final', 1, 9, 'regular', null)`);
     check('corregir una nota sigue andando y conserva la referencia', regrade.value === 'ok' && value(`select study_plan_subject_id from public.student_grades where institution_id = '${A}' and attempt_number = 1;`) === CATALOG.planSubject, regrade);

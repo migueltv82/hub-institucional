@@ -1678,9 +1678,9 @@ begin
           and exam_subject.exam_table_id = table_row.id
           and assignment.workspace_key = clean_workspace_key
           and assignment.teacher_id = caller_id
-          and assignment.role = 'titular'
-          and assignment.status = 'active'
-          and assignment.deleted_at is null
+          -- Gate Codex P1: el titular (tambien con una licencia futura o ya terminada), dentro de su vigencia.
+          and assignment.role in ('titular', 'licencia')
+          and public.academic_teacher_assignment_grants_access(assignment)
       )
     ) then
       -- Mismo error si la mesa no existe: no se revela que mesas hay.
@@ -2024,9 +2024,9 @@ as $$
       and exam_subject.exam_table_id = p_exam_table_id
       and assignment.workspace_key = p_workspace_key
       and assignment.teacher_id = (select auth.uid())
-      and assignment.role = 'titular'
-      and assignment.status = 'active'
-      and assignment.deleted_at is null
+      -- Gate Codex P1: el titular (tambien con una licencia futura o ya terminada), dentro de su vigencia.
+      and assignment.role in ('titular', 'licencia')
+      and public.academic_teacher_assignment_grants_access(assignment)
   );
 $$;
 

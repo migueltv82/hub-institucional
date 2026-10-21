@@ -336,6 +336,42 @@ where replacement.replaces_assignment_id is null
   and parent.subject_id = replacement.subject_id
   and parent.program_id = replacement.program_id;
 
+-- Gate Codex P1 (21/10): UNA regla temporal para todo acceso de un docente a una materia (libro docente,
+-- padron, comandos del docente, mesas). Antes se miraban rol y estado sin fechas: un suplente programado
+-- accedia antes de empezar y despues de vencer, y el titular perdia el acceso apenas se cargaba una licencia
+-- futura (y no lo recuperaba al terminar).
+--   * activa, sin baja, rol titular / suplente / licencia, y dentro de su vigencia (starts_on / ends_on);
+--   * un titular en licencia accede solo FUERA del periodo de la licencia (metadata leave_starts_on /
+--     leave_ends_on, que escribe academic_create_teacher_subject_leave). Una licencia sin fechas es indefinida.
+-- "Hoy" es current_date del servidor (UTC). Interna: sin EXECUTE para la API.
+create or replace function public.academic_teacher_assignment_grants_access(
+  p_assignment public.subject_teacher_assignments,
+  p_today date default current_date
+)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce(
+    p_assignment.status = 'active'
+    and p_assignment.deleted_at is null
+    and p_assignment.role in ('titular', 'suplente', 'licencia')
+    and (p_assignment.starts_on is null or p_assignment.starts_on <= p_today)
+    and (p_assignment.ends_on is null or p_today <= p_assignment.ends_on)
+    and (
+      p_assignment.role <> 'licencia'
+      or not (
+        coalesce(public.academic_try_iso_date(p_assignment.metadata ->> 'leave_starts_on'), '-infinity'::date) <= p_today
+        and p_today <= coalesce(public.academic_try_iso_date(p_assignment.metadata ->> 'leave_ends_on'), 'infinity'::date)
+      )
+    ),
+    false
+  );
+$$;
+
+revoke all on function public.academic_teacher_assignment_grants_access(public.subject_teacher_assignments, date) from public, anon, authenticated;
+
 -- Asignaciones ya dadas de baja antes de esta columna: el motivo no se conoce.
 update public.subject_teacher_assignments
 set end_reason = 'otro'

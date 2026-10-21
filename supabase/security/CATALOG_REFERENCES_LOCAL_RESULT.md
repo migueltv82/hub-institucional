@@ -107,3 +107,11 @@ Informe del auditor: `CATALOG_REFERENCES_AGENT_AUDIT.md`.
 - `program_id` vacío frente a carreras con `external_code` vacío.
 - `enable trigger user` re-habilita triggers apagados a mano.
 - Costo del trigger en lotes de 1000 filas (unos 2 s).
+
+## Correcciones del gate de Codex (393aa51, 21/10)
+
+- **P2 · Carrera ambigua.** `academic_resolve_plan_subject_id` resuelve primero **una sola** carrera, igual que `academic_resolve_catalog_subject`. Si el texto coincide con el nombre de una carrera y el código de otra, devuelve NULL. Una carrera vacía nunca resuelve.
+- **P3 · Código renombrado.** El atajo del trigger solo se saltea el recálculo si la referencia todavía corresponde al código y a la carrera actuales (una lectura por PK). Si no, recalcula.
+- **Harness: 36/36 PASS (run `e3517cc2cee14816`).** La reproducción de la carrera ambigua usa una materia que está en un solo plan, porque si no el caso no distingue. La del renombrado sigue la receta de Codex.
+- **Control negativo** con el 07 anterior: fallan los dos casos.
+- **Fuera de alcance**, documentado por Codex: el borrado directo de una institución con revisiones del gateway da 23503. Es previo; la purga I3 funciona.

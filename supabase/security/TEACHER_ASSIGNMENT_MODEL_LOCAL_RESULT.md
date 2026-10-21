@@ -104,3 +104,33 @@ Informe del auditor: `TEACHER_ASSIGNMENT_MODEL_AGENT_AUDIT.md`.
 - Fechas de baja muy viejas.
 - El `ON CONFLICT` de la licencia pisa un vínculo previo.
 - `updateSubjectTeacherAssignmentRole` sin uso.
+
+## Correcciones del gate de Codex (393aa51, 21/10)
+
+**P1 · La vigencia gobierna el acceso.** Era previo a este bloque. Lo había dejado para la fase B y Codex lo marcó P1 con razón: es un permiso indebido.
+
+- **Regla única** en `public.academic_teacher_assignment_grants_access(asignación, hoy)` (06, sin EXECUTE para la API). Una asignación da acceso si se cumple todo esto:
+  - está activa y sin baja, con rol titular, suplente o licencia;
+  - hoy está dentro de su vigencia (`starts_on` / `ends_on`);
+  - si el rol es licencia, hoy está **fuera** del período de la licencia (`leave_starts_on` / `leave_ends_on` de metadata). Una licencia sin fechas es indefinida.
+- **Dónde se aplica:**
+  - `academic_can_manage_subject` (libro docente);
+  - `academic_get_teacher_subject_rosters`;
+  - `teacher_reset_student_subject_academic_records`;
+  - `teacher_remove_student_subject_records`;
+  - el reemplazante en `academic_get_student_subject_teacher_notices`;
+  - los dos chequeos de titular de mesa del 08: el titular con una licencia futura o terminada sigue siendo el titular de la mesa.
+- **Edge `admin-users`:** `isTeacherRosterAssignmentInActiveWindow` aplica la misma regla. Antes buscaba un `source` (`teacher_leave_replacement`) que la RPC nunca escribe. Necesita redeploy.
+- **Portal docente:** `src/modules/docentes/lib/teacherAssignmentAccess.js` espeja la regla para lo que se muestra.
+- **Harness: 55/55 PASS (run `4537c9dfa8186e8b`).**
+  - Licencia futura: el titular sí accede, el suplente no.
+  - Licencia en curso: el suplente sí, el titular no.
+  - Licencia vencida: el titular vuelve y el suplente ya no.
+  - Límites inclusivos (la licencia empieza y termina hoy).
+  - Licencia sin fin.
+  - El padrón del suplente vencido queda vacío.
+  - La regla no tiene EXECUTE para la API.
+- **Control negativo** con el 06, 07 y 08 anteriores: fallan "licencia futura" y "licencia vencida", que es el escenario de Codex.
+- **Límites:**
+  - Los dos chequeos de mesa del 08 usan la misma función, pero el fixture no tiene `legacy_subject_id` en `exam_table_subjects`, así que no se ejercitan por harness.
+  - "Hoy" es la fecha del servidor (UTC).

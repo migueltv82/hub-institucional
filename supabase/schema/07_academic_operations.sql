@@ -678,9 +678,8 @@ as $$
         and assignment.program_id = coalesce(p_program_id, '')
         and assignment.teacher_id = (select auth.uid())
         and public.is_member_of_institution(p_institution_id)
-        and assignment.status = 'active'
-        and assignment.deleted_at is null
-        and assignment.role in ('titular', 'suplente')
+        -- Gate Codex P1: estado, rol y vigencia en una sola regla (06).
+        and public.academic_teacher_assignment_grants_access(assignment)
     );
 $$;
 
@@ -1173,9 +1172,8 @@ as $$
       and public.is_member_of_institution(p_institution_id)
       and assignment.workspace_key = context.workspace_key
       and assignment.teacher_id = context.actor_id
-      and assignment.status = 'active'
-      and assignment.deleted_at is null
-      and assignment.role in ('titular', 'suplente')
+      -- Gate Codex P1: estado, rol y vigencia en una sola regla (06).
+      and public.academic_teacher_assignment_grants_access(assignment)
   ),
   active_enrollments as (
     select distinct on (
@@ -1338,9 +1336,8 @@ as $$
    and replacement_assignment.workspace_key = leave_assignment.workspace_key
    and replacement_assignment.subject_id = leave_assignment.subject_id
    and replacement_assignment.program_id = leave_assignment.program_id
-   and replacement_assignment.status = 'active'
-   and replacement_assignment.deleted_at is null
    and replacement_assignment.role = 'suplente'
+   and public.academic_teacher_assignment_grants_access(replacement_assignment)
    and exists (
      select 1 from public.memberships teacher_membership
      where teacher_membership.institution_id = replacement_assignment.institution_id
@@ -1487,9 +1484,8 @@ begin
     where assignment.institution_id = p_institution_id
       and assignment.workspace_key = clean_workspace_key
       and assignment.teacher_id = p_actor_id
-      and assignment.status = 'active'
-      and assignment.deleted_at is null
-      and assignment.role in ('titular', 'suplente', 'licencia')
+      -- Gate Codex P1: un titular en licencia no opera durante la licencia; un suplente, solo en su vigencia.
+      and public.academic_teacher_assignment_grants_access(assignment)
       and regexp_replace(lower(coalesce(assignment.subject_id, '')), '[^a-z0-9]+', '', 'g') = normalized_subject_id
       and (
         clean_program_id = ''
@@ -1586,9 +1582,8 @@ begin
     where assignment.institution_id = p_institution_id
       and assignment.workspace_key = clean_workspace_key
       and assignment.teacher_id = p_actor_id
-      and assignment.status = 'active'
-      and assignment.deleted_at is null
-      and assignment.role in ('titular', 'suplente', 'licencia')
+      -- Gate Codex P1: un titular en licencia no opera durante la licencia; un suplente, solo en su vigencia.
+      and public.academic_teacher_assignment_grants_access(assignment)
       and regexp_replace(lower(coalesce(assignment.subject_id, '')), '[^a-z0-9]+', '', 'g') = normalized_subject_id
       and (
         clean_program_id = ''
@@ -2585,21 +2580,31 @@ stable
 security definer
 set search_path = ''
 as $$
-  with candidates as (
-    select distinct plan_subject.id, plan_subject.plan_id, plan.status
+  -- Gate Codex P2: primero UNA sola carrera, igual que academic_resolve_catalog_subject (si el texto coincide
+  -- con el nombre de una carrera y el codigo de otra, es ambiguo y queda NULL); recien despues los planes.
+  with matched_careers as (
+    select career.id
     from public.careers career
+    where career.institution_id = p_institution_id
+      and btrim(coalesce(p_program, '')) <> ''
+      and (
+        lower(btrim(career.name)) = lower(btrim(p_program))
+        or lower(btrim(coalesce(career.external_code, ''))) = lower(btrim(p_program))
+      )
+  ),
+  the_career as (
+    select min(id::text)::uuid as id from matched_careers having count(*) = 1
+  ),
+  candidates as (
+    select distinct plan_subject.id, plan_subject.plan_id, plan.status
+    from the_career
     join public.study_plans plan
-      on plan.institution_id = career.institution_id and plan.career_id = career.id
+      on plan.institution_id = p_institution_id and plan.career_id = the_career.id
     join public.study_plan_subjects plan_subject
       on plan_subject.institution_id = plan.institution_id and plan_subject.plan_id = plan.id
     join public.subjects subject
       on subject.institution_id = plan_subject.institution_id and subject.id = plan_subject.subject_id
-    where career.institution_id = p_institution_id
-      and btrim(coalesce(p_subject, '')) <> ''
-      and (
-        lower(btrim(career.name)) = lower(btrim(coalesce(p_program, '')))
-        or lower(btrim(career.external_code)) = lower(btrim(coalesce(p_program, '')))
-      )
+    where btrim(coalesce(p_subject, '')) <> ''
       and lower(btrim(subject.code)) = lower(btrim(p_subject))
   ),
   student_candidates as (
@@ -2646,7 +2651,26 @@ begin
     and new.institution_id is not distinct from old.institution_id
     and new.subject_id is not distinct from old.subject_id
     and new.program_id is not distinct from old.program_id
-    and (to_jsonb(new) ->> 'student_record_id') is not distinct from (to_jsonb(old) ->> 'student_record_id') then
+    and (to_jsonb(new) ->> 'student_record_id') is not distinct from (to_jsonb(old) ->> 'student_record_id')
+    -- Gate Codex P3: y la referencia todavia corresponde a ese codigo y esa carrera (un codigo renombrado en el
+    -- catalogo la deja ajena). Es una lectura por clave primaria; si no coincide, se recalcula abajo.
+    and exists (
+      select 1
+      from public.study_plan_subjects plan_subject
+      join public.subjects subject
+        on subject.institution_id = plan_subject.institution_id and subject.id = plan_subject.subject_id
+      join public.study_plans plan
+        on plan.institution_id = plan_subject.institution_id and plan.id = plan_subject.plan_id
+      join public.careers career
+        on career.institution_id = plan.institution_id and career.id = plan.career_id
+      where plan_subject.institution_id = new.institution_id
+        and plan_subject.id = old.study_plan_subject_id
+        and lower(btrim(subject.code)) = lower(btrim(new.subject_id))
+        and (
+          lower(btrim(career.name)) = lower(btrim(new.program_id))
+          or lower(btrim(coalesce(career.external_code, ''))) = lower(btrim(new.program_id))
+        )
+    ) then
     return new;
   end if;
   new.study_plan_subject_id := public.academic_resolve_plan_subject_id(

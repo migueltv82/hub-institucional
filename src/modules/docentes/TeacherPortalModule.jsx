@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { isLeaveReplacement, teacherAssignmentAccessState } from './lib/teacherAssignmentAccess.js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
@@ -928,12 +929,9 @@ export default function TeacherPortalModule() {
       const subjectId = clean(assignment.subject_id)
       const programId = clean(assignment.program_id)
       const display = subjectDisplayIndex.get(buildSubjectKey(subjectId, programId)) ?? {}
-      const today = new Date().toISOString().slice(0, 10)
-      const startsOn = clean(assignment.metadata?.leave_starts_on)
-      const endsOn = clean(assignment.metadata?.leave_ends_on)
-      const leaveIsCurrent = (!startsOn || startsOn <= today) && (!endsOn || today <= endsOn)
-
-      if (assignment.source === 'teacher_leave_replacement' && !leaveIsCurrent) return null
+      // Gate Codex P1: misma regla temporal que la base (lib/teacherAssignmentAccess.js).
+      const access = teacherAssignmentAccessState(assignment)
+      if (!access.visible) return null
 
       return {
         id: assignment.id,
@@ -942,10 +940,8 @@ export default function TeacherPortalModule() {
         nombre: display.nombre || subjectId,
         carrera: display.carrera || programId,
         anio: display.anio || '',
-        role: assignment.role === 'licencia' && !leaveIsCurrent
-          ? (assignment.metadata?.original_role || 'titular')
-          : (assignment.role || ''),
-        assignmentSource: assignment.source || '',
+        role: access.effectiveRole || '',
+        assignmentSource: isLeaveReplacement(assignment) ? 'teacher_leave_replacement' : (assignment.source || ''),
         leave: assignment.metadata || null,
       }
     }).filter(Boolean)

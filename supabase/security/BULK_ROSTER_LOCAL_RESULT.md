@@ -118,3 +118,15 @@ Informe del auditor: `BULK_ROSTER_P2_AGENT_AUDIT.md`.
 - H3 (huecos del harness). Lo cubre el informe del auditor, con reproducciones propias.
 - H5 (una licencia se pisa desde la planilla): es comportamiento previo.
 - H6 (el portal recibe 55P03 crudo durante una carga): es del gateway.
+
+## Corrección del gate de Codex (393aa51, 21/10) · importación pendiente de A publicada en B
+
+- **Causa:** `useCronogramaFiles` captura la institución al empezar la importación, así que guarda en la correcta. Pero después publicaba las filas en el estado de la pantalla, que ya era de B, y `hydratedInstitutionId=B` habilitaba aplicarlas.
+- **Corrección:**
+  - Cada importación (maestra, docentes, alumnos) recuerda dónde se lanzó y sigue guardando ahí.
+  - Si al terminar ya no se está en esa institución, **no publica nada en pantalla** y avisa que se guardó en la anterior.
+  - Los errores también aclaran que son de la institución anterior.
+- **Tests** en `useCronogramaFiles.test.js`, con la reproducción de Codex: el parser queda pendiente en A, se cambia a B y después se resuelve.
+  - Docentes y alumnos: se guarda en A, ningún setter se llama y aparece el aviso.
+  - Misma institución: publica como siempre.
+- **Control negativo:** con el hook anterior fallan los 2 casos de A→B.

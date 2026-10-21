@@ -2125,16 +2125,24 @@ function getTeacherRosterIsoDate(value: unknown) {
   return new Date(parsed).toISOString().slice(0, 10)
 }
 
+// Gate Codex P1: misma regla que public.academic_teacher_assignment_grants_access (06).
+// - Titular en licencia: accede solo fuera del periodo de la licencia (leave_starts_on / leave_ends_on).
+// - Suplencia: accede solo dentro de su periodo (starts_on / ends_on de la fila o de su metadata).
+// Antes se buscaba source 'teacher_leave_replacement', que la RPC de licencias nunca escribe ('leave').
 function isTeacherRosterAssignmentInActiveWindow(row: Record<string, unknown>, today: string) {
   const metadata = isRecord(row.metadata) ? row.metadata : {}
   const role = getOptionalString(row.role).toLowerCase()
-  const source = getOptionalString(row.source).toLowerCase()
-  const startsOn = getTeacherRosterIsoDate(metadata.leave_starts_on)
-  const endsOn = getTeacherRosterIsoDate(metadata.leave_ends_on)
-  const leaveIsCurrent = (!startsOn || startsOn <= today) && (!endsOn || today <= endsOn)
+  const inWindow = (startsOn: string, endsOn: string) => (!startsOn || startsOn <= today) && (!endsOn || today <= endsOn)
 
-  if (role === 'licencia' && leaveIsCurrent) return false
-  if (source === 'teacher_leave_replacement' && !leaveIsCurrent) return false
+  const ownStartsOn = getTeacherRosterIsoDate(row.starts_on ?? metadata.starts_on)
+  const ownEndsOn = getTeacherRosterIsoDate(row.ends_on ?? metadata.ends_on)
+  if (!inWindow(ownStartsOn, ownEndsOn)) return false
+
+  if (role === 'licencia') {
+    const leaveStartsOn = getTeacherRosterIsoDate(metadata.leave_starts_on)
+    const leaveEndsOn = getTeacherRosterIsoDate(metadata.leave_ends_on)
+    if (inWindow(leaveStartsOn, leaveEndsOn)) return false
+  }
 
   return true
 }

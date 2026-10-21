@@ -1693,3 +1693,17 @@ Decisión de Miguel: Codex sin tokens. Tres agentes auditores corrieron en paral
 
 - Se conservó además la reauditoría documental de Claude `817cb20` al publicar; no introduce cambios de runtime frente a la base integrada verificada.
 - 2026-10-21 · Gate Codex AUD16–18 sobre d0f11ee/0a120d0: 1 FAIL (P1 vigencias heredado), 2 FAIL (P2 carrera ambigua heredado; P3 renombrado manual), 3 FAIL (P2 importación A pendiente reemplaza filas B conservando ancla B). Harness 48/32/13+5 PASS; 07 completo como postgres no superusuario PASS con huella estable, concurrencia/referencias PASS; focales 7 archivos/77 tests PASS (incluye observación del fallo). Evidencia AUD16_18_CODEX_GATE.md, 38 líneas; solo local, sin correcciones ni check completo; 06/07 no habilitados para Prod.
+
+## 2026-10-21 — Correcciones del gate FAIL de Codex (393aa51) (Claude, tarjeta GATE.C)
+
+- **P1 · Vigencia de acceso:**
+  - Regla única `academic_teacher_assignment_grants_access` (06), aplicada en libro docente, roster, comandos del docente, avisos y mesas (07/08), en la Edge `admin-users` y en el portal docente.
+  - El suplente accede solo en su período. El titular en licencia accede antes y después de la licencia.
+- **P2 · Carrera ambigua:** el resolver exige una sola carrera.
+- **P3 · Código renombrado:** el atajo del trigger revalida.
+- **P2 · Importación A→B:** `useCronogramaFiles` no publica en pantalla una importación que terminó en otra institución.
+- **Pruebas:**
+  - Harness: docente 55/55, referencias 36/36. Controles negativos en todos los casos nuevos.
+  - 13 harness de regresión en PASS.
+  - `npm run check` PASS: 361 archivos y 2761 tests.
+- **Para Prod**, después del nuevo gate: correr el 06, el 07 y el 08 (cambian los chequeos de mesa) y redeployar `admin-users`.

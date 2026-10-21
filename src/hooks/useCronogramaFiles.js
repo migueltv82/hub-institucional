@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { saveSourceFile } from '../services/sourceFiles.js'
 import {
@@ -461,12 +462,28 @@ export function useCronogramaFiles({
   useRemoteWorkspace,
   workspaceKey,
 }) {
+  // Gate Codex P2 (21/10): cada importacion queda atada a la institucion donde se lanzo. Las funciones de abajo
+  // capturan esa institucion (y su snapshot) al empezar, asi que guardan ahi; pero si mientras se procesaba la
+  // planilla se cambio de institucion, NO se publica nada en pantalla: los datos visibles ya son de la otra, y
+  // mezclarlos permitia aplicar planillas de A sobre B (BulkRosterSection confia en hydratedInstitutionId).
+  const currentInstitutionRef = useRef(activeInstitutionId)
+  useEffect(() => {
+    currentInstitutionRef.current = activeInstitutionId
+  }, [activeInstitutionId])
+  const startedIn = activeInstitutionId
+  const stillHere = () => currentInstitutionRef.current === startedIn
+  function notifyFinishedElsewhere(label) {
+    toast(`${label}: se termino de guardar en la institucion anterior. Volve a ella para verla.`)
+  }
+
   async function persistFile({ file, datasetKey, datasets, nextUploadedFiles }) {
     if (useRemoteWorkspace) await fileHandlers.saveSourceFile({ institutionId: activeInstitutionId, workspaceKey, datasetKey, file, useRemote: true })
     const requiereRegeneracion = Boolean(cronogramaLength) || snapshotPayload?.requiereRegeneracion
     await persistWorkspaceSnapshot?.({ ...snapshotPayload, ...datasets, uploadedFiles: nextUploadedFiles, requiereRegeneracion })
+    if (!stillHere()) return false
     setUploadedFiles(nextUploadedFiles)
     if (requiereRegeneracion) setRequiereRegeneracion(true)
+    return true
   }
 
   async function onUploadMaster(event) {
@@ -504,7 +521,10 @@ export function useCronogramaFiles({
       if (enrollmentImports) mergedDatasets.inscripcionesAlumnos = enrollmentImports.rows
       const willRequireReview = Boolean(cronogramaLength) || snapshotPayload?.requiereRegeneracion
 
-      await persistFile({ file, datasetKey: 'masterWorkbook', datasets: mergedDatasets, nextUploadedFiles })
+      if (!(await persistFile({ file, datasetKey: 'masterWorkbook', datasets: mergedDatasets, nextUploadedFiles }))) {
+        notifyFinishedElsewhere('Plantilla maestra')
+        return
+      }
       setCorrelatividades(academicDatasets.datasets.correlatividades)
       setPlanesEstudio(academicDatasets.datasets.planesEstudio)
       if (teacherDatasets) {
@@ -529,7 +549,7 @@ export function useCronogramaFiles({
         ],
       })
     } catch (error) {
-      toast.error(`No se pudo cargar la plantilla maestra: ${error.message}`)
+      toast.error(`No se pudo cargar la plantilla maestra${stillHere() ? '' : ' (de la institucion anterior)'}: ${error.message}`)
     } finally {
       event.target.value = ''
     }
@@ -543,7 +563,10 @@ export function useCronogramaFiles({
       const { datasets } = await fileHandlers.parseTemplateV2TeachersWorkbook(file, { planesEstudio: snapshotPayload?.planesEstudio })
       const merged = mergeTeacherWorkbookDatasets(snapshotPayload, datasets)
       const nextUploadedFiles = { ...snapshotPayload?.uploadedFiles, docentesWorkbook: file.name }
-      await persistFile({ file, datasetKey: 'docentesWorkbook', datasets: merged.datasets, nextUploadedFiles })
+      if (!(await persistFile({ file, datasetKey: 'docentesWorkbook', datasets: merged.datasets, nextUploadedFiles }))) {
+        notifyFinishedElsewhere('Plantilla docente')
+        return
+      }
       setDocentes(merged.datasets.docentes); setDocenteMateria(merged.datasets.docenteMateria); setHorariosDocentes(merged.datasets.horariosDocentes)
       setDisponibilidadDocente?.(merged.datasets.disponibilidadDocente); setCargaHorariaDocente?.(merged.datasets.cargaHorariaDocente)
       const message = `Carga docente acumulativa guardada: ${merged.created.docentes} docentes nuevos, ${merged.created.docenteMateria} titularidades nuevas, ${merged.created.horariosDocentes} horarios nuevos. Total: ${merged.datasets.docentes.length} docentes.`
@@ -559,7 +582,7 @@ export function useCronogramaFiles({
           `${merged.datasets.docentes.length} docentes totales.`,
         ],
       })
-    } catch (error) { toast.error(`No se pudo cargar la plantilla de docentes: ${error.message}`) } finally { event.target.value = '' }
+    } catch (error) { toast.error(`No se pudo cargar la plantilla de docentes${stillHere() ? '' : ' (de la institucion anterior)'}: ${error.message}`) } finally { event.target.value = '' }
   }
 
   async function onUploadStudents(event) {
@@ -572,7 +595,10 @@ export function useCronogramaFiles({
       const enrollmentImports = mergeStudentEnrollmentImports(snapshotPayload?.inscripcionesAlumnos, datasets.inscripcionesAlumnos)
       const mergedDatasets = { alumnos: merged.rows, inscripcionesAlumnos: enrollmentImports.rows }
       const nextUploadedFiles = { ...snapshotPayload?.uploadedFiles, alumnosWorkbook: file.name }
-      await persistFile({ file, datasetKey: 'alumnosWorkbook', datasets: mergedDatasets, nextUploadedFiles })
+      if (!(await persistFile({ file, datasetKey: 'alumnosWorkbook', datasets: mergedDatasets, nextUploadedFiles }))) {
+        notifyFinishedElsewhere('Plantilla de alumnos')
+        return
+      }
       setAlumnos(merged.rows)
       setStudentEnrollmentImports?.(enrollmentImports.rows)
       const message = `Carga acumulativa guardada: ${merged.created} nuevos, ${merged.updated} actualizados, ${merged.preserved} conservados, ${merged.rows.length} alumnos totales.`
@@ -589,7 +615,7 @@ export function useCronogramaFiles({
           `${enrollmentImports.rows.length} inscripciones a materias guardadas (${enrollmentImports.created} nuevas).`,
         ],
       })
-    } catch (error) { toast.error(`No se pudo cargar la plantilla de alumnos: ${error.message}`) } finally { event.target.value = '' }
+    } catch (error) { toast.error(`No se pudo cargar la plantilla de alumnos${stillHere() ? '' : ' (de la institucion anterior)'}: ${error.message}`) } finally { event.target.value = '' }
   }
 
   return { onUploadMaster, onUploadStudents, onUploadTeachers }
