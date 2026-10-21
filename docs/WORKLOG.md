@@ -1607,3 +1607,22 @@ Las tres se verificaron en el stack local; la evidencia está en `supabase/secur
   - `npm run check` PASS: 360 archivos y 2751 tests.
 - Evidencia: sección nueva en `supabase/security/BULK_ROSTER_LOCAL_RESULT.md`.
 - Pendiente: reauditoría completa de Codex. Cambia el 07, así que se aplica en Prod junto con el punto 1.
+
+## 2026-10-21 — Primera pasada de auditoría con agentes de Claude: AUD.16, 17 y 18
+
+Decisión de Miguel: Codex sin tokens. Tres agentes auditores corrieron en paralelo, con contexto limpio y otro modelo (Sonnet), solo en local. No corrigieron nada. No reemplazan el gate de Codex (🔍 AUDITAR, ítems 1–3).
+
+- **AUD.16 · punto 3 (143efb7) — PASS WITH WARNINGS.** Informe: `TEACHER_ASSIGNMENT_MODEL_AGENT_AUDIT.md`.
+  - P2: el backfill del 06 aborta con una fecha o un uuid que tienen el formato correcto pero no existen. Esto desmiente lo que afirmaba la evidencia del implementador.
+  - P2: no se puede dar de baja una suplencia con inicio futuro.
+  - P2, previo al commit: `starts_on`/`ends_on` no los aplica ningún acceso.
+  - Además, varios P3.
+- **AUD.17 · punto 1 (972613c) — PASS WITH WARNINGS.** Informe: `CATALOG_REFERENCES_AGENT_AUDIT.md`.
+  - P2: los `where` nuevos de normalización no cubren espacios en los extremos de `grade_type`/`grade_scale`.
+  - P3: el `ON CONFLICT` de clases no dispara el trigger; la referencia se desactualiza ante cambios de plan; el caso `program_id` vacío; costo del trigger en lotes.
+  - Verificó el backfill como no superusuario y la purga con referencias.
+- **AUD.18 · P2 de I2b (5bafedd) — PASS WITH WARNINGS.** Informe: `BULK_ROSTER_P2_AGENT_AUDIT.md`.
+  - El P2-a (SQL concurrente) queda cerrado.
+  - P2 nuevo, de front: se puede lanzar una carga sobre B con las planillas de A mientras B se hidrata.
+  - P3: deadlock 40P01 con dos cargas en orden opuesto (no es regresión); huecos del harness.
+- Los hallazgos los corrige Claude. Después, Codex hace el gate final.
