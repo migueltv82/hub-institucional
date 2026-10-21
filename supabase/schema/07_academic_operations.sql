@@ -171,6 +171,10 @@ alter table public.student_financial_status
   add column if not exists updated_at timestamptz default timezone('utc', now()),
   add column if not exists created_at timestamptz default timezone('utc', now());
 
+-- Normalizacion de filas viejas. Solo toca filas que la necesitan: un update sin where reescribia TODAS las
+-- filas en cada re-ejecucion de este archivo, y el trigger de updated_at les ponia la hora de la corrida en
+-- el orden en que se leian. Como "la ultima condicion cargada" (mesas, correlativas) se ordena por
+-- updated_at, re-correr 07 podia cambiarla (paso en Prod el 20/10, sin efecto porque el orden coincidio).
 update public.subject_enrollments
 set
   workspace_key = coalesce(nullif(btrim(workspace_key), ''), 'main'),
@@ -180,7 +184,15 @@ set
   lock_version = greatest(coalesce(lock_version, 1), 1),
   metadata = coalesce(metadata, '{}'::jsonb),
   created_at = coalesce(created_at, timezone('utc', now())),
-  updated_at = coalesce(updated_at, created_at, timezone('utc', now()));
+  updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
+where workspace_key is null or btrim(workspace_key) = ''
+  or program_id is null
+  or status is null or btrim(status) = ''
+  or enrolled_at is null
+  or lock_version is null or lock_version < 1
+  or metadata is null
+  or created_at is null
+  or updated_at is null;
 
 update public.student_grades
 set
@@ -195,7 +207,19 @@ set
   attempt_number = greatest(coalesce(attempt_number, 1), 1),
   lock_version = greatest(coalesce(lock_version, 1), 1),
   created_at = coalesce(created_at, timezone('utc', now())),
-  updated_at = coalesce(updated_at, created_at, timezone('utc', now()));
+  updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
+where workspace_key is null or btrim(workspace_key) = ''
+  or program_id is null
+  or grade_type is null or btrim(grade_type) = ''
+  or grade_label is null
+  or grade_scale is null or btrim(grade_scale) = ''
+  or academic_status is null or btrim(academic_status) = ''
+  or observations is null
+  or grading_period is null
+  or attempt_number is null or attempt_number < 1
+  or lock_version is null or lock_version < 1
+  or created_at is null
+  or updated_at is null;
 
 update public.subject_class_sessions
 set
@@ -204,7 +228,13 @@ set
   topic = coalesce(topic, ''),
   notes = coalesce(notes, ''),
   created_at = coalesce(created_at, timezone('utc', now())),
-  updated_at = coalesce(updated_at, created_at, timezone('utc', now()));
+  updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
+where workspace_key is null or btrim(workspace_key) = ''
+  or program_id is null
+  or topic is null
+  or notes is null
+  or created_at is null
+  or updated_at is null;
 
 update public.subject_attendance_records
 set
@@ -212,7 +242,12 @@ set
   status = coalesce(nullif(btrim(status), ''), 'present'),
   observations = coalesce(observations, ''),
   created_at = coalesce(created_at, timezone('utc', now())),
-  updated_at = coalesce(updated_at, created_at, timezone('utc', now()));
+  updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
+where workspace_key is null or btrim(workspace_key) = ''
+  or status is null or btrim(status) = ''
+  or observations is null
+  or created_at is null
+  or updated_at is null;
 
 update public.student_financial_status
 set
@@ -220,7 +255,12 @@ set
   adeuda_cuota = coalesce(adeuda_cuota, false),
   note = coalesce(note, ''),
   created_at = coalesce(created_at, updated_at, timezone('utc', now())),
-  updated_at = coalesce(updated_at, created_at, timezone('utc', now()));
+  updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
+where workspace_key is null or btrim(workspace_key) = ''
+  or adeuda_cuota is null
+  or note is null
+  or created_at is null
+  or updated_at is null;
 
 alter table public.subject_enrollments
   alter column id set default gen_random_uuid(),
@@ -2450,3 +2490,176 @@ grant select, insert, update, delete on
   public.subject_attendance_records,
   public.student_financial_status
 to authenticated;
+
+-- ============================================================
+-- Punto 1 (21/10): REFERENCIA VALIDADA AL CATALOGO
+-- Cursadas, notas, clases y asignaciones docentes nombran la materia por texto (subject_id = codigo,
+-- program_id = nombre de carrera). Ese texto sigue siendo la identidad canonica que usan el RLS, las RPC y
+-- el front: no se reemplaza. Se agrega study_plan_subject_id, que la base completa sola y valida con FK
+-- contra study_plan_subjects.
+--
+-- Fase 1 (esto): la referencia se completa cuando se puede resolver sin ambiguedad y queda NULL cuando no
+-- (materia fuera del catalogo, o en mas de un plan sin forma de elegir). No bloquea escrituras.
+-- Fase 2 (decision aparte): exigirla (NOT NULL) cuando todas las instituciones tengan su catalogo publicado.
+-- Volver a correr este archivo tambien completa las referencias que quedaron NULL si despues se publico la
+-- materia en el catalogo. Va al final porque necesita subject_teacher_assignments (06) y las tablas de arriba.
+-- ============================================================
+
+-- Resuelve la materia del plan para (carrera, codigo de materia). Mismo criterio de carrera y materia que
+-- academic_resolve_catalog_subject (07): carrera por nombre o codigo externo, materia por codigo, sin
+-- distinguir mayusculas ni espacios en los extremos. Si el codigo esta en mas de un plan:
+--   1. el plan activo del alumno (student_career_plans), si la fila tiene legajo y eso deja uno solo;
+--   2. si hay uno solo en total, ese;
+--   3. si hay uno solo en un plan activo, ese;
+--   4. si no, NULL: es ambiguo y lo decide gestion.
+create or replace function public.academic_resolve_plan_subject_id(
+  p_institution_id uuid,
+  p_program text,
+  p_subject text,
+  p_student_record_id uuid default null
+)
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with candidates as (
+    select distinct plan_subject.id, plan_subject.plan_id, plan.status
+    from public.careers career
+    join public.study_plans plan
+      on plan.institution_id = career.institution_id and plan.career_id = career.id
+    join public.study_plan_subjects plan_subject
+      on plan_subject.institution_id = plan.institution_id and plan_subject.plan_id = plan.id
+    join public.subjects subject
+      on subject.institution_id = plan_subject.institution_id and subject.id = plan_subject.subject_id
+    where career.institution_id = p_institution_id
+      and btrim(coalesce(p_subject, '')) <> ''
+      and (
+        lower(btrim(career.name)) = lower(btrim(coalesce(p_program, '')))
+        or lower(btrim(career.external_code)) = lower(btrim(coalesce(p_program, '')))
+      )
+      and lower(btrim(subject.code)) = lower(btrim(p_subject))
+  ),
+  student_candidates as (
+    select candidate.id
+    from candidates candidate
+    where p_student_record_id is not null
+      and exists (
+        select 1
+        from public.student_career_plans student_plan
+        where student_plan.institution_id = p_institution_id
+          and student_plan.student_id = p_student_record_id
+          and student_plan.plan_id = candidate.plan_id
+          and student_plan.status = 'active'
+      )
+  ),
+  active_candidates as (
+    select candidate.id from candidates candidate where candidate.status = 'active'
+  )
+  select case
+    when (select count(*) from student_candidates) = 1 then (select id from student_candidates)
+    when (select count(*) from candidates) = 1 then (select id from candidates)
+    when (select count(*) from active_candidates) = 1 then (select id from active_candidates)
+    else null
+  end;
+$$;
+
+revoke all on function public.academic_resolve_plan_subject_id(uuid, text, text, uuid) from public, anon, authenticated;
+
+-- Trigger comun: la referencia siempre se recalcula desde el texto. Nadie la escribe a mano (un valor
+-- enviado por el cliente se pisa), asi no puede quedar en desacuerdo con subject_id/program_id.
+create or replace function public.academic_set_plan_subject_reference()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  new.study_plan_subject_id := public.academic_resolve_plan_subject_id(
+    new.institution_id,
+    new.program_id,
+    new.subject_id,
+    nullif(to_jsonb(new) ->> 'student_record_id', '')::uuid
+  );
+  return new;
+end;
+$$;
+
+revoke all on function public.academic_set_plan_subject_reference() from public, anon, authenticated;
+
+do $$
+declare
+  target record;
+begin
+  for target in
+    select * from (values
+      ('subject_enrollments', 'institution_id, subject_id, program_id, student_record_id, study_plan_subject_id'),
+      ('student_grades', 'institution_id, subject_id, program_id, student_record_id, study_plan_subject_id'),
+      ('subject_class_sessions', 'institution_id, subject_id, program_id, study_plan_subject_id'),
+      ('subject_teacher_assignments', 'institution_id, subject_id, program_id, study_plan_subject_id')
+    ) as t(table_name, watched_columns)
+  loop
+    execute format('alter table public.%I add column if not exists study_plan_subject_id uuid', target.table_name);
+
+    if not exists (
+      select 1 from pg_constraint
+      where conrelid = format('public.%I', target.table_name)::regclass
+        and conname = target.table_name || '_plan_subject_fkey'
+    ) then
+      -- NO ACTION (no RESTRICT): un borrado en cascada de la institucion entera sigue andando, pero no se
+      -- puede borrar del catalogo una materia que ya tiene cursadas, notas, clases o docentes.
+      execute format(
+        'alter table public.%I add constraint %I foreign key (institution_id, study_plan_subject_id) references public.study_plan_subjects (institution_id, id)',
+        target.table_name,
+        target.table_name || '_plan_subject_fkey'
+      );
+    end if;
+
+    execute format(
+      'create index if not exists %I on public.%I (institution_id, study_plan_subject_id) where study_plan_subject_id is not null',
+      'idx_' || target.table_name || '_plan_subject',
+      target.table_name
+    );
+
+    execute format('drop trigger if exists set_plan_subject_reference on public.%I', target.table_name);
+    execute format(
+      'create trigger set_plan_subject_reference before insert or update of %s on public.%I for each row execute function public.academic_set_plan_subject_reference()',
+      target.watched_columns,
+      target.table_name
+    );
+  end loop;
+end $$;
+
+-- Backfill. Con los triggers de usuario apagados SOLO durante este bloque (que es atomico): el de
+-- updated_at no puede correrse, porque "la ultima condicion cargada" (mesas, correlativas) se ordena por
+-- updated_at; y el del gateway de Storage no tiene que contar esto como una edicion del workspace. Las FK
+-- son triggers internos y siguen validando. Solo toca filas cuya referencia cambia.
+do $$
+declare
+  target_table text;
+  student_expression text;
+begin
+  foreach target_table in array array['subject_enrollments', 'student_grades', 'subject_class_sessions', 'subject_teacher_assignments']
+  loop
+    student_expression := case
+      when target_table in ('subject_enrollments', 'student_grades') then 'row_data.student_record_id'
+      else 'null::uuid'
+    end;
+    execute format('alter table public.%I disable trigger user', target_table);
+    execute format(
+      'update public.%1$I row_data
+       set study_plan_subject_id = public.academic_resolve_plan_subject_id(row_data.institution_id, row_data.program_id, row_data.subject_id, %2$s)
+       where row_data.study_plan_subject_id is distinct from public.academic_resolve_plan_subject_id(row_data.institution_id, row_data.program_id, row_data.subject_id, %2$s)',
+      target_table,
+      student_expression
+    );
+    execute format('alter table public.%I enable trigger user', target_table);
+  end loop;
+end $$;
+
+-- Verificacion (solo lectura): cuantas filas quedaron con referencia en cada tabla.
+-- select 'subject_enrollments' tabla, count(*) filas, count(study_plan_subject_id) con_referencia from public.subject_enrollments
+-- union all select 'student_grades', count(*), count(study_plan_subject_id) from public.student_grades
+-- union all select 'subject_class_sessions', count(*), count(study_plan_subject_id) from public.subject_class_sessions
+-- union all select 'subject_teacher_assignments', count(*), count(study_plan_subject_id) from public.subject_teacher_assignments;

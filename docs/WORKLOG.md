@@ -1561,3 +1561,16 @@ Las tres se verificaron en el stack local; la evidencia está en `supabase/secur
 - P2: ambas RPC, dos importaciones concurrentes de clave nueva, segunda llamada23505 revierte también fila ajena al conflicto. P2: resultado con DNI de A permanece tras cambiar institución a B en componente real.
 - Run propio `39a86e3d98d105df`: 13 casos originales + punta a punta PASS, 23 adversariales inspeccionados, tres casos de estado/vigencia y dos carreras; cleanup0. Suites focales5/56 PASS, reproducciones frontend1/2 PASS. Revisión independiente SQL/front coincide. QUALITY GATE: FAIL por P1 abierto.
 - Gate automatizado `npm.cmd run check` PASS: 359 archivos / 2743 tests, lint/build/auditorías (bundle120 archivos). Typecheck no disponible, navegador no ejecutado, aviso preexistente de chunks>500kB. No altera el veredicto FAIL de la auditoría.
+
+## 2026-10-21 — Punto 1: referencia validada al catálogo (Claude)
+
+- Al final de `07_academic_operations.sql` (sin archivo 09, por la regla del README de no parchear bloques):
+  - `study_plan_subject_id` con FK a `study_plan_subjects` en cursadas, notas, clases y asignaciones docentes.
+  - La completa un trigger desde el texto, que sigue siendo la identidad canónica: nadie la escribe a mano.
+  - Resuelve la ambigüedad entre planes por el plan del alumno o por el único plan activo; si no, queda NULL.
+  - En esta fase no bloquea escrituras.
+  - Backfill sin tocar `updated_at`; re-correr el 07 completa las referencias nuevas.
+- Hallazgo previo, corregido: los `update` de normalización del 07 no tenían `where`. Cada re-ejecución reescribía `updated_at` de todas las filas en orden de lectura y podía cambiar "la última condición cargada". Pasó en Prod el 20/10 sin efecto, porque el orden coincidió y eran datos UAT.
+- Harness nuevo `scripts/validateCatalogReferencesLocal.mjs`: 27/27 PASS, más un control negativo con el 07 anterior. 14 harness de regresión en PASS; `npm run check` PASS.
+- Evidencia: `supabase/security/CATALOG_REFERENCES_LOCAL_RESULT.md`.
+- Pendiente: auditoría completa de Codex; después Miguel re-corre el 07 en Prod con la foto de `updated_at` antes y después. La fase 2 (exigir la referencia) queda para decidir.
