@@ -1574,3 +1574,11 @@ Las tres se verificaron en el stack local; la evidencia está en `supabase/secur
 - Harness nuevo `scripts/validateCatalogReferencesLocal.mjs`: 27/27 PASS, más un control negativo con el 07 anterior. 14 harness de regresión en PASS; `npm run check` PASS.
 - Evidencia: `supabase/security/CATALOG_REFERENCES_LOCAL_RESULT.md`.
 - Pendiente: auditoría completa de Codex; después Miguel re-corre el 07 en Prod con la foto de `updated_at` antes y después. La fase 2 (exigir la referencia) queda para decidir.
+
+## AUD.I2f — Reauditoría de correctivos (Codex, 2026-10-21)
+
+- Correctivo `dfcc7ab`, base integrada `bd23c49`. P1 y dos P2 originales cerrados en pruebas locales. Solo evidencia en `TENANT_CREATION_INDEPENDENT_AUDIT.md` y WORKLOG; sin cambios funcionales ni deploy.
+- Runners propios: `7dd53d736b7387b1` (harness completo actual más reproducción original de rollback) y `5359dee49610cbd2` (perfil ausente y democión). B recibe409 mientras A está en provisión; reutilización posterior y reintento tras fallo devuelven200/login200. Perfil ausente409, democión409 conservando alumno y sin membresía nueva. Ambos stacks cleanup bases/contenedores/temporales=0.
+- Suites focales2/29 PASS. Revisión estática independiente favorable; todos los caminos de reutilización relevantes comprueban la marca en app_metadata. No se aprueba toda I2g ni el release global; I2b conserva su P1.
+- Gate completo repetido: `npm.cmd run check` PASS, 359 archivos / 2743 tests, lint/build/auditorías (bundle120 archivos). Typecheck no disponible, navegador no ejecutado, aviso preexistente de chunks>500kB. Sin hallazgos nuevos en alcance; QUALITY GATE de I2f: PASS WITH WARNINGS. El revisor independiente valida informe y cierre local. Sin autorización de deploy.
+- Se integró `972613c` antes del push, preservando ambas entradas del WORKLOG; gate completo repetido PASS (359 archivos / 2743 tests). El cambio de referencias del catálogo no está auditado por este cierre de I2f.

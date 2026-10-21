@@ -2,7 +2,7 @@
 
 Fecha: 2026-10-20. Implementación: Claude, `64986f7`, integrada en `c4fabb3`. Auditor: Codex, más CHIEF CODE AUDITOR independiente read-only. No se utilizó la implementación alternativa de Codex conservada en stash. No se modificó código funcional.
 
-**Veredicto funcional y de seguridad: FAIL.** La compensación original elimina las instituciones fallidas, pero puede destruir una cuenta que otra alta concurrente ya reutilizó y dejar esa segunda institución sin administrador. No aprobar I2f ni desplegar este correctivo sin resolver P1 y repetir auditoría.
+**Veredicto original (2026-10-20): FAIL.** La compensación original elimina las instituciones fallidas, pero puede destruir una cuenta que otra alta concurrente ya reutilizó y dejar esa segunda institución sin administrador. Los hallazgos y pruebas originales se conservan como antecedente; ver la reauditoría del correctivo al final.
 
 ## P1 — El rollback borra al administrador de otra alta exitosa
 
@@ -56,3 +56,29 @@ La primera variante de este escenario (`57d8936f23e3e4b2`) con demora de ocho se
 **QUALITY GATE: FAIL por P1 confirmado**, aun si tests, lint y build están verdes. Hallazgos entregados sin corregir al implementador.
 
 Gate automatizado final: `npm.cmd run check` PASS, 351 archivos / 2702 tests, lint, auditoría del repo, build y auditoría del bundle (120 archivos). Aviso preexistente de chunks >500 kB. Typecheck no disponible; navegador no ejecutado; pruebas de base/Auth/Edge locales completadas. Revisión independiente: coincide con P1 y dos P2 y aprueba la fidelidad del informe. Seguridad/corrección/adversarial: FAIL por los hallazgos descritos. No se alteraron tests para conseguir verde.
+
+## Reauditoría independiente de dfcc7ab — 2026-10-21
+
+Base integrada `bd23c49`. **Los tres hallazgos originales quedan cerrados en las pruebas locales.** No se modificó implementación. Este cierre no acredita despliegue remoto ni aprobación global de la aplicación: I2b conserva un P1 abierto en su informe independiente.
+
+Revisión estática con CHIEF CODE AUDITOR read-only:
+
+- El usuario nuevo nace con `app_metadata.institution_admin_provisioning=true` en Auth (`admin-users/index.ts:690`). La reutilización admin, alumno, docente y la reparación de accesos comprueban esa marca (`:617–620,627,668,1038,1478`). No se confía en `user_metadata` para proteger este estado.
+- La marca se libera al terminar la provisión (`:699–706,840`). La compensación consulta Auth y no elimina una cuenta ya liberada (`:711–717,860`). El escenario original de reutilización antes de compensar ahora recibe 409 antes de crear la segunda institución.
+- Perfil ausente se rechaza explícitamente (`:654–656`). La reutilización ya no escribe el perfil y vuelve a validarlo después de asignar owner (`:839`); si fue degradado o bloqueado, compensa la institución. El harness también verifica restauración de membresías en el camino compartido de asignación; no se declara auditada toda I2g.
+
+Repetición de runners independientes originales, reconstruidos desde el harness actual y conservando las ventanas inducidas:
+
+| Caso | Resultado corregido |
+|---|---|
+| A crea admin, demora 12 segundos y falla en membership; B intenta reutilizar durante la espera | B=409; B no crea institución. A=500 y compensa su institución y cuenta provisional; `defectReproduced=false` |
+| Auth existente sin perfil | 409, sin perfil inventado, sin membresía |
+| Pausa en INSERT de institución, democión a alumno en otra conexión y continuación | 409; sigue `alumno,false,false`; membresías=0 |
+
+El harness actualizado ejecutado en el mismo stack comprueba además: mientras A está en alta B=409; si A termina correctamente, la reutilización posterior devuelve 200, ambas owner se conservan y login=200; si A falla, el reintento posterior de B devuelve 200 y login=200. No se bloquea permanentemente la reutilización legítima.
+
+Runner completo con concurrencia propia `7dd53d736b7387b1` y runner de identidad propio `5359dee49610cbd2`: PASS, con los valores anteriores observados explícitamente. Ambos stacks terminaron con bases, contenedores y archivos temporales=0 y sin errores. Suites focales: 2 archivos / 29 tests PASS. Sin tests debilitados ni cambios de producto. No se ejecutó SQL remoto ni deploy; navegador no ejecutado.
+
+Gate repetido sobre la base integrada: `npm.cmd run check` PASS, 359 archivos / 2743 tests, lint, auditoría del repo, build y auditoría del bundle (120 archivos). Typecheck no disponible y aviso preexistente de chunks >500 kB. El revisor independiente confirma el cierre local y la fidelidad de esta sección. Sin nuevos hallazgos P0–P3 en el alcance reexaminado. **Veredicto vigente de I2f: QUALITY GATE: PASS WITH WARNINGS**, por límites de validación local y aviso de bundle. El FAIL anterior queda como antecedente de la implementación previa; no se modifica el FAIL de I2b ni se autoriza deploy.
+
+Antes del push se integró el avance concurrente `972613c` (referencias de catálogo), conservando ambas entradas del WORKLOG. Se repitió el gate completo: 359 archivos / 2743 tests, lint/build/auditorías PASS. Ese cambio no forma parte del alcance de esta reauditoría.
