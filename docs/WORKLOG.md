@@ -1714,3 +1714,4 @@ Decisión de Miguel: Codex sin tokens. Tres agentes auditores corrieron en paral
 - Claude verificó en solo lectura: todos los controles dan lo esperado; filas y `max(updated_at)` idénticos a la foto previa; referencias al catálogo completas; 0 triggers apagados; policies sin cambios; versión de `8120b35`.
 - Detalle: `supabase/security/PRODUCTION_APPLY_2026-10-21.md`.
 - Pendiente: publicar el front; redeploy de admin-users después de los ítems 5–6 de AUDITAR; re-gate de Codex de los ítems 1–3 sobre lo aplicado.
+- 2026-10-21 · Ítem 4 de AUDITAR: fechas Excel sobre 0bc6640, PASS WITH WARNINGS; 2 archivos/11 tests focales PASS, parser sin cambios desde 37961e4, P1 cerrado y P3 de sufijo ISO heredado documentado. Evidencia BULK_ROSTER_SHEET_DATES_INDEPENDENT_AUDIT.md; solo local, sin correcciones ni check completo. Ítems 1–3 esperan GATE_C_FIXES_AGENT_REAUDIT.md, ausente al tomar la tarea.
