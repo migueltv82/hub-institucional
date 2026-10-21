@@ -1583,6 +1583,30 @@ Las tres se verificaron en el stack local; la evidencia está en `supabase/secur
 - Gate completo repetido: `npm.cmd run check` PASS, 359 archivos / 2743 tests, lint/build/auditorías (bundle120 archivos). Typecheck no disponible, navegador no ejecutado, aviso preexistente de chunks>500kB. Sin hallazgos nuevos en alcance; QUALITY GATE de I2f: PASS WITH WARNINGS. El revisor independiente valida informe y cierre local. Sin autorización de deploy.
 - Se integró `972613c` antes del push, preservando ambas entradas del WORKLOG; gate completo repetido PASS (359 archivos / 2743 tests). El cambio de referencias del catálogo no está auditado por este cierre de I2f.
 
+## AUD.15 — Reauditoría P1 de fechas Excel (Codex, 2026-10-21)
+
+- Implementación de Claude `37961e4`, sin correcciones de producto. Reproducción propia con ExcelJS, importador real y builder; control negativo `5356f82`. Date vencida/futura ya no se asigna; Date inválido/calendario imposible/texto no fecha se rechazan; fórmulas y seriales cubiertos. Dos procesos TZ Buenos Aires/UTC, controlando diferencia local real: 28 tests en cada zona terminan correctamente (incluyen dos observaciones del defecto residual, no aceptación).
+- P1 original cerrado en este alcance. P3 residual: sufijo ISO inválido (`2026-10-21Tbasura`, `2026-10-21 texto`) se acepta por su prefijo calendario. Revisor independiente confirma PASS WITH WARNINGS. Los dos P2 originales de I2b siguen fuera de alcance y abiertos. Evidencia ampliada al final de `supabase/security/BULK_ROSTER_INDEPENDENT_AUDIT.md`.
+- Solo local, sin datos remotos ni deploy. No habilita por sí mismo 06/07 ni el release integral.
+
+## AUD.16 — Modelo de asignación docente (Codex, 2026-10-21)
+
+- Auditoría independiente sobre `37961e4` de la implementación `143efb7`, solo bases descartables locales. Harness original: 44 checks PASS, servicio: 23 tests PASS; probes propios de CHECK NULL, viewer/suspensión, FK scope, cierre legacy y conservación de policies PASS. Cleanup: 0 bases y 0 errores.
+- FAIL: P1 vigencia no gobierna acceso (licencia futura por RPC quita padrón al titular y lo concede anticipadamente al suplente; suplencia vencida sigue accediendo); P2 fechas imposibles en metadata abortan backfill del 06. Evidencia y propuestas sin implementar en `supabase/security/TEACHER_ASSIGNMENT_MODEL_INDEPENDENT_AUDIT.md`.
+- 06 no habilitado para Producción por este gate. Front revisado estáticamente y por tests de servicio, sin navegador. Sin cambios funcionales, SQL remoto ni deploy. QUALITY GATE: FAIL.
+
+## AUD.17 — Referencia validada al catálogo (Codex, 2026-10-21)
+
+- Auditoría independiente sobre `37961e4` de la implementación `972613c`, solo local. Harness original 27/27 PASS; runner propio `f9bd2c2f43e9be1b`: 40 controles, 32 PASS y 8 FAIL que reproducen tres P2 nuevos: cinco WHERE omiten recortes necesarios, ON CONFLICT de clase conserva referencia obsoleta y resolver nuevo discrepa ante carrera ambigua. Propuestas documentadas sin implementarlas en `supabase/security/CATALOG_REFERENCES_INDEPENDENT_AUDIT.md`.
+- P2 adicional preexistente: DELETE de institución con gateway falla 23503; retirar las cuatro FK nuevas conserva el mismo error. No se certifica cascada directa. Purga I3 soportada PASS. Doce harness de regresión PASS, todos con cleanup=0. Backfill como postgres no superusuario, rollback de triggers y control negativo comprobados con los límites del clon expresos. Quince bases de corridas finales/original/purga/regresiones confirmadas ausentes al cerrar.
+- Revisor independiente validó fidelidad de los tres P2 nuevos y atribución del preexistente. 07 no habilitado para Producción. QUALITY GATE: FAIL.
+
+## Cierre conjunto AUD.15–17 (Codex, 2026-10-21)
+
+- `npm.cmd run check` PASS: auditoría de repositorio, lint, 360 archivos / 2746 tests, build y auditoría de producción (120 archivos). Typecheck no disponible (JS/JSX). Aviso preexistente de chunks >500 kB. El gate automatizado verde no cierra los defectos reproducidos.
+- Solo se modificaron estas evidencias y WORKLOG; runtime/SQL/RLS/Edge/tests/harness originales intactos. Revisión independiente de informes y evidencia: PASS. Veredictos: 15 PASS WITH WARNINGS (P3); 16 FAIL (P1/P2); 17 FAIL (tres P2 nuevos y uno preexistente). Sin P0 confirmados. No se habilita ejecutar 06 ni 07 en Producción; no hubo operación remota ni deploy. QUALITY GATE: FAIL.
+- Al publicar aparecieron commits posteriores de Claude hasta `0a120d0`. Se integran para conservar la rama, pero las reproducciones y veredictos anteriores corresponden exclusivamente a `37961e4`; no constituyen reauditoría de los correctivos posteriores ni ratifican que cada hallazgo persista en el nuevo HEAD.
+
 ## 2026-10-21 — Corrección del P1 de AUD.I2b: vigencias con fecha de Excel (Claude)
 
 - Causa (filtro de `5356f82`): `parseSheetDate` convertía todo a texto. Una celda de fecha de Excel llega del importador como `Date`, devolvía vacío y la fila se asignaba como "sin límite".
@@ -1661,3 +1685,10 @@ Decisión de Miguel: Codex sin tokens. Tres agentes auditores corrieron en paral
   - el costo del resolver en updates de filas con referencia NULL permanente;
   - el harness del 06 no cubre la ruta real de upgrade (la cubrió el auditor).
 - A juicio del auditor, el 06 y el 07 quedan listos para el gate de Codex (🔍 AUDITAR, ítems 1–3).
+
+## Verificación de integración de AUD.15–17 (Codex, 2026-10-21)
+
+- Informes integrados sobre `0a120d0` sin conflictos; el commit de auditoría contiene únicamente cuatro documentos. `npm.cmd run check` PASS después de integrar: auditoría de repositorio, lint, 360 archivos / 2755 tests, build y auditoría del bundle (120 archivos). Se conserva el aviso previo de chunks >500 kB.
+- Esta ejecución verifica la integración de la rama; no sustituye la reauditoría SQL de los correctivos posteriores. Los veredictos 15–17 documentados siguen referidos a `37961e4`. Sin habilitación del 06/07 en Producción ni deploy.
+
+- Se conservó además la reauditoría documental de Claude `817cb20` al publicar; no introduce cambios de runtime frente a la base integrada verificada.

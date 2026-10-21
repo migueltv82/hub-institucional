@@ -62,3 +62,42 @@ El revisor contrastó el padre y el cambio de institución en AuthContext: no ha
 Gate automatizado final: `npm.cmd run check` PASS, 359 archivos / 2743 tests, auditoría del repo, lint, build y auditoría del bundle (120 archivos). Typecheck no disponible. Aviso preexistente de chunks >500 kB. Los dos revisores validaron la fidelidad del informe en su alcance. Seguridad/corrección funcional y adversarial: FAIL por P1 confirmado; automatización verde no equivale a aprobación.
 
 Validación local, sin recorrido de navegador ni comprobación de despliegue remoto. No se audita aquí toda la nueva tarjeta del modelo docente, I2f ni el resto de la rama. No se modificaron archivos F1, el modelo de datos ni la regla de asistencia de vocales. El P1 queda para corrección del implementador; no aprobar I2b con este fallo abierto.
+
+## Ítem 15 — Reauditoría del correctivo P1 (2026-10-21)
+
+Base auditada: `release/v1`, HEAD `37961e4`, implementación de Claude. **Veredicto del correctivo: PASS WITH WARNINGS.** El P1 de fechas nativas de Excel queda cerrado en este commit, con un P3 residual detallado abajo. El FAIL histórico de I2b no se convierte en aprobación integral: los dos P2 de concurrencia y contexto de institución siguen abiertos y fuera de esta reauditoría.
+
+### Reproducción independiente y control negativo
+
+Runner propio de auditoría, sin mocks de ExcelJS ni del importador: workbook con hojas `docentes`, `docente_materia` y `horarios_docentes`, docente sintético `20111222`, rol TITULAR/estado ACTIVO, materias M0–M7. Serializar con `workbook.xlsx.writeBuffer()`, leer con `parseTemplateV2TeachersWorkbook({name:'audit15.xlsx', arrayBuffer: async () => bytes})` y ejecutar `planTeacherAssignmentRows(datasets.docenteMateria, {today:new Date(2026,9,21)})`.
+
+| Fila | Inicio / fin de vigencia | Resultado comprobado en 37961e4 |
+| --- | --- | --- |
+| M0 | fin `new Date('2020-01-01T00:00:00Z')` | `VIGENCIA_VENCIDA`, ninguna asignación |
+| M1 | inicio `new Date('2099-01-01T00:00:00Z')` | `VIGENCIA_FUTURA`, ninguna asignación |
+| M2 | inicio y fin `new Date('2026-10-21T00:00:00Z')` | única fila asignable, límites inclusivos |
+| M3 | fórmula `DATE(2020,1,1)`, resultado Date UTC | `VIGENCIA_VENCIDA` |
+| M4 | fórmula `DATE(2099,1,1)`, resultado Date UTC | `VIGENCIA_FUTURA` |
+| M5 | fin `31/02/2026` | `VIGENCIA_INVALIDA`, rechazada |
+| M6 | fin `no es fecha` | `VIGENCIA_INVALIDA`, rechazada |
+| M7 | fin serial Excel `43831` | `VIGENCIA_VENCIDA` |
+
+Se verificó que M0 y M3 llegan como `Date` después de reabrir el XLSX, incluyendo formato de celda `yyyy-mm-dd` para resultados de fórmula. El mismo dataset, ejecutado con el código de `git show 5356f82:src/services/bulkRoster.js`, admite incorrectamente M0, M1, M3, M4, M6 y M7. Solo se sustituyó el import del cliente Supabase por un stub sin red para evaluar el builder antiguo; ninguna regla de fechas se modificó en ese control.
+
+### Fechas inválidas, formatos y zonas horarias
+
+Además del round-trip XLSX: once entradas inválidas (`31/02/2026`, `2026-02-31`, `29/02/2025`, mes 13/00, día 00, texto, Date inválido, Infinity, NaN y serial negativo) devuelven `null`; el builder devuelve cero filas asignables y `estado='rechazada', motivo='VIGENCIA_INVALIDA'`. Se mantuvieron vacíos/null/undefined como ausencia de límite. Diez casos de normalización incluyen Date UTC, serial `46316` y fracción `46316.75`, ISO con hora, DD/MM/AAAA con y sin ceros y año bisiesto válido.
+
+Se ejecutó el runner en procesos separados con `$env:TZ='America/Argentina/Buenos_Aires'` y `$env:TZ='UTC'`. Un control comprueba que `new Date('2026-10-21T00:00:00Z').getHours()` da 21 y 0 respectivamente; en ambos, `parseSheetDate` conserva `2026-10-21`. **28/28 tests terminados correctamente en cada zona: 25 propios y los 3 de `bulkRosterSheetDates.test.js`.** Dos de los propios son observaciones del P3 y prueban que se reproduce, no aceptación del defecto. Las fechas nativas no se desplazan al día previo en Argentina. CHIEF CODE AUDITOR independiente: mismo veredicto, sin P0/P1/P2 nuevos en este alcance.
+
+### P3 residual — La parte horaria del texto ISO no se valida
+
+`src/services/bulkRoster.js:75–76`: la expresión reconoce un calendario válido seguido de `T` o espacio y omite validar el resto. `parseSheetDate('2026-10-21Tbasura')` y `parseSheetDate('2026-10-21 texto')` devuelven `2026-10-21`; con `today=new Date(2026,9,21)` y cualquiera de esos valores en `vigencia_hasta`, el builder devuelve una asignación y cero rechazos. Reproducido en ambos TZ y confirmado por el revisor independiente. El comportamiento ya existía en el parser anterior; no reabre el P1 de Date nativa, pero impide afirmar rechazo de cualquier texto inválido.
+
+Corrección propuesta, sin implementarla: acotar las formas ISO admitidas y validar el sufijo horario completo antes de extraer el calendario; conservar la semántica UTC de Date y probar sufijos inválidos frente a timestamps válidos. No se recomienda un parseo genérico dependiente del locale.
+
+No se escribieron datos ni se invocó RPC remota. La reauditoría cierra el filtro previo a la RPC; no se repite el circuito SQL del hallazgo original porque ya no se genera payload para las filas inválidas/vencidas/futuras. No se aprueba el release global, el deploy ni la ejecución del 06/07 por este ítem.
+
+Gate automatizado de esta base al cierre conjunto: `npm.cmd run check` PASS, 360 archivos / 2746 tests, auditorías de repositorio/bundle, lint y build PASS. Typecheck no disponible; aviso previo de chunks >500 kB. Este ítem mantiene **QUALITY GATE: PASS WITH WARNINGS** por el P3; los ítems SQL 16/17 tienen sus propios FAIL.
+
+Nota de publicación: aparecieron cambios posteriores de Claude hasta `0a120d0`. Este informe audita `37961e4`; los hallazgos y los P2 históricos referidos arriba son estados de esa base, sin reauditoría de los correctivos posteriores.
