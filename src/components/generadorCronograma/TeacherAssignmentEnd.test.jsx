@@ -48,6 +48,13 @@ describe('Punto 3: baja de una asignacion docente con motivo', () => {
     expect(within(dialog).getByLabelText('Fecha de la baja')).toHaveAttribute('max')
 
     fireEvent.change(within(dialog).getByLabelText('Motivo'), { target: { value: 'renuncia' } })
+    // AUD.16 P3: el max del input es solo del navegador; una fecha futura tipeada tambien deshabilita el boton.
+    const endDate = within(dialog).getByLabelText('Fecha de la baja')
+    const today = endDate.value
+    fireEvent.change(endDate, { target: { value: '2999-01-01' } })
+    expect(confirm).toBeDisabled()
+    fireEvent.change(endDate, { target: { value: today } })
+    expect(confirm).toBeEnabled()
     fireEvent.change(within(dialog).getByLabelText('Observaciones (opcional)'), { target: { value: 'Presento nota' } })
     fireEvent.click(confirm)
 

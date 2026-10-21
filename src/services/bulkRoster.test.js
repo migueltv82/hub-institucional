@@ -112,4 +112,19 @@ describe('bulkRoster (I2b)', () => {
     await expect(other.applyStudentEnrollments({ institutionId: 'i1', rows: [{}], busyRetryDelayMs: 0 })).rejects.toThrow('owner, admin o editor')
     expect(denied).toHaveBeenCalledTimes(1)
   })
+
+  it('AUD.18: reintenta tambien un deadlock (40P01) y, con varios lotes, el reporte no se duplica', async () => {
+    const rows = Array.from({ length: 700 }, (_, index) => ({ fila: String(index) }))
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: { procesadas: 500, creadas: 500, problemas: [] }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { code: '40P01', message: 'deadlock detected' } })
+      .mockResolvedValueOnce({ data: null, error: { code: '55P03', message: 'SOURCE_FILE_WORKSPACE_BUSY' } })
+      .mockResolvedValueOnce({ data: { procesadas: 200, creadas: 200, problemas: [] }, error: null })
+    const service = await loadService(rpc)
+    const progress = []
+    const report = await service.applyTeacherAssignments({ institutionId: 'i1', rows, busyRetryDelayMs: 0, onProgress: (step) => progress.push(step.done) })
+    expect(report).toMatchObject({ procesadas: 700, creadas: 700 })
+    expect(rpc.mock.calls.map(([, args]) => args.p_rows.length)).toEqual([500, 200, 200, 200])
+    expect(progress).toEqual([500, 700])
+  })
 })

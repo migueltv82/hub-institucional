@@ -16,7 +16,7 @@ Fecha: 2026-10-21. Ejecutó: Claude. Entorno: base descartable sobre `supabase_d
   - Una asignación activa no tiene motivo de fin y una inactiva **tiene que tenerlo**. El CHECK usa `is not null` explícito, porque `null in (...)` da NULL y un CHECK con NULL pasa (el harness lo detectó en la primera corrida).
   - `ends_on >= starts_on`, y una asignación no puede reemplazarse a sí misma.
   - FK compuesta `(institution_id, workspace_key, subject_id, program_id, replaces_assignment_id)`: solo se puede reemplazar a una asignación de la misma institución, workspace, materia y carrera.
-- **Backfill (las fechas se toman solo si tienen formato AAAA-MM-DD y respetan fin >= inicio, así una fecha mal escrita no corta el script):**
+- **Backfill.** Corrección del 21/10: la versión de 143efb7 decía que una fecha mal escrita no cortaba el script, y **era falso**. Una fecha con buen formato pero inexistente (`2026-02-31`) o un uuid de puros guiones abortaban el 06 entero (AUD.16 P2-1). Ahora `academic_try_iso_date` y `academic_try_uuid` devuelven NULL en vez de fallar; la sección de correcciones de abajo tiene las pruebas.
   - Las suplencias viejas toman el vínculo y la vigencia de `metadata`, solo si apuntan a la misma materia.
   - Las bajas viejas sin motivo quedan con `otro`.
 - **`academic_create_teacher_subject_leave`:**
@@ -81,3 +81,26 @@ Fecha: 2026-10-21. Ejecutó: Claude. Entorno: base descartable sobre `supabase_d
      (select count(*) from public.subject_teacher_assignments where status='inactive' and end_reason is null) as bajas_sin_motivo; -- 0
    ```
 3. Recién después, publicar el front. Antes de correr el SQL, el botón "Dar de baja" responde que falta actualizar la base y la lectura sigue funcionando con las columnas viejas.
+
+
+## Correcciones de la primera pasada de auditoría (AUD.16, 21/10)
+
+Informe del auditor: `TEACHER_ASSIGNMENT_MODEL_AGENT_AUDIT.md`.
+
+- **P2-1 · Backfill.** Conversión segura con `academic_try_iso_date` / `academic_try_uuid`: son internas, sin EXECUTE para la API, y devuelven NULL ante valores inexistentes. Las fechas inválidas, o con fin anterior al inicio, quedan NULL; el vínculo se copia igual si el padre es válido.
+- **P2-2 · Baja de una suplencia que no empezó.** `academic_end_teacher_assignment` la cancela con fin = inicio. Queda `cancelled_before_start` en metadata y se devuelve `cancelledBeforeStart`. Una fecha de fin futura enviada a mano se sigue rechazando.
+- **P3 · Front.** "Confirmar baja" se deshabilita también con una fecha futura tipeada, no solo con el `max` del navegador.
+- **Harness: 48/48 PASS (run `49c57e935517387e`).** Casos nuevos:
+  - metadata con `2026-02-31`, `0000-00-00` y uuid de guiones, sin abortar;
+  - cancelar una suplencia futura;
+  - fecha futura a mano.
+- **Control negativo** con el 06 anterior: aborta con `date/time field value out of range: "2026-02-31"` y falla la cancelación de la suplencia futura.
+
+**Queda documentado, sin corregir:**
+- La vigencia (`starts_on`/`ends_on`) todavía no limita el acceso. Era así antes de este cambio y va con la fase B (licencia como estado).
+- La Edge espera `source='teacher_leave_replacement'` y la RPC escribe `'leave'`.
+- Ciclos de reemplazo.
+- Al dar de baja al único suplente, el titular queda en licencia sin nadie a cargo.
+- Fechas de baja muy viejas.
+- El `ON CONFLICT` de la licencia pisa un vínculo previo.
+- `updateSubjectTeacherAssignmentRole` sin uso.

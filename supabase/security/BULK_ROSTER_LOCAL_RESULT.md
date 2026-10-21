@@ -101,3 +101,20 @@ Tests en `BulkRosterSection.test.jsx`, con la reproducción de Codex: carga pend
 - `npm run check`: PASS, 360 archivos y 2751 tests.
 - Regresión local en PASS: catálogo de referencias `5c4d228cbc2c555a`, historia académica `e653337cee320376`, modelo docente `2bdeb10a342deeaf` y publicación de catálogo `6cbba1453e6426af`.
 - Pendiente: reauditoría completa de Codex (cambia SQL del 07).
+
+
+## Correcciones de la primera pasada de auditoría (AUD.18, 21/10)
+
+Informe del auditor: `BULK_ROSTER_P2_AGENT_AUDIT.md`.
+
+- **H1 (P2) · Cargar sobre B con las planillas de A.**
+  - `useWorkspacePersistence` expone `hydratedInstitutionId`: la institución de la que son los datos en pantalla. Pasa a null al empezar a cargar otra y queda en null si esa carga falla.
+  - `GeneradorCronograma` lo pasa a `BulkRosterSection` como `dataInstitutionId`. Los botones solo se habilitan si coincide con la institución activa, y `run()` lo vuelve a verificar.
+  - Tests: el del hook cubre el cambio con la carga pendiente y fallida; los del componente cubren la reproducción del auditor (con datos de A y la institución B activa no se llama al servicio).
+- **H2 (P3) · Deadlock 40P01 con dos cargas en orden opuesto.** `runBulk` lo reintenta igual que 55P03: el lote no escribió nada y es idempotente.
+- **H4 (P3).** Test con varios lotes: el reporte y el progreso no se duplican al reintentar.
+
+**Quedan sin corregir:**
+- H3 (huecos del harness). Lo cubre el informe del auditor, con reproducciones propias.
+- H5 (una licencia se pisa desde la planilla): es comportamiento previo.
+- H6 (el portal recibe 55P03 crudo durante una carga): es del gateway.

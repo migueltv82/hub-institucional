@@ -141,18 +141,23 @@ export function emptyBulkRosterReport() {
 }
 
 // En Prod el gateway de Storage serializa las escrituras de un workspace con un lock no bloqueante: si otra
-// carga (u otro guardado) esta en curso, la RPC falla entera con 55P03 sin escribir nada. Cada lote es atomico
-// e idempotente, asi que reintentarlo es seguro (AUD.I2b P2).
+// carga (u otro guardado) esta en curso, la RPC falla entera con 55P03 sin escribir nada. Sin gateway, dos
+// cargas con las mismas claves en orden opuesto pueden terminar en deadlock (40P01) y Postgres revierte una.
+// En los dos casos el lote no escribio nada y es idempotente, asi que reintentarlo es seguro (AUD.I2b P2, AUD.18 H2).
 export const BULK_ROSTER_BUSY_ATTEMPTS = 6
 
 function isWorkspaceBusy(error) {
   return error?.code === '55P03' || String(error?.message ?? '').includes('SOURCE_FILE_WORKSPACE_BUSY')
 }
 
+function isRetryableBulkError(error) {
+  return isWorkspaceBusy(error) || error?.code === '40P01'
+}
+
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function translateError(error) {
-  if (isWorkspaceBusy(error)) return 'Hay otra carga o guardado en curso en esta institucion. Espera unos segundos y volve a aplicar.'
+  if (isRetryableBulkError(error)) return 'Hay otra carga o guardado en curso en esta institucion. Espera unos segundos y volve a aplicar.'
   if (error?.code === '42501') return 'Solo el owner, admin o editor de la institucion puede hacer cargas masivas.'
   if (error?.code === 'PGRST202') return 'Falta actualizar la base de datos para las cargas masivas. Avisale al responsable tecnico.'
   return 'No se pudo completar la carga masiva.'
@@ -171,7 +176,7 @@ async function runBulk(rpcName, { institutionId, workspaceKey = 'main', rows = [
   for (let start = 0; start < rows.length; start += BULK_ROSTER_CHUNK_SIZE) {
     const chunk = rows.slice(start, start + BULK_ROSTER_CHUNK_SIZE)
     let { data, error } = await supabase.rpc(rpcName, { p_institution_id: institutionId, p_workspace_key: workspaceKey, p_rows: chunk })
-    for (let attempt = 1; isWorkspaceBusy(error) && attempt < BULK_ROSTER_BUSY_ATTEMPTS; attempt += 1) {
+    for (let attempt = 1; isRetryableBulkError(error) && attempt < BULK_ROSTER_BUSY_ATTEMPTS; attempt += 1) {
       await wait(busyRetryDelayMs * attempt)
       ;({ data, error } = await supabase.rpc(rpcName, { p_institution_id: institutionId, p_workspace_key: workspaceKey, p_rows: chunk }))
     }

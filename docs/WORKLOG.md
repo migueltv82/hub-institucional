@@ -1626,3 +1626,24 @@ Decisión de Miguel: Codex sin tokens. Tres agentes auditores corrieron en paral
   - P2 nuevo, de front: se puede lanzar una carga sobre B con las planillas de A mientras B se hidrata.
   - P3: deadlock 40P01 con dos cargas en orden opuesto (no es regresión); huecos del harness.
 - Los hallazgos los corrige Claude. Después, Codex hace el gate final.
+
+## 2026-10-21 — Correcciones de la primera pasada de auditoría (AUD.16, 17 y 18) (Claude)
+
+- **06 (AUD.16):**
+  - El backfill usa conversión segura (`academic_try_iso_date`, `academic_try_uuid`): una fecha o un uuid bien formados pero inexistentes ya no abortan el 06.
+  - Una suplencia que todavía no empezó se puede dar de baja: queda cancelada con fin = inicio.
+  - El botón de baja se deshabilita con una fecha futura tipeada.
+  - Se corrigió en la evidencia una afirmación falsa sobre el backfill.
+- **07 (AUD.17):**
+  - Los `where` de normalización reflejan exactamente el `set`, incluidos los espacios en los extremos.
+  - El trigger de referencia al catálogo se dispara en todo update, así que el `ON CONFLICT` de clases completa una referencia NULL.
+- **Carga masiva (AUD.18):**
+  - `useWorkspacePersistence` expone `hydratedInstitutionId` y la carga masiva solo se habilita si los datos en pantalla son de la institución activa.
+  - `runBulk` reintenta también el deadlock 40P01.
+  - Test con varios lotes.
+- **Pruebas:**
+  - Harness de asignación docente 48/48 y de referencias 32/32. Cada caso nuevo tiene control negativo contra el código anterior.
+  - 13 harness de regresión en PASS.
+  - `npm run check` PASS: 360 archivos y 2755 tests.
+- **Queda documentado, sin corregir:** la vigencia todavía no limita el acceso (va con la fase B) y varios P3 de los informes.
+- **Pendiente:** reauditoría con un agente nuevo y gate de Codex (🔍 AUDITAR, ítems 1–3).

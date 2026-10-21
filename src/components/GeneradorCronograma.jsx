@@ -319,6 +319,7 @@ function GeneradorCronograma() {
     activeInstitutionId,
     institutions,
     isHydrating,
+    hydratedInstitutionId,
     isLoadingInstitutions,
     lastSyncedAt,
     clearWorkspaceNow,
@@ -1898,6 +1899,7 @@ function GeneradorCronograma() {
                       />
                       <BulkRosterSection
                         canEditWorkspace={canEditWorkspace}
+                        dataInstitutionId={hydratedInstitutionId}
                         docenteMateria={docenteMateria}
                         inscripcionesAlumnos={academicSnapshotData.inscripcionesAlumnos}
                         institutionId={activeInstitutionId}

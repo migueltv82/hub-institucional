@@ -10,7 +10,7 @@ import {
 } from '../../services/bulkRoster.js'
 
 // I2b: titularidades y cursadas desde las planillas cargadas, de una vez. Antes se hacian de a una.
-function BulkRosterSection({ canEditWorkspace, docenteMateria, inscripcionesAlumnos, institutionId, useRemoteWorkspace, workspaceKey = 'main' }) {
+function BulkRosterSection({ canEditWorkspace, dataInstitutionId = null, docenteMateria, inscripcionesAlumnos, institutionId, useRemoteWorkspace, workspaceKey = 'main' }) {
   // AUD.I2b P2: lo que se ve (en curso, progreso, resultado) queda atado a la institucion y el workspace donde
   // se lanzo la carga. Si se cambia de institucion, no se muestra lo de la anterior (DNI, materias, avisos).
   // Una carga ya enviada sigue en la base de la institucion original: no se cancela, solo deja de mostrarse.
@@ -26,9 +26,13 @@ function BulkRosterSection({ canEditWorkspace, docenteMateria, inscripcionesAlum
   const teacherRows = teacherPlan.rows
   const studentRows = buildStudentEnrollmentRows(inscripcionesAlumnos)
   const runningHere = running?.contextKey === contextKey ? running.kind : ''
-  const canRun = canEditWorkspace && useRemoteWorkspace && Boolean(institutionId) && !running
+  // AUD.18 H1: las planillas en pantalla tienen que ser de esta institucion. Mientras carga la nueva (o si su carga
+  // fallo) siguen siendo las de la anterior, y aplicarlas escribiria datos de A en B.
+  const dataIsCurrent = Boolean(institutionId) && dataInstitutionId === institutionId
+  const canRun = canEditWorkspace && useRemoteWorkspace && dataIsCurrent && !running
 
   async function run(kind) {
+    if (!canRun) return
     const rows = kind === 'teachers' ? teacherRows : studentRows
     const apply = kind === 'teachers' ? applyTeacherAssignments : applyStudentEnrollments
     const startedIn = contextKey
@@ -91,6 +95,11 @@ function BulkRosterSection({ canEditWorkspace, docenteMateria, inscripcionesAlum
         </div>
       </div>
 
+      {Boolean(institutionId) && !dataIsCurrent && (
+        <p className="mt-3 text-sm font-semibold text-slate-600" role="status">
+          Todavia no estan cargadas las planillas de esta institucion. Cuando terminen de cargar, se pueden aplicar.
+        </p>
+      )}
       {running && !runningHere && (
         <p className="mt-3 text-sm font-semibold text-slate-600" role="status">
           Termina una carga que se lanzo en otra institucion. Cuando termine, se pueden aplicar las de esta.

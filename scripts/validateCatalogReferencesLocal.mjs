@@ -171,6 +171,28 @@ insert into public.study_plan_subjects (id, institution_id, plan_id, subject_id)
     // tenia referencia no se pisa mientras siga siendo valida.
     check('la clase ambigua sigue NULL (dos planes activos)', refOf('subject_class_sessions', `topic = 'ambigua'`) === 'NULL', 'ambigua');
 
+    step = 'normalization trims (AUD.17 P2-1)';
+    // El update de normalizacion anterior recortaba espacios; los where nuevos tienen que seguir viendolos.
+    sql(`insert into public.student_grades (institution_id, workspace_key, student_id, student_record_id, subject_id, program_id, grade_type, grade_scale, academic_status, attempt_number)
+values ('${A}', 'main', '${STUDENT.userId}', '${STUDENT.recordId}', 'FIX-A-01', 'Fixture Career A', ' final ', ' numeric_0_10 ', 'regular', 7);`);
+    const untouchedBefore = value(`select json_agg(id::text || '@' || updated_at::text order by id)::text from public.student_grades where attempt_number <> 7;`);
+    sql(readFileSync(resolve(SCHEMA_07), 'utf8'));
+    const trimmed = JSON.parse(value(`select row_to_json(g)::text from (select grade_type, grade_scale from public.student_grades where attempt_number = 7) g;`));
+    check('re-correr 07 recorta espacios en grade_type y grade_scale', trimmed.grade_type === 'final' && trimmed.grade_scale === 'numeric_0_10', trimmed);
+    check('y no toca las demas notas', value(`select json_agg(id::text || '@' || updated_at::text order by id)::text from public.student_grades where attempt_number <> 7;`) === untouchedBefore, 'updated_at changed');
+
+    step = 'class session ON CONFLICT fills the reference (AUD.17 P3-1)';
+    sql(`insert into public.subject_teacher_assignments (institution_id, workspace_key, subject_id, program_id, teacher_id, role) values ('${A}', 'main', 'LATE2-01', 'Fixture Career A', '${ACTORS.teacherA}', 'titular');`);
+    const firstSession = as('teacherA', `perform public.academic_teacher_create_class_session('${A}', 'main', 'LATE2-01', 'Fixture Career A', current_date - 5, 'antes')`);
+    check('clase de una materia todavia fuera del catalogo: NULL', firstSession.value === 'ok' && refOf('subject_class_sessions', `subject_id = 'LATE2-01'`) === 'NULL', firstSession);
+    sql(`insert into public.subjects (id, institution_id, code, name) values ('a5000000-0000-4000-8000-0000000000f4', '${A}', 'LATE2-01', 'Publicada despues');
+insert into public.study_plan_subjects (id, institution_id, plan_id, subject_id) values ('a6000000-0000-4000-8000-0000000000f4', '${A}', '${CATALOG.plan}', 'a5000000-0000-4000-8000-0000000000f4');`);
+    const secondSession = as('teacherA', `perform public.academic_teacher_create_class_session('${A}', 'main', 'LATE2-01', 'Fixture Career A', current_date - 5, 'despues')`);
+    check('el ON CONFLICT que solo cambia el tema completa la referencia', secondSession.value === 'ok' && refOf('subject_class_sessions', `subject_id = 'LATE2-01'`) === 'a6000000-0000-4000-8000-0000000000f4'
+      && value(`select count(*) from public.subject_class_sessions where subject_id = 'LATE2-01';`) === '1', { secondSession, ref: refOf('subject_class_sessions', `subject_id = 'LATE2-01'`) });
+    const forgedAgain = as('adminA', `update public.subject_class_sessions set study_plan_subject_id = '${CATALOG.planSubject}' where subject_id = 'LATE2-01'`);
+    check('y un valor a mano en un update que no toca el texto igual se pisa', forgedAgain.value === 'ok' && refOf('subject_class_sessions', `subject_id = 'LATE2-01'`) === 'a6000000-0000-4000-8000-0000000000f4', forgedAgain);
+
     step = 'normal updates keep working';
     const regrade = as('teacherA', `perform public.academic_teacher_upsert_student_grade('${A}', 'main', '${STUDENT.userId}', '${STUDENT.recordId}', null, 'FIX-A-01', 'Fixture Career A', 'final', 1, 9, 'regular', null)`);
     check('corregir una nota sigue andando y conserva la referencia', regrade.value === 'ok' && value(`select study_plan_subject_id from public.student_grades where institution_id = '${A}' and attempt_number = 1;`) === CATALOG.planSubject, regrade);

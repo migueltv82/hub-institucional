@@ -105,6 +105,9 @@ export function useWorkspacePersistence({
   const [localActiveInstitutionId, setLocalActiveInstitutionId] = useState(null)
   const [isLoadingLocalInstitutions, setIsLoadingLocalInstitutions] = useState(true)
   const [isHydrating, setIsHydrating] = useState(true)
+  // AUD.18 H1: de que institucion son los datos que hay en pantalla. Al cambiar de institucion pasa a null hasta
+  // que la nueva termina de cargar; si la carga falla queda en null (los datos que se ven son de la anterior).
+  const [hydratedInstitutionId, setHydratedInstitutionId] = useState(null)
   const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'syncing' : 'local-only')
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
   const [workspaceSource, setWorkspaceSource] = useState('workspace-snapshot')
@@ -315,10 +318,12 @@ export function useWorkspacePersistence({
           workspaceKey: WORKSPACE_KEY,
         })
         setWorkspaceSource('none')
+        setHydratedInstitutionId(null)
         setIsHydrating(false)
         return
       }
 
+      setHydratedInstitutionId(null)
       setIsHydrating(true)
       setSyncStatus(useRemoteWorkspace ? 'syncing' : 'local-only')
 
@@ -347,6 +352,7 @@ export function useWorkspacePersistence({
                 counts: diagnostics?.counts ?? getSnapshotCounts(relationalSnapshot),
               })
               onHydrate(relationalSnapshot)
+              setHydratedInstitutionId(activeInstitutionId)
               dirtySnapshotRef.current = false
               setLastSyncedAt(null)
               setWorkspaceSource(RELATIONAL_WORKSPACE_SOURCE)
@@ -396,6 +402,7 @@ export function useWorkspacePersistence({
           counts: getSnapshotCounts(hydratedSnapshot),
         })
         onHydrate(hydratedSnapshot)
+        setHydratedInstitutionId(activeInstitutionId)
         dirtySnapshotRef.current = useRemoteWorkspace && source === 'local'
         setLastSyncedAt(updatedAt)
         setWorkspaceSource(source)
@@ -629,6 +636,7 @@ export function useWorkspacePersistence({
     activeInstitutionId,
     institutions,
     isHydrating,
+    hydratedInstitutionId,
     isLoadingInstitutions,
     lastSyncedAt,
     clearWorkspaceNow,

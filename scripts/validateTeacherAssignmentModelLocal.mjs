@@ -32,6 +32,8 @@ export const IDS = Object.freeze({
   legacyParent: 'af000000-0000-4000-8000-000000000004',
   legacyReplacement: 'af000000-0000-4000-8000-000000000005',
   legacyEnded: 'af000000-0000-4000-8000-000000000006',
+  malformedDates: 'af000000-0000-4000-8000-000000000007',
+  malformedParent: 'af000000-0000-4000-8000-000000000008',
 });
 
 const quote = value => value === null || value === undefined ? 'null' : "'" + String(value).replaceAll("'", "''") + "'";
@@ -176,6 +178,17 @@ where not exists (select 1 from public.subject_enrollments where institution_id 
     const retired = call('adminA', endCall(IDS.titular2, 'jubilacion'));
     check('jubilacion durante la licencia: la suplencia sigue', retired.value?.remainingReplacements === 1 && call('replacementA', rosterCall).value === 1, retired);
 
+    step = 'cancel a future replacement';
+    // AUD.16 P2-2: una suplencia programada (inicio futuro) se puede dar de baja: queda cancelada con fin = inicio.
+    sql(`insert into public.subject_teacher_assignments (institution_id, workspace_key, subject_id, program_id, teacher_id, teacher_record_id, role, status) values ('${INSTITUTION}', 'main', 'FIX-A-FUTURE', '${STUDENT.programId}', '${ACTORS.teacherA}', '${RECORDS.teacherA}', 'titular', 'active');`);
+    const futureParent = sql(`select id from public.subject_teacher_assignments where subject_id = 'FIX-A-FUTURE' and status = 'active';`);
+    call('adminA', leaveCall([futureParent], 'current_date + 5', 'current_date + 20'));
+    const futureReplacement = sql(`select id from public.subject_teacher_assignments where replaces_assignment_id = '${futureParent}' and status = 'active';`);
+    const cancelled = call('adminA', endCall(futureReplacement, 'fin_suplencia'));
+    const cancelledRow = row(futureReplacement);
+    check('una suplencia que no empezo se cancela con fin = inicio', cancelled.value?.cancelledBeforeStart === true && cancelledRow?.status === 'inactive' && cancelledRow?.ends_on === cancelledRow?.starts_on && cancelledRow?.metadata?.cancelled_before_start === true, { cancelled, cancelledRow });
+    expectState('igual se rechaza una fecha de fin futura enviada a mano', call('adminA', endCall(futureParent, 'renuncia', 'current_date + 1')), '22023');
+
     step = 'backfill and rerun';
     // Datos de antes de las columnas nuevas: suplencia vinculada solo por metadata y una baja sin motivo.
     sql(`alter table public.subject_teacher_assignments drop constraint subject_teacher_assignments_end_reason_check;
@@ -183,15 +196,23 @@ insert into public.subject_teacher_assignments (id, institution_id, workspace_ke
   ('${IDS.legacyParent}', '${INSTITUTION}', 'main', 'FIX-A-LEGACY', '${STUDENT.programId}', '${ACTORS.teacherA}', 'licencia', 'active', '{}'),
   ('${IDS.legacyReplacement}', '${INSTITUTION}', 'main', 'FIX-A-LEGACY', '${STUDENT.programId}', '${ACTORS.replacementA}', 'suplente', 'active', '{"leave_parent_assignment_id":"${IDS.legacyParent}","starts_on":"2026-10-01","ends_on":"2026-10-31"}');
 insert into public.subject_teacher_assignments (id, institution_id, workspace_key, subject_id, program_id, teacher_id, role, status, deleted_at) values
-  ('${IDS.legacyEnded}', '${INSTITUTION}', 'main', 'FIX-A-LEGACY-2', '${STUDENT.programId}', '${ACTORS.teacherA}', 'titular', 'inactive', now());`);
+  ('${IDS.legacyEnded}', '${INSTITUTION}', 'main', 'FIX-A-LEGACY-2', '${STUDENT.programId}', '${ACTORS.teacherA}', 'titular', 'inactive', now());
+-- AUD.16 P2-1: metadata vieja con buen formato pero valores inexistentes; antes abortaba el 06 entero.
+insert into public.subject_teacher_assignments (id, institution_id, workspace_key, subject_id, program_id, teacher_id, role, status, metadata) values
+  ('${IDS.malformedDates}', '${INSTITUTION}', 'main', 'FIX-A-LEGACY', '${STUDENT.programId}', '${ACTORS.studentA}', 'suplente', 'active', '{"leave_parent_assignment_id":"${IDS.legacyParent}","starts_on":"2026-02-31","ends_on":"0000-00-00"}'),
+  ('${IDS.malformedParent}', '${INSTITUTION}', 'main', 'FIX-A-LEGACY-3', '${STUDENT.programId}', '${ACTORS.replacementA}', 'suplente', 'active', '{"leave_parent_assignment_id":"------------------------------------","starts_on":"2026-10-01"}');`);
     const beforeRerun = assignmentsState();
     sql(readFileSync(resolve(SCHEMA_06), 'utf8'));
     const legacy = row(IDS.legacyReplacement), legacyEnded = row(IDS.legacyEnded);
     check('backfill del vinculo y la vigencia desde metadata', legacy?.replaces_assignment_id === IDS.legacyParent && legacy?.starts_on === '2026-10-01' && legacy?.ends_on === '2026-10-31', legacy);
     check('backfill del motivo desconocido', legacyEnded?.end_reason === 'otro', legacyEnded);
+    const malformedDates = row(IDS.malformedDates), malformedParent = row(IDS.malformedParent);
+    check('fechas inexistentes en metadata: vinculo si, fechas NULL, sin abortar', malformedDates?.replaces_assignment_id === IDS.legacyParent && malformedDates?.starts_on === null && malformedDates?.ends_on === null, malformedDates);
+    check('uuid de guiones en metadata: sin vinculo, sin abortar', malformedParent?.replaces_assignment_id === null, malformedParent);
     check('constraint restaurado', sql(`select count(*) from pg_constraint where conname = 'subject_teacher_assignments_end_reason_check';`) === '1', 'constraint');
-    const rerunChanges = JSON.parse(beforeRerun).filter(item => ![IDS.legacyReplacement, IDS.legacyEnded].includes(item.id));
-    const afterRerun = JSON.parse(assignmentsState()).filter(item => ![IDS.legacyReplacement, IDS.legacyEnded].includes(item.id));
+    const touched = [IDS.legacyReplacement, IDS.legacyEnded, IDS.malformedDates];
+    const rerunChanges = JSON.parse(beforeRerun).filter(item => !touched.includes(item.id));
+    const afterRerun = JSON.parse(assignmentsState()).filter(item => !touched.includes(item.id));
     check('re-ejecutar 06 no toca las demas filas', JSON.stringify(rerunChanges) === JSON.stringify(afterRerun), 'rerun changed rows');
     const beforeThirdRun = assignmentsState();
     sql(readFileSync(resolve(SCHEMA_06), 'utf8'));

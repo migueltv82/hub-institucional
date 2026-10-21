@@ -2343,7 +2343,7 @@ function TeacherSubjectAssignmentsPanel({
             {error && <p className="mt-3 text-sm font-semibold text-amber-700" role="alert">{error}</p>}
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setEndDraft(null)}>Cancelar</button>
-              <button type="button" className="btn-primary" disabled={isSaving || !endDraft.reason || !endDraft.endsOn} onClick={submitEnd}>{isSaving ? 'Registrando...' : 'Confirmar baja'}</button>
+              <button type="button" className="btn-primary" disabled={isSaving || !endDraft.reason || !endDraft.endsOn || endDraft.endsOn > localToday()} onClick={submitEnd}>{isSaving ? 'Registrando...' : 'Confirmar baja'}</button>
             </div>
           </section>
         </div>,

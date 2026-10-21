@@ -207,6 +207,26 @@ describe('useWorkspacePersistence', () => {
     expect(onHydrate).toHaveBeenCalledWith(hydratedSnapshot)
     expect(result.current.lastSyncedAt).toBe('2026-04-28T11:00:00.000Z')
     expect(result.current.syncStatus).toBe('local-only')
+    await waitFor(() => expect(result.current.hydratedInstitutionId).toBe('institution-2'))
+  })
+
+  it('AUD.18 H1: al cambiar de institucion los datos dejan de ser "de" la nueva hasta que cargan, y si la carga falla siguen sin serlo', async () => {
+    const onHydrate = vi.fn()
+    mocks.readStoredActiveInstitutionId.mockReturnValue('institution-2')
+    mocks.fetchWorkspaceSnapshot.mockResolvedValueOnce({ snapshot: emptySnapshot, updatedAt: null, source: 'local' })
+    const { result } = renderPersistenceHook({ onHydrate })
+    await waitFor(() => expect(result.current.hydratedInstitutionId).toBe('institution-2'))
+
+    let rejectSecond
+    mocks.fetchWorkspaceSnapshot.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectSecond = reject }))
+    act(() => result.current.setActiveInstitutionId('institution-1'))
+    await waitFor(() => expect(result.current.activeInstitutionId).toBe('institution-1'))
+    await waitFor(() => expect(result.current.isHydrating).toBe(true))
+    expect(result.current.hydratedInstitutionId).toBeNull()
+
+    await act(async () => { rejectSecond(new Error('network unavailable')) })
+    await waitFor(() => expect(result.current.isHydrating).toBe(false))
+    expect(result.current.hydratedInstitutionId).toBeNull()
   })
 
   it('hidrata la UI existente desde el schema relacional cuando la institucion tiene el flag activo', async () => {
@@ -447,6 +467,7 @@ describe('useWorkspacePersistence', () => {
     })
 
     expect(result.current.syncStatus).toBe('error')
+    expect(result.current.hydratedInstitutionId).toBeNull()
     expect(onHydrate).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith(
       'No se pudo recuperar el workspace desde Supabase: network unavailable',

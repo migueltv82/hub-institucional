@@ -279,19 +279,57 @@ begin
   end if;
 end $$;
 
+-- Conversion segura para datos viejos de metadata (AUD.16 P2-1): una fecha o un uuid con buen formato pero
+-- inexistentes ('2026-02-31', '------------------------------------') hacian abortar el 06 entero en el
+-- backfill. Devuelven NULL en vez de fallar. Internas: sin EXECUTE para la API.
+create or replace function public.academic_try_iso_date(p_value text)
+returns date
+language plpgsql
+stable
+set search_path = ''
+as $$
+begin
+  if p_value is null or p_value !~ '^\d{4}-\d{2}-\d{2}$' then
+    return null;
+  end if;
+  -- AAAA-MM-DD no es ambiguo para ningun DateStyle; una fecha inexistente lanza error y cae al handler.
+  return p_value::date;
+exception when others then
+  return null;
+end;
+$$;
+
+create or replace function public.academic_try_uuid(p_value text)
+returns uuid
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+  if p_value is null or p_value !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return null;
+  end if;
+  return p_value::uuid;
+exception when others then
+  return null;
+end;
+$$;
+
+revoke all on function public.academic_try_iso_date(text) from public, anon, authenticated;
+revoke all on function public.academic_try_uuid(text) from public, anon, authenticated;
+
 -- Suplencias creadas antes de esta columna: el vinculo vivia en metadata. Solo se copia si apunta a una
--- asignacion de la misma materia (la FK lo exige).
+-- asignacion de la misma materia (la FK lo exige). Fechas invalidas o con fin antes del inicio quedan NULL.
 update public.subject_teacher_assignments replacement
 set replaces_assignment_id = parent.id,
-  starts_on = coalesce(replacement.starts_on, case when replacement.metadata ->> 'starts_on' ~ '^\d{4}-\d{2}-\d{2}$' then (replacement.metadata ->> 'starts_on')::date end),
+  starts_on = coalesce(replacement.starts_on, public.academic_try_iso_date(replacement.metadata ->> 'starts_on')),
   ends_on = coalesce(replacement.ends_on, case
-    when replacement.metadata ->> 'ends_on' ~ '^\d{4}-\d{2}-\d{2}$'
-      and (replacement.metadata ->> 'ends_on')::date >= coalesce(replacement.starts_on, case when replacement.metadata ->> 'starts_on' ~ '^\d{4}-\d{2}-\d{2}$' then (replacement.metadata ->> 'starts_on')::date end, '-infinity'::date)
-    then (replacement.metadata ->> 'ends_on')::date end)
+    when public.academic_try_iso_date(replacement.metadata ->> 'ends_on')
+      >= coalesce(replacement.starts_on, public.academic_try_iso_date(replacement.metadata ->> 'starts_on'), '-infinity'::date)
+    then public.academic_try_iso_date(replacement.metadata ->> 'ends_on') end)
 from public.subject_teacher_assignments parent
 where replacement.replaces_assignment_id is null
-  and replacement.metadata ->> 'leave_parent_assignment_id' ~ '^[0-9a-fA-F-]{36}$'
-  and parent.id = (replacement.metadata ->> 'leave_parent_assignment_id')::uuid
+  and parent.id = public.academic_try_uuid(replacement.metadata ->> 'leave_parent_assignment_id')
   and parent.id <> replacement.id
   and parent.institution_id = replacement.institution_id
   and parent.workspace_key = replacement.workspace_key
@@ -667,6 +705,7 @@ declare
   clean_reason text := lower(btrim(coalesce(p_reason, '')));
   clean_notes text := left(btrim(coalesce(p_notes, '')), 500);
   effective_end date := coalesce(p_ends_on, current_date);
+  cancelled_before_start boolean := false;
   target_assignment public.subject_teacher_assignments%rowtype;
   remaining_replacements integer := 0;
 begin
@@ -699,7 +738,12 @@ begin
     raise exception 'La asignacion ya estaba terminada.' using errcode = '22023';
   end if;
 
-  if target_assignment.starts_on is not null and effective_end < target_assignment.starts_on then
+  -- AUD.16 P2-2: una asignacion que todavia no empezo (por ejemplo, una suplencia programada) se cancela:
+  -- queda con fin = inicio, porque la fecha de fin no puede ser futura ni anterior al inicio.
+  if target_assignment.starts_on is not null and target_assignment.starts_on > current_date then
+    effective_end := target_assignment.starts_on;
+    cancelled_before_start := true;
+  elsif target_assignment.starts_on is not null and effective_end < target_assignment.starts_on then
     raise exception 'La fecha de fin es anterior al inicio de la asignacion.' using errcode = '22023';
   end if;
 
@@ -710,7 +754,7 @@ begin
     end_reason = clean_reason,
     ends_on = effective_end,
     metadata = coalesce(metadata, '{}'::jsonb)
-      || jsonb_build_object('ended_by', (select auth.uid()), 'end_notes', clean_notes)
+      || jsonb_build_object('ended_by', (select auth.uid()), 'end_notes', clean_notes, 'cancelled_before_start', cancelled_before_start)
   where id = target_assignment.id;
 
   select count(*)
@@ -724,6 +768,7 @@ begin
     'id', target_assignment.id,
     'endReason', clean_reason,
     'endsOn', effective_end,
+    'cancelledBeforeStart', cancelled_before_start,
     'remainingReplacements', remaining_replacements
   );
 end;

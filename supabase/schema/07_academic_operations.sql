@@ -175,6 +175,8 @@ alter table public.student_financial_status
 -- filas en cada re-ejecucion de este archivo, y el trigger de updated_at les ponia la hora de la corrida en
 -- el orden en que se leian. Como "la ultima condicion cargada" (mesas, correlativas) se ordena por
 -- updated_at, re-correr 07 podia cambiarla (paso en Prod el 20/10, sin efecto porque el orden coincidio).
+-- Cada condicion del where es "la columna no esta ya como la dejaria el set" (AUD.17 P2-1: tambien los espacios
+-- en los extremos que el set recorta).
 update public.subject_enrollments
 set
   workspace_key = coalesce(nullif(btrim(workspace_key), ''), 'main'),
@@ -185,9 +187,9 @@ set
   metadata = coalesce(metadata, '{}'::jsonb),
   created_at = coalesce(created_at, timezone('utc', now())),
   updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
-where workspace_key is null or btrim(workspace_key) = ''
+where workspace_key is null or workspace_key <> coalesce(nullif(btrim(workspace_key), ''), 'main')
   or program_id is null
-  or status is null or btrim(status) = ''
+  or status is null or status <> coalesce(nullif(btrim(status), ''), 'active')
   or enrolled_at is null
   or lock_version is null or lock_version < 1
   or metadata is null
@@ -208,12 +210,12 @@ set
   lock_version = greatest(coalesce(lock_version, 1), 1),
   created_at = coalesce(created_at, timezone('utc', now())),
   updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
-where workspace_key is null or btrim(workspace_key) = ''
+where workspace_key is null or workspace_key <> coalesce(nullif(btrim(workspace_key), ''), 'main')
   or program_id is null
-  or grade_type is null or btrim(grade_type) = ''
+  or grade_type is null or grade_type <> coalesce(nullif(btrim(grade_type), ''), 'final')
   or grade_label is null
-  or grade_scale is null or btrim(grade_scale) = ''
-  or academic_status is null or btrim(academic_status) = ''
+  or grade_scale is null or grade_scale <> coalesce(nullif(btrim(grade_scale), ''), 'numeric_0_10')
+  or academic_status is null or academic_status <> coalesce(nullif(btrim(academic_status), ''), 'pending')
   or observations is null
   or grading_period is null
   or attempt_number is null or attempt_number < 1
@@ -229,7 +231,7 @@ set
   notes = coalesce(notes, ''),
   created_at = coalesce(created_at, timezone('utc', now())),
   updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
-where workspace_key is null or btrim(workspace_key) = ''
+where workspace_key is null or workspace_key <> coalesce(nullif(btrim(workspace_key), ''), 'main')
   or program_id is null
   or topic is null
   or notes is null
@@ -243,8 +245,8 @@ set
   observations = coalesce(observations, ''),
   created_at = coalesce(created_at, timezone('utc', now())),
   updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
-where workspace_key is null or btrim(workspace_key) = ''
-  or status is null or btrim(status) = ''
+where workspace_key is null or workspace_key <> coalesce(nullif(btrim(workspace_key), ''), 'main')
+  or status is null or status <> coalesce(nullif(btrim(status), ''), 'present')
   or observations is null
   or created_at is null
   or updated_at is null;
@@ -256,7 +258,7 @@ set
   note = coalesce(note, ''),
   created_at = coalesce(created_at, updated_at, timezone('utc', now())),
   updated_at = coalesce(updated_at, created_at, timezone('utc', now()))
-where workspace_key is null or btrim(workspace_key) = ''
+where workspace_key is null or workspace_key <> coalesce(nullif(btrim(workspace_key), ''), 'main')
   or adeuda_cuota is null
   or note is null
   or created_at is null
@@ -2635,6 +2637,18 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- Se dispara en todo update (AUD.17 P3-1: un ON CONFLICT DO UPDATE que solo toca otras columnas, como el de
+  -- las clases, dejaba sin completar una referencia NULL). Solo se saltea si no cambio nada que la defina, no
+  -- se intento escribirla a mano y ya estaba completa.
+  if tg_op = 'UPDATE'
+    and old.study_plan_subject_id is not null
+    and new.study_plan_subject_id is not distinct from old.study_plan_subject_id
+    and new.institution_id is not distinct from old.institution_id
+    and new.subject_id is not distinct from old.subject_id
+    and new.program_id is not distinct from old.program_id
+    and (to_jsonb(new) ->> 'student_record_id') is not distinct from (to_jsonb(old) ->> 'student_record_id') then
+    return new;
+  end if;
   new.study_plan_subject_id := public.academic_resolve_plan_subject_id(
     new.institution_id,
     new.program_id,
@@ -2653,11 +2667,11 @@ declare
 begin
   for target in
     select * from (values
-      ('subject_enrollments', 'institution_id, subject_id, program_id, student_record_id, study_plan_subject_id'),
-      ('student_grades', 'institution_id, subject_id, program_id, student_record_id, study_plan_subject_id'),
-      ('subject_class_sessions', 'institution_id, subject_id, program_id, study_plan_subject_id'),
-      ('subject_teacher_assignments', 'institution_id, subject_id, program_id, study_plan_subject_id')
-    ) as t(table_name, watched_columns)
+      ('subject_enrollments'),
+      ('student_grades'),
+      ('subject_class_sessions'),
+      ('subject_teacher_assignments')
+    ) as t(table_name)
   loop
     execute format('alter table public.%I add column if not exists study_plan_subject_id uuid', target.table_name);
 
@@ -2683,8 +2697,7 @@ begin
 
     execute format('drop trigger if exists set_plan_subject_reference on public.%I', target.table_name);
     execute format(
-      'create trigger set_plan_subject_reference before insert or update of %s on public.%I for each row execute function public.academic_set_plan_subject_reference()',
-      target.watched_columns,
+      'create trigger set_plan_subject_reference before insert or update on public.%I for each row execute function public.academic_set_plan_subject_reference()',
       target.table_name
     );
   end loop;

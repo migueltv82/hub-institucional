@@ -12,6 +12,7 @@ const props = {
   docenteMateria: [{ dni: '20111222', carrera: 'P', materia: 'ING01', rol_en_materia: 'TITULAR' }],
   inscripcionesAlumnos: [{ dni: '30111222', carrera: 'P', materia_codigo: 'ING01' }, { dni: '30222333', carrera: 'P', materia_codigo: 'ING01' }],
   institutionId: 'i1',
+  dataInstitutionId: 'i1',
   useRemoteWorkspace: true,
 }
 
@@ -59,11 +60,11 @@ describe('BulkRosterSection', () => {
     it('reproduccion de Codex: una carga de A que termina despues de cambiar a B no se muestra en B', async () => {
       let resolveA
       mocks.students.mockImplementation(() => new Promise((resolve) => { resolveA = resolve }))
-      const { rerender } = render(<BulkRosterSection {...props} institutionId="inst-A" />)
+      const { rerender } = render(<BulkRosterSection {...props} institutionId="inst-A" dataInstitutionId="inst-A" />)
       fireEvent.click(screen.getByRole('button', { name: 'Inscribir cursadas (2)' }))
       expect(mocks.students).toHaveBeenCalledWith(expect.objectContaining({ institutionId: 'inst-A' }))
 
-      rerender(<BulkRosterSection {...props} institutionId="inst-B" />)
+      rerender(<BulkRosterSection {...props} institutionId="inst-B" dataInstitutionId="inst-B" />)
       expect(screen.getByRole('status')).toHaveTextContent('otra institucion')
       expect(screen.getByRole('button', { name: 'Inscribir cursadas (2)' })).toBeDisabled()
 
@@ -74,30 +75,51 @@ describe('BulkRosterSection', () => {
       expect(screen.queryByText('MATERIA-A')).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Inscribir cursadas (2)' })).toBeEnabled()
 
-      rerender(<BulkRosterSection {...props} institutionId="inst-A" />)
+      rerender(<BulkRosterSection {...props} institutionId="inst-A" dataInstitutionId="inst-A" />)
       expect(screen.getByText('30111222')).toBeInTheDocument()
     })
 
     it('un resultado terminado tampoco queda visible al cambiar de institucion o de workspace', async () => {
       mocks.students.mockResolvedValue(problemReport)
-      const { rerender } = render(<BulkRosterSection {...props} institutionId="inst-A" />)
+      const { rerender } = render(<BulkRosterSection {...props} institutionId="inst-A" dataInstitutionId="inst-A" />)
       fireEvent.click(screen.getByRole('button', { name: 'Inscribir cursadas (2)' }))
       expect(await screen.findByText('30111222')).toBeInTheDocument()
-      rerender(<BulkRosterSection {...props} institutionId="inst-B" />)
+      rerender(<BulkRosterSection {...props} institutionId="inst-B" dataInstitutionId="inst-B" />)
       expect(screen.queryByText('30111222')).not.toBeInTheDocument()
-      rerender(<BulkRosterSection {...props} institutionId="inst-A" workspaceKey="otro" />)
+      rerender(<BulkRosterSection {...props} institutionId="inst-A" dataInstitutionId="inst-A" workspaceKey="otro" />)
       expect(screen.queryByText('30111222')).not.toBeInTheDocument()
     })
 
     it('un error de la institucion anterior se avisa como tal', async () => {
       let rejectA
       mocks.teachers.mockImplementation(() => new Promise((_resolve, reject) => { rejectA = reject }))
-      const { rerender } = render(<BulkRosterSection {...props} institutionId="inst-A" />)
+      const { rerender } = render(<BulkRosterSection {...props} institutionId="inst-A" dataInstitutionId="inst-A" />)
       fireEvent.click(screen.getByRole('button', { name: 'Aplicar titularidades (1)' }))
-      rerender(<BulkRosterSection {...props} institutionId="inst-B" />)
+      rerender(<BulkRosterSection {...props} institutionId="inst-B" dataInstitutionId="inst-B" />)
       rejectA(Object.assign(new Error('No se pudo completar la carga masiva.'), { partialReport: problemReport }))
       await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('institucion anterior')))
       expect(screen.queryByText('30111222')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('AUD.18 H1: no aplicar planillas de otra institucion', () => {
+    it('mientras la nueva institucion carga (o si su carga fallo) los botones quedan deshabilitados y se explica', () => {
+      const { rerender } = render(<BulkRosterSection {...props} institutionId="inst-B" dataInstitutionId="inst-A" />)
+      expect(screen.getByRole('button', { name: /Aplicar titularidades/ })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Inscribir cursadas/ })).toBeDisabled()
+      expect(screen.getByRole('status')).toHaveTextContent('Todavia no estan cargadas las planillas de esta institucion')
+      rerender(<BulkRosterSection {...props} institutionId="inst-B" dataInstitutionId={null} />)
+      expect(screen.getByRole('button', { name: /Inscribir cursadas/ })).toBeDisabled()
+      rerender(<BulkRosterSection {...props} institutionId="inst-B" dataInstitutionId="inst-B" />)
+      expect(screen.getByRole('button', { name: /Inscribir cursadas/ })).toBeEnabled()
+    })
+
+    it('reproduccion del auditor: con datos de A y la institucion B activa no se llama al servicio', () => {
+      render(<BulkRosterSection {...props} institutionId="inst-B" dataInstitutionId="inst-A" />)
+      fireEvent.click(screen.getByRole('button', { name: /Inscribir cursadas/ }))
+      fireEvent.click(screen.getByRole('button', { name: /Aplicar titularidades/ }))
+      expect(mocks.students).not.toHaveBeenCalled()
+      expect(mocks.teachers).not.toHaveBeenCalled()
     })
   })
 })

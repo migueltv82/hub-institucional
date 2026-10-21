@@ -88,3 +88,22 @@ Ahora cada `update` solo toca filas que necesitan normalización. El harness tie
 2. En el SQL Editor, correr `supabase/schema/07_academic_operations.sql` completo, en un momento sin uso. El backfill toma un lock exclusivo breve de las 4 tablas.
 3. Repetir la foto del paso 1: `max(updated_at)` tiene que dar **igual**.
 4. Correr la verificación que está al final del 07: `con_referencia` tiene que ser igual a `filas` en las 4 tablas.
+
+
+## Correcciones de la primera pasada de auditoría (AUD.17, 21/10)
+
+Informe del auditor: `CATALOG_REFERENCES_AGENT_AUDIT.md`.
+
+- **P2-1 · `where` de normalización.** Cada condición pasó a ser "la columna no está como la dejaría el `set`", así que también entran los espacios en los extremos de las columnas que el `set` recorta: `workspace_key`, `status`, `grade_type`, `grade_scale` y `academic_status`.
+- **P3-1 · Trigger.** Ahora se dispara en todo UPDATE. Solo se saltea si no cambió nada que defina la referencia, si no se la intentó escribir a mano y si ya estaba completa. Así, el `ON CONFLICT DO UPDATE` de clases (que solo toca `topic`) completa una referencia NULL.
+- **Harness: 32/32 PASS (run `6b975bfae181e291`).** Casos nuevos:
+  - `' final '` y `' numeric_0_10 '` se recortan al re-correr el 07 sin tocar las demás notas;
+  - el `ON CONFLICT` de clases completa la referencia de una materia publicada después;
+  - un valor a mano en un update que no toca el texto igual se pisa.
+- **Control negativo** con el 07 anterior: fallan los casos de recorte y de `ON CONFLICT`.
+
+**Queda como deuda para la fase 2 (NOT NULL), sin corregir:**
+- La referencia se recalcula al re-correr el 07 si cambia el plan del alumno o el catálogo.
+- `program_id` vacío frente a carreras con `external_code` vacío.
+- `enable trigger user` re-habilita triggers apagados a mano.
+- Costo del trigger en lotes de 1000 filas (unos 2 s).
