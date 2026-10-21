@@ -367,30 +367,56 @@ describe('subjectTeacherAssignments service', () => {
     expect(result.error).toContain('06_subject_teacher_assignments.sql')
   })
 
-  it('da de baja una titularidad', async () => {
-    const updated = { id: 'a1', status: 'inactive' }
-    const { deactivateSubjectTeacherAssignment, queryBuilder } = await loadService({
-      fromResult: { data: updated, error: null },
+  it('punto 3: da de baja con motivo y fecha por RPC, sin update directo', async () => {
+    const { endSubjectTeacherAssignment, rpc, queryBuilder } = await loadService({
+      rpcResult: { data: { id: 'a1', endReason: 'renuncia', remainingReplacements: 0 }, error: null },
     })
 
-    const result = await deactivateSubjectTeacherAssignment('a1')
+    const result = await endSubjectTeacherAssignment({ id: 'a1', reason: 'renuncia', endsOn: '2026-10-20', notes: ' nota ' })
 
-    expect(queryBuilder.update).toHaveBeenCalledWith({
-      status: 'inactive',
-      deleted_at: expect.any(String),
+    expect(rpc).toHaveBeenCalledWith('academic_end_teacher_assignment', {
+      p_assignment_id: 'a1',
+      p_reason: 'renuncia',
+      p_ends_on: '2026-10-20',
+      p_notes: 'nota',
     })
-    expect(queryBuilder.eq).toHaveBeenCalledWith('id', 'a1')
-    expect(result).toEqual({ success: true, data: updated })
+    expect(queryBuilder.update).not.toHaveBeenCalled()
+    expect(result).toEqual({ success: true, data: { id: 'a1', endReason: 'renuncia', remainingReplacements: 0 } })
   })
 
-  it('explica la migracion pendiente si la baja dispara deleted_at faltante', async () => {
-    const { deactivateSubjectTeacherAssignment } = await loadService({
-      fromResult: { data: null, error: { message: 'record "old" has no field "deleted_at"' } },
-    })
+  it('punto 3: sin motivo valido no llama a la base', async () => {
+    const { endSubjectTeacherAssignment, rpc } = await loadService()
 
-    const result = await deactivateSubjectTeacherAssignment('a1')
+    expect(await endSubjectTeacherAssignment({ id: 'a1', reason: 'vacaciones' })).toMatchObject({ success: false })
+    expect(await endSubjectTeacherAssignment({ id: '', reason: 'renuncia' })).toMatchObject({ success: false })
+    expect(rpc).not.toHaveBeenCalled()
+  })
 
+  it('punto 3: sin fecha manda null (la base usa hoy) y explica si falta correr el 06', async () => {
+    const { endSubjectTeacherAssignment, rpc } = await loadService({ rpcResult: { data: null, error: { code: 'PGRST202', message: 'not found' } } })
+
+    const result = await endSubjectTeacherAssignment({ id: 'a1', reason: 'baja' })
+
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_ends_on: null, p_notes: '' })
     expect(result.success).toBe(false)
     expect(result.error).toContain('06_subject_teacher_assignments.sql')
+  })
+
+  it('punto 3: lee vigencia, motivo y reemplazo; si la base no tiene esas columnas sigue con las de antes', async () => {
+    const rows = [{ id: 'a1', subject_id: 'ING13', teacher_id: 'u1', status: 'active' }]
+    const { fetchSubjectTeacherAssignments, from, queryBuilder } = await loadService({
+      fromResult: [
+        { data: null, error: { code: '42703', message: 'column subject_teacher_assignments.replaces_assignment_id does not exist' } },
+        { data: rows, error: null },
+      ],
+    })
+
+    const result = await fetchSubjectTeacherAssignments({ institutionId: 'inst-1' })
+
+    expect(from).toHaveBeenCalledTimes(2)
+    expect(queryBuilder.select.mock.calls[0][0]).toContain('replaces_assignment_id')
+    expect(queryBuilder.select.mock.calls[1][0]).not.toContain('replaces_assignment_id')
+    expect(queryBuilder.is).toHaveBeenCalledWith('deleted_at', null)
+    expect(result).toEqual(rows)
   })
 })

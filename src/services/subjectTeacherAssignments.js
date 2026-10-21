@@ -1,6 +1,20 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 
 const SUBJECT_TEACHER_ASSIGNMENT_SELECT = 'id, institution_id, workspace_key, subject_id, program_id, teacher_id, teacher_record_id, status, role, source, metadata, created_at, updated_at, deleted_at'
+// Punto 3 (21/10): vigencia, motivo de fin y vinculo de reemplazo. Si la base todavia no corrio el 06 nuevo,
+// la lectura sigue con las columnas de antes.
+const ASSIGNMENT_MODEL_COLUMNS = ['starts_on', 'ends_on', 'end_reason', 'replaces_assignment_id']
+const SUBJECT_TEACHER_ASSIGNMENT_MODEL_SELECT = `${SUBJECT_TEACHER_ASSIGNMENT_SELECT}, ${ASSIGNMENT_MODEL_COLUMNS.join(', ')}`
+
+export const TEACHER_ASSIGNMENT_END_REASONS = Object.freeze({
+  renuncia: 'Renuncia',
+  baja: 'Baja',
+  jubilacion: 'Jubilacion',
+  reemplazado: 'Reemplazado por otro docente',
+  fin_suplencia: 'Fin de la suplencia',
+  error_de_carga: 'Error de carga',
+  otro: 'Otro motivo',
+})
 
 function clean(value) {
   return String(value ?? '').trim()
@@ -27,6 +41,11 @@ function isMissingDeletedAtColumn(error) {
   )
 }
 
+function isMissingModelColumn(error) {
+  const message = clean(error?.message).toLowerCase()
+  return error?.code === '42703' && ASSIGNMENT_MODEL_COLUMNS.some((column) => message.includes(column))
+}
+
 function deletedAtMigrationMessage(action) {
   return `${action}. Falta actualizar la base: ejecuta supabase/schema/06_subject_teacher_assignments.sql en Supabase.`
 }
@@ -41,10 +60,11 @@ async function runActiveAssignmentsQuery({
   workspaceKey = 'main',
   teacherId = '',
   withDeletedAtFilter = true,
+  withModelColumns = true,
 } = {}) {
   let query = supabase
     .from('subject_teacher_assignments')
-    .select(SUBJECT_TEACHER_ASSIGNMENT_SELECT)
+    .select(withModelColumns ? SUBJECT_TEACHER_ASSIGNMENT_MODEL_SELECT : SUBJECT_TEACHER_ASSIGNMENT_SELECT)
     .eq('institution_id', institutionId)
     .eq('workspace_key', workspaceKey)
     .eq('status', 'active')
@@ -55,6 +75,15 @@ async function runActiveAssignmentsQuery({
   return query.order('created_at', { ascending: false })
 }
 
+async function queryActiveAssignments(options) {
+  let result = await runActiveAssignmentsQuery(options)
+  if (isMissingModelColumn(result.error)) result = await runActiveAssignmentsQuery({ ...options, withModelColumns: false })
+  if (isMissingDeletedAtColumn(result.error)) {
+    result = await runActiveAssignmentsQuery({ ...options, withModelColumns: false, withDeletedAtFilter: false })
+  }
+  return result
+}
+
 export async function fetchSubjectTeacherAssignments({ institutionId, workspaceKey = 'main' }) {
   ensureSupabaseReady()
 
@@ -62,11 +91,7 @@ export async function fetchSubjectTeacherAssignments({ institutionId, workspaceK
     throw new Error('Falta la institucion activa para cargar las titularidades.')
   }
 
-  let { data, error } = await runActiveAssignmentsQuery({ institutionId, workspaceKey })
-
-  if (isMissingDeletedAtColumn(error)) {
-    ;({ data, error } = await runActiveAssignmentsQuery({ institutionId, workspaceKey, withDeletedAtFilter: false }))
-  }
+  const { data, error } = await queryActiveAssignments({ institutionId, workspaceKey })
 
   if (error) {
     throw new Error(`No se pudieron cargar las titularidades de materias. ${error.message}`)
@@ -175,16 +200,7 @@ export async function fetchSubjectTeacherAssignmentsForTeacher({ institutionId, 
 
   if (!institutionId || !teacherId) return []
 
-  let { data, error } = await runActiveAssignmentsQuery({ institutionId, workspaceKey, teacherId })
-
-  if (isMissingDeletedAtColumn(error)) {
-    ;({ data, error } = await runActiveAssignmentsQuery({
-      institutionId,
-      workspaceKey,
-      teacherId,
-      withDeletedAtFilter: false,
-    }))
-  }
+  const { data, error } = await queryActiveAssignments({ institutionId, workspaceKey, teacherId })
 
   if (error) {
     throw new Error(`No se pudieron cargar las materias del docente. ${error.message}`)
@@ -305,28 +321,31 @@ export async function updateTeacherAssignmentCondition(id, role) {
   return { success: true, data }
 }
 
-export async function deactivateSubjectTeacherAssignment(id) {
+// Fin de una asignacion con motivo y fecha efectiva (RPC staff-only). Reemplaza la baja por update directo:
+// la base ya no acepta una asignacion inactiva sin motivo.
+export async function endSubjectTeacherAssignment({ id, reason, endsOn = null, notes = '' }) {
   ensureSupabaseReady()
 
   if (!id) {
-    return { success: false, error: 'Falta el identificador de la titularidad a dar de baja.' }
+    return { success: false, error: 'Falta el identificador de la asignacion a terminar.' }
+  }
+  if (!Object.hasOwn(TEACHER_ASSIGNMENT_END_REASONS, reason)) {
+    return { success: false, error: 'Elegi el motivo por el que termina la asignacion.' }
   }
 
-  const deletedAt = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('subject_teacher_assignments')
-    .update({ status: 'inactive', deleted_at: deletedAt })
-    .eq('id', id)
-    .select(SUBJECT_TEACHER_ASSIGNMENT_SELECT)
-    .single()
+  const { data, error } = await supabase.rpc('academic_end_teacher_assignment', {
+    p_assignment_id: id,
+    p_reason: reason,
+    p_ends_on: clean(endsOn) || null,
+    p_notes: clean(notes),
+  })
 
   if (error) {
-    if (isMissingDeletedAtColumn(error)) {
-      return { success: false, error: deletedAtMigrationMessage('No se pudo dar de baja la titularidad') }
+    if (error.code === 'PGRST202') {
+      return { success: false, error: deletedAtMigrationMessage('No se pudo dar de baja la asignacion') }
     }
-
-    return { success: false, error: `No se pudo dar de baja la titularidad. ${error.message}` }
+    return { success: false, error: `No se pudo dar de baja la asignacion. ${error.message}` }
   }
 
-  return { success: true, data }
+  return { success: true, data: data ?? {} }
 }

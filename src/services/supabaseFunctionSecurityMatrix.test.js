@@ -124,6 +124,7 @@ const invokedRpcContracts = new Set([
   'academic_admin_link_teacher_record_profile',
   'academic_admin_reset_exam_process',
   'academic_create_teacher_subject_leave',
+  'academic_end_teacher_assignment',
   'academic_enroll_first_year_student',
   'academic_enroll_student_in_course_offering',
   'academic_get_student_course_enrollment_preview',

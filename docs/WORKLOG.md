@@ -1539,3 +1539,17 @@ Las tres se verificaron en el stack local; la evidencia está en `supabase/secur
 - Nuevo `supabase/security/subject_reference_orphans_diagnostic.sql`, de solo lectura: filas que nombran una materia por texto que no resuelve en el catálogo. Corrido en Prod (lectura): 11 filas en 5 tablas, 0 huérfanas. Las mesas (`exam_table_subjects`) ya tienen FK al plan.
 - Tests: 3 nuevos (bulkRoster y BulkRosterSection). `npm run check` PASS: 358 archivos, 2737 tests.
 - Pendiente de auditoría independiente (Codex).
+
+## 2026-10-21 — Punto 3: modelo de asignación docente (Claude)
+
+- Decisión aplicada: `subject_teacher_assignments` es la única fuente de verdad. `teacher_subject_assignments` queda como legado del import relacional; en Prod está vacía.
+- `06_subject_teacher_assignments.sql`:
+  - Columnas `starts_on`, `ends_on`, `end_reason` (obligatorio en toda baja) y `replaces_assignment_id`, con FK a una asignación de la misma materia.
+  - Backfill desde `metadata`.
+  - Licencia y cambio de condición escriben y cierran por el vínculo real. Un cambio de condición ya no revive una asignación terminada.
+  - Nueva RPC `academic_end_teacher_assignment` para dar de baja con motivo y fecha, sin borrar.
+- Front: modal "Dar de baja" con motivo, fecha y observaciones, en lugar del borrado directo. Se corrigieron las etiquetas de licencia y reemplazo, que leían claves que nadie escribía.
+- Bug atrapado por el harness antes de subir: el CHECK del motivo dejaba pasar NULL (`null in (...)`).
+- Evidencia: `supabase/security/TEACHER_ASSIGNMENT_MODEL_LOCAL_RESULT.md`. Harness nuevo: 44/44 PASS; 7 harness relacionados siguen en PASS. `npm run check` PASS: 2743 tests.
+- `validateIntegratedAcceptanceLocal` falla en el login local del alumno, igual sin estos cambios.
+- Pendiente: auditoría completa de Codex (cambia SQL); después Miguel corre el 06 en Prod y se publica el front. La fase B (licencia como estado, no como rol) queda aparte.

@@ -21,10 +21,11 @@ import { getTeachersFromProfiles } from '../../services/teacherAccess.js'
 import {
   createTeacherSubjectLeave,
   createSubjectTeacherAssignment,
-  deactivateSubjectTeacherAssignment,
+  endSubjectTeacherAssignment,
   fetchSubjectTeacherAssignmentsForTeacher,
   resolveTeacherProfile,
   SUBJECT_TEACHER_ROLES,
+  TEACHER_ASSIGNMENT_END_REASONS,
   updateTeacherAssignmentCondition,
 } from '../../services/subjectTeacherAssignments.js'
 import {
@@ -43,6 +44,18 @@ import {
   validateTeacherBlockedDateDraft,
 } from '../../utils/examEngine/teacherBlockedDates.js'
 import { buildTeacherBaseDataDiagnostics } from '../../utils/examEngine/teacherBaseDataDiagnostics.js'
+
+// Fecha local (no UTC): a la noche en Argentina toISOString ya da el dia siguiente y la base rechaza una baja futura.
+function localToday() {
+  const now = new Date()
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+function formatAssignmentDate(value) {
+  const [year, month, day] = String(value ?? '').slice(0, 10).split('-')
+  return year && month && day ? `${day}/${month}/${year}` : ''
+}
 
 const SUBJECT_ROLE_LABELS = {
   titular: 'Titular',
@@ -1966,6 +1979,8 @@ function TeacherSubjectAssignmentsPanel({
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [leaveDraft, setLeaveDraft] = useState(null)
+  const [endDraft, setEndDraft] = useState(null)
+  const [notice, setNotice] = useState('')
 
   const institutionId = activeInstitution?.id ?? null
   // PB.7: la cuenta se crea con el email tecnico del DNI; el de la planilla es solo de contacto.
@@ -2064,7 +2079,7 @@ function TeacherSubjectAssignmentsPanel({
     setLeaveDraft({
       assignmentIds,
       replacementKey: '',
-      startsOn: new Date().toISOString().slice(0, 10),
+      startsOn: localToday(),
       endsOn: '',
       notes: '',
     })
@@ -2169,13 +2184,34 @@ function TeacherSubjectAssignmentsPanel({
     }
   }
 
-  async function removeAssignment(assignmentId) {
-    const result = await deactivateSubjectTeacherAssignment(assignmentId)
-    if (!result.success) {
-      setError(result.error)
-      return
+  function openEnd(row) {
+    setError('')
+    setNotice('')
+    setEndDraft({ assignmentId: row.id, materia: row.materia, reason: '', endsOn: localToday(), notes: '' })
+  }
+
+  async function submitEnd() {
+    setIsSaving(true)
+    try {
+      const result = await endSubjectTeacherAssignment({
+        id: endDraft.assignmentId,
+        reason: endDraft.reason,
+        endsOn: endDraft.endsOn,
+        notes: endDraft.notes,
+      })
+      if (!result.success) {
+        setError(result.error)
+        return
+      }
+      setAssignments((current) => current.filter((assignment) => assignment.id !== endDraft.assignmentId))
+      const remaining = Number(result.data?.remainingReplacements) || 0
+      setNotice(remaining > 0
+        ? `Baja registrada. ${remaining === 1 ? 'El reemplazante sigue' : `Los ${remaining} reemplazantes siguen`} a cargo de ${endDraft.materia}: revisá su condición en su ficha.`
+        : `Baja registrada: ${endDraft.materia}.`)
+      setEndDraft(null)
+    } finally {
+      setIsSaving(false)
     }
-    setAssignments((current) => current.filter((assignment) => assignment.id !== assignmentId))
   }
 
   return (
@@ -2211,6 +2247,7 @@ function TeacherSubjectAssignmentsPanel({
       )}
 
       {error && <p className="mt-3 text-sm font-semibold text-amber-700">{error}</p>}
+      {notice && <p className="mt-3 text-sm font-semibold text-teal-700" role="status">{notice}</p>}
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
         <table className="min-w-[680px] table-fixed divide-y divide-slate-200 text-sm">
@@ -2244,21 +2281,21 @@ function TeacherSubjectAssignmentsPanel({
                         </select>
                         {row.source === 'assignment' && row.role === 'licencia' && (
                           <p className="mt-1 text-xs font-bold text-amber-700">
-                            En licencia · reemplaza {row.assignment?.metadata?.replacement_teacher_name || 'docente designado'}
-                            {row.assignment?.metadata?.leave_ends_on ? ` hasta ${row.assignment.metadata.leave_ends_on}` : ''}
+                            En licencia · lo reemplaza {row.assignment?.metadata?.replacement_teacher_name || 'el docente designado'}
+                            {row.assignment?.metadata?.leave_ends_on ? ` hasta el ${formatAssignmentDate(row.assignment.metadata.leave_ends_on)}` : ''}
                           </p>
                         )}
-                        {row.source === 'assignment' && row.assignment?.source === 'teacher_leave_replacement' && (
+                        {row.source === 'assignment' && (row.assignment?.replaces_assignment_id || row.assignment?.metadata?.leave_parent_assignment_id) && (
                           <p className="mt-1 text-xs font-bold text-sky-700">
-                            Reemplaza a {row.assignment?.metadata?.teacher_on_leave_name || 'docente de licencia'}
-                            {row.assignment?.metadata?.leave_ends_on ? ` hasta ${row.assignment.metadata.leave_ends_on}` : ''}
+                            Reemplaza a {row.assignment?.metadata?.teacher_on_leave_name || 'el docente de licencia'}
+                            {(row.assignment?.ends_on || row.assignment?.metadata?.ends_on) ? ` hasta el ${formatAssignmentDate(row.assignment?.ends_on || row.assignment?.metadata?.ends_on)}` : ''}
                           </p>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end">
                           {row.source === 'assignment' ? (
-                          <button type="button" className="btn-secondary px-3 py-2 text-red-700" onClick={() => removeAssignment(row.id)} disabled={!canEditWorkspace} title="Quitar materia">
+                          <button type="button" className="btn-secondary shrink-0 px-3 py-2 text-red-700" onClick={() => openEnd(row)} disabled={!canEditWorkspace} title="Dar de baja" aria-label={`Dar de baja ${row.materia}`}>
                             <Trash2 className="h-4 w-4" />
                           </button>
                           ) : (
@@ -2277,6 +2314,41 @@ function TeacherSubjectAssignmentsPanel({
           <div className="p-6 text-sm text-slate-500">Cargando materias...</div>
         )}
       </div>
+
+      {endDraft && createPortal(
+        <div className="modal-backdrop fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <section className="modal-surface max-h-[90vh] w-full max-w-lg overflow-y-auto border p-5" aria-label="Dar de baja la asignación">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-extrabold uppercase text-red-700">Baja de la asignación</p>
+                <h3 className="mt-2 text-xl font-extrabold text-slate-950">{getTeacherFullName(teacher)} deja {endDraft.materia}</h3>
+                <p className="mt-2 text-sm text-slate-600">Pierde el acceso al padrón, las notas y la asistencia de esta materia. Queda registrado el motivo; no se borra nada.</p>
+              </div>
+              <button type="button" className="btn-secondary shrink-0 px-3 py-2" onClick={() => setEndDraft(null)} title="Cerrar" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-5 grid gap-3">
+              <label htmlFor="assignment-end-reason"><span className="text-sm font-bold text-slate-800">Motivo</span>
+                <select id="assignment-end-reason" className="input-base mt-2" value={endDraft.reason} onChange={(event) => setEndDraft((current) => ({ ...current, reason: event.target.value }))}>
+                  <option value="">Seleccionar motivo</option>
+                  {Object.entries(TEACHER_ASSIGNMENT_END_REASONS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label htmlFor="assignment-end-date"><span className="text-sm font-bold text-slate-800">Fecha de la baja</span>
+                <input id="assignment-end-date" className="input-base mt-2" type="date" max={localToday()} value={endDraft.endsOn} onChange={(event) => setEndDraft((current) => ({ ...current, endsOn: event.target.value }))} />
+              </label>
+              <label htmlFor="assignment-end-notes"><span className="text-sm font-bold text-slate-800">Observaciones (opcional)</span>
+                <textarea id="assignment-end-notes" className="input-base mt-2 min-h-20" maxLength={500} value={endDraft.notes} onChange={(event) => setEndDraft((current) => ({ ...current, notes: event.target.value }))} />
+              </label>
+            </div>
+            {error && <p className="mt-3 text-sm font-semibold text-amber-700" role="alert">{error}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setEndDraft(null)}>Cancelar</button>
+              <button type="button" className="btn-primary" disabled={isSaving || !endDraft.reason || !endDraft.endsOn} onClick={submitEnd}>{isSaving ? 'Registrando...' : 'Confirmar baja'}</button>
+            </div>
+          </section>
+        </div>,
+        document.body,
+      )}
 
       {leaveDraft && createPortal(
         <div className="modal-backdrop fixed inset-0 z-[60] flex items-center justify-center p-4">
