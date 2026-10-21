@@ -1707,3 +1707,10 @@ Decisión de Miguel: Codex sin tokens. Tres agentes auditores corrieron en paral
   - 13 harness de regresión en PASS.
   - `npm run check` PASS: 361 archivos y 2761 tests.
 - **Para Prod**, después del nuevo gate: correr el 06, el 07 y el 08 (cambian los chequeos de mesa) y redeployar `admin-users`.
+
+## 2026-10-21 — Producción: 06, 07 y 08 aplicados (Miguel) y verificados (Claude)
+
+- Miguel corrió el 06, el 07 y el 08 en el SQL Editor (decisión suya, antes del re-gate de Codex).
+- Claude verificó en solo lectura: todos los controles dan lo esperado; filas y `max(updated_at)` idénticos a la foto previa; referencias al catálogo completas; 0 triggers apagados; policies sin cambios; versión de `8120b35`.
+- Detalle: `supabase/security/PRODUCTION_APPLY_2026-10-21.md`.
+- Pendiente: publicar el front; redeploy de admin-users después de los ítems 5–6 de AUDITAR; re-gate de Codex de los ítems 1–3 sobre lo aplicado.

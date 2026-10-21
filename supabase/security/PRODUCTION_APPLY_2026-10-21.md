@@ -57,3 +57,21 @@ Esperado:
 
 - **Front:** publicar `release/v1`. Todo lo nuevo tolera la base vieja, pero "Dar de baja" necesita el 06.
 - **Edge `admin-users`:** **no** redeployar todavía. El código nuevo incluye la vigencia del padrón, pero el redeploy espera la auditoría de los ítems 5 y 6 de 🔍 AUDITAR (I2d, I2g, `repair_student_access`). Mientras tanto, la Edge vieja muestra en el padrón (solo lectura) a un suplente fuera de su período. Las escrituras las protege la base.
+
+## Resultado (21/10)
+
+Miguel corrió el 06, el 07 y el 08 en el SQL Editor **antes** del re-gate de Codex. Fue decisión suya, con Prod solo con datos de prueba. Codex audita después sobre lo aplicado (🔍 AUDITAR, ítems 1–3). Claude verificó en solo lectura:
+
+| Control | Resultado |
+|---|---|
+| columnas_06 / constraints_06 / funciones_nuevas / triggers_07 | 4 / 4 / 6 / 4 ✅ |
+| funciones_con_vigencia | 7 ✅ |
+| bajas_sin_motivo / internas_expuestas | 0 / 0 ✅ |
+| Filas y `max(updated_at)` de las 6 tablas | **idénticos a la foto "antes"** ✅: re-correr el 07 no tocó notas ni cursadas |
+| `con_referencia` | igual a `filas` en las 4 tablas (3/3/1/3) ✅ |
+| Triggers apagados después del backfill | 0 ✅ |
+| Policies de `subject_teacher_assignments` | las mismas 4 de antes ✅ |
+| Acceso de las 3 asignaciones titulares existentes | las 3 siguen con acceso según la regla de vigencia ✅ |
+| Versión aplicada | la de `8120b35`: resolver de carrera única, trigger que revalida, cancelación de suplencia futura, backfill seguro y `ON CONFLICT` en la carga masiva ✅ |
+
+**Pendiente:** publicar el front. El redeploy de `admin-users` espera los ítems 5–6 de 🔍 AUDITAR.
