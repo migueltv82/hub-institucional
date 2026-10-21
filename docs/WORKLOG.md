@@ -1553,3 +1553,11 @@ Las tres se verificaron en el stack local; la evidencia está en `supabase/secur
 - Evidencia: `supabase/security/TEACHER_ASSIGNMENT_MODEL_LOCAL_RESULT.md`. Harness nuevo: 44/44 PASS; 7 harness relacionados siguen en PASS. `npm run check` PASS: 2743 tests.
 - `validateIntegratedAcceptanceLocal` falla en el login local del alumno, igual sin estos cambios.
 - Pendiente: auditoría completa de Codex (cambia SQL); después Miguel corre el 06 en Prod y se publica el front. La fase B (licencia como estado, no como rol) queda aparte.
+
+## AUD.I2b — Auditoría independiente (Codex, 2026-10-21)
+
+- Base final `143efb7`, implementación original `4b6f570`, correctivo de filtros `5356f82` revisado. Solo `BULK_ROSTER_INDEPENDENT_AUDIT.md` y WORKLOG; sin correcciones funcionales ni SQL remoto/deploy.
+- P1: fecha nativa Excel vencida/futura llega por importador real y se admite como TITULAR; RPC crea active y permiso docente=true. Textos ISO equivalentes se omiten; LICENCIA queda sin permiso. No se ignora el correctivo existente.
+- P2: ambas RPC, dos importaciones concurrentes de clave nueva, segunda llamada23505 revierte también fila ajena al conflicto. P2: resultado con DNI de A permanece tras cambiar institución a B en componente real.
+- Run propio `39a86e3d98d105df`: 13 casos originales + punta a punta PASS, 23 adversariales inspeccionados, tres casos de estado/vigencia y dos carreras; cleanup0. Suites focales5/56 PASS, reproducciones frontend1/2 PASS. Revisión independiente SQL/front coincide. QUALITY GATE: FAIL por P1 abierto.
+- Gate automatizado `npm.cmd run check` PASS: 359 archivos / 2743 tests, lint/build/auditorías (bundle120 archivos). Typecheck no disponible, navegador no ejecutado, aviso preexistente de chunks>500kB. No altera el veredicto FAIL de la auditoría.
