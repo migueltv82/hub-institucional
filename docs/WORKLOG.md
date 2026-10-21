@@ -1647,3 +1647,17 @@ Decisión de Miguel: Codex sin tokens. Tres agentes auditores corrieron en paral
   - `npm run check` PASS: 360 archivos y 2755 tests.
 - **Queda documentado, sin corregir:** la vigencia todavía no limita el acceso (va con la fase B) y varios P3 de los informes.
 - **Pendiente:** reauditoría con un agente nuevo y gate de Codex (🔍 AUDITAR, ítems 1–3).
+
+## 2026-10-21 — Reauditoría de las correcciones AUD.16-18 (agente Claude)
+
+- Commit auditado: `0a120d0`. **PASS WITH WARNINGS.** Los 6 hallazgos quedan cerrados (06 P2-1 y P2-2, 07 P2-1 y P3-1, carga masiva H1 y H2) y no hay P0, P1 ni P2 nuevos. Informe: `supabase/security/AUD16_18_FIXES_AGENT_REAUDIT.md`.
+- **06:** el auditor probó la ruta real de upgrade (06 viejo → actual) con metadata mal formada, sin abortes.
+- **07:** reprodujo de forma dinámica la equivalencia `where`/`set` en las 5 tablas.
+- **Controles negativos:** reprodujo los del implementador sobre copias.
+- **Tests:** 186 tests del front y 5 harness en PASS.
+- **P3 nuevos, sin bloqueo:**
+  - la guarda redundante en `run()` no tiene test;
+  - falta un test del camino relacional del hook;
+  - el costo del resolver en updates de filas con referencia NULL permanente;
+  - el harness del 06 no cubre la ruta real de upgrade (la cubrió el auditor).
+- A juicio del auditor, el 06 y el 07 quedan listos para el gate de Codex (🔍 AUDITAR, ítems 1–3).
