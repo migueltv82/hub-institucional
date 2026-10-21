@@ -29,6 +29,7 @@ export const BULK_ROSTER_REASONS = Object.freeze({
   VIGENCIA_VENCIDA: 'La vigencia de la asignacion ya termino: no se asigna.',
   VIGENCIA_FUTURA: 'La vigencia de la asignacion todavia no empezo: se aplica cuando arranque.',
   ESTADO_ASIGNACION_INVALIDO: 'Estado de asignacion no valido. Usar ACTIVO, LICENCIA, RENUNCIA, BAJA o REEMPLAZADO.',
+  VIGENCIA_INVALIDA: 'La vigencia no es una fecha valida (o termina antes de empezar): corregila en la planilla.',
 })
 
 function clean(value) {
@@ -45,19 +46,42 @@ export function describeBulkRosterReason(reason) {
 const ASSIGNMENT_NOT_CURRENT_STATES = new Set(['RENUNCIA', 'BAJA', 'REEMPLAZADO'])
 const ASSIGNMENT_KNOWN_STATES = new Set(['', 'ACTIVO', 'ACTIVA', 'ACTIVE', 'LICENCIA', ...ASSIGNMENT_NOT_CURRENT_STATES])
 
-function parseSheetDate(value) {
+const pad2 = (value) => String(value).padStart(2, '0')
+const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30)
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function calendarKey(year, month, day) {
+  const date = new Date(Date.UTC(year, month - 1, day))
+  const valid = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  return valid && year >= 1900 && year <= 2200 ? `${year}-${pad2(month)}-${pad2(day)}` : null
+}
+
+// Vigencia de una celda de la planilla: '' si esta vacia, 'YYYY-MM-DD' si es una fecha valida y null si
+// tiene algo que no es una fecha. AUD.I2b P1: ExcelJS entrega las celdas de fecha como Date (en UTC, porque
+// Excel no guarda zona) y antes eso se leia como "sin limite"; un valor invalido tampoco puede pasar como
+// vacio. Tambien acepta el numero de serie de Excel, texto ISO (con o sin hora) y DD/MM/AAAA.
+export function parseSheetDate(value) {
+  if (value === null || value === undefined) return ''
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : calendarKey(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate())
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 1) return null
+    const date = new Date(EXCEL_EPOCH_UTC + Math.floor(value) * DAY_MS)
+    return calendarKey(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate())
+  }
   const text = clean(value)
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text)
+  if (!text) return ''
+  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T ])/.exec(text)
+  if (iso) return calendarKey(Number(iso[1]), Number(iso[2]), Number(iso[3]))
   const local = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text)
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
-  if (local) return `${local[3]}-${local[2].padStart(2, '0')}-${local[1].padStart(2, '0')}`
-  return ''
+  if (local) return calendarKey(Number(local[3]), Number(local[2]), Number(local[1]))
+  return null
 }
 
 function todayKey(today) {
   const date = today instanceof Date ? today : new Date()
-  const pad = (value) => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
 }
 
 function assignmentSkipReason(row, state, today) {
@@ -65,6 +89,8 @@ function assignmentSkipReason(row, state, today) {
   if (ASSIGNMENT_NOT_CURRENT_STATES.has(state)) return 'ASIGNACION_NO_VIGENTE'
   const from = parseSheetDate(row?.vigencia_desde)
   const until = parseSheetDate(row?.vigencia_hasta)
+  if (from === null || until === null) return 'VIGENCIA_INVALIDA'
+  if (from && until && until < from) return 'VIGENCIA_INVALIDA'
   if (until && until < today) return 'VIGENCIA_VENCIDA'
   if (from && from > today) return 'VIGENCIA_FUTURA'
   return ''
@@ -86,7 +112,7 @@ export function planTeacherAssignmentRows(docenteMateria = [], { today } = {}) {
     const state = clean(row?.estado_asignacion || row?.estado).toUpperCase()
     const reason = assignmentSkipReason(row, state, day)
     if (reason) {
-      skipped.push({ fila: item.fila, estado: reason === 'ESTADO_ASIGNACION_INVALIDO' ? 'rechazada' : 'omitida', motivo: reason, dni: item.dni, materia: item.materia })
+      skipped.push({ fila: item.fila, estado: ['ESTADO_ASIGNACION_INVALIDO', 'VIGENCIA_INVALIDA'].includes(reason) ? 'rechazada' : 'omitida', motivo: reason, dni: item.dni, materia: item.materia })
       return
     }
     rows.push(state === 'LICENCIA' ? { ...item, rol: 'licencia' } : item)

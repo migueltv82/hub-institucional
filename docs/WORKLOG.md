@@ -1582,3 +1582,14 @@ Las tres se verificaron en el stack local; la evidencia está en `supabase/secur
 - Suites focales2/29 PASS. Revisión estática independiente favorable; todos los caminos de reutilización relevantes comprueban la marca en app_metadata. No se aprueba toda I2g ni el release global; I2b conserva su P1.
 - Gate completo repetido: `npm.cmd run check` PASS, 359 archivos / 2743 tests, lint/build/auditorías (bundle120 archivos). Typecheck no disponible, navegador no ejecutado, aviso preexistente de chunks>500kB. Sin hallazgos nuevos en alcance; QUALITY GATE de I2f: PASS WITH WARNINGS. El revisor independiente valida informe y cierre local. Sin autorización de deploy.
 - Se integró `972613c` antes del push, preservando ambas entradas del WORKLOG; gate completo repetido PASS (359 archivos / 2743 tests). El cambio de referencias del catálogo no está auditado por este cierre de I2f.
+
+## 2026-10-21 — Corrección del P1 de AUD.I2b: vigencias con fecha de Excel (Claude)
+
+- Causa (filtro de `5356f82`): `parseSheetDate` convertía todo a texto. Una celda de fecha de Excel llega del importador como `Date`, devolvía vacío y la fila se asignaba como "sin límite".
+- Corrección en `src/services/bulkRoster.js`:
+  - `parseSheetDate` acepta `Date` (en UTC), número de serie de Excel, texto ISO (con o sin hora) y DD/MM/AAAA, y valida que la fecha exista en el calendario.
+  - Distingue vacío (`''`) de inválido (`null`).
+  - Un valor no vacío que no es fecha, o una vigencia que termina antes de empezar, se rechaza con `VIGENCIA_INVALIDA`; ya no pasa como "sin límite".
+- Tests nuevos en `src/services/bulkRosterSheetDates.test.js`. Incluyen la reproducción de Codex con ExcelJS y el importador real: vencida y futura como `Date` ya no se asignan.
+- Control negativo: con el `bulkRoster.js` anterior fallan los 3 tests. `npm run check` PASS: 360 archivos y 2746 tests.
+- Siguen abiertos los dos P2 de AUD.I2b: concurrencia de lotes (23505 revierte el lote entero) y resultado de otra institución en `BulkRosterSection`. Se pide reauditoría del P1.
