@@ -255,6 +255,40 @@ describe('parseTemplateV2StudentsWorkbook', () => {
     ])
   })
 
+  it('conserva el nombre y las observaciones del alumno cuando la materia existe en el plan (PB.5)', async () => {
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('alumnos_inscripciones')
+    sheet.addRow(['alumno_id', 'apellido', 'nombre', 'dni', 'email', 'carrera_id', 'plan_id', 'materia_id', 'materia_codigo', 'materia_nombre', 'observaciones'])
+    sheet.addRow(['alu-3', 'Perez', 'Ana', '30111222', 'ana@example.com', 'ING', 'ING-PLAN', 'ING01', 'ING01', 'Ingles I', 'del alumno'])
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const result = await parseTemplateV2StudentsWorkbook(workbookFile(buffer, 'alumnos.xlsx'), {
+      planesEstudio: [{
+        plan_id: 'ING-PLAN',
+        carrera_id: 'ING',
+        materia_id: 'ING01',
+        materia_codigo: 'ING01',
+        materia_nombre: 'Ingles I',
+        observaciones: 'del plan',
+        carrera: 'PROFESORADO DE INGLES',
+        materia: 'ING01',
+        nombre: 'Ingles I',
+        anio: 1,
+      }],
+    })
+
+    expect(result.datasets.alumnos).toEqual([
+      expect.objectContaining({
+        apellido: 'Perez',
+        nombre: 'Ana',
+        observaciones: 'del alumno',
+        carrera: 'PROFESORADO DE INGLES',
+        materia: 'ING01',
+        nombreMateria: 'Ingles I',
+      }),
+    ])
+  })
+
   it('resuelve el nombre de carrera por carrera_id cuando la fila no tiene materia_id (caso real: alumno sin cursada previa)', async () => {
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet('alumnos_inscripciones')
@@ -369,5 +403,59 @@ describe('parseTemplateV2StudentsWorkbook', () => {
     await expect(parseTemplateV2StudentsWorkbook(workbookFile(buffer, 'plantilla-alumnos.xlsx'))).rejects.toThrow(
       'Hojas encontradas: Alumnos, Instrucciones',
     )
+  })
+})
+
+describe('I2e: alumnos con varias materias', () => {
+  const plan = [
+    { plan_id: 'ING-PLAN', carrera_id: 'ING', materia_id: 'ING01', materia_codigo: 'ING01', materia_nombre: 'Ingles I', carrera: 'PROFESORADO DE INGLES', materia: 'ING01', nombre: 'Ingles I', anio: 1 },
+    { plan_id: 'ING-PLAN', carrera_id: 'ING', materia_id: 'ING02', materia_codigo: 'ING02', materia_nombre: 'Fonetica I', carrera: 'PROFESORADO DE INGLES', materia: 'ING02', nombre: 'Fonetica I', anio: 1 },
+    { plan_id: 'ING-PLAN', carrera_id: 'ING', materia_id: 'ING03', materia_codigo: 'ING03', materia_nombre: 'Gramatica I', carrera: 'PROFESORADO DE INGLES', materia: 'ING03', nombre: 'Gramatica I', anio: 1 },
+  ]
+
+  async function studentsWorkbook(rows) {
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('alumnos_inscripciones')
+    sheet.addRow(['alumno_id', 'apellido', 'nombre', 'dni', 'email', 'carrera_id', 'plan_id', 'materia_id', 'materia_codigo', 'materia_nombre'])
+    rows.forEach((row) => sheet.addRow(row))
+    return workbookFile(await workbook.xlsx.writeBuffer(), 'alumnos.xlsx')
+  }
+
+  it('conserva las tres materias de un alumno y deja una sola fila en el padron', async () => {
+    const file = await studentsWorkbook([
+      ['', 'Perez', 'Ana', '30111222', 'ana@example.com', 'ING', 'ING-PLAN', 'ING01', 'ING01', 'Ingles I'],
+      ['', 'Perez', 'Ana', '30111222', 'ana@example.com', 'ING', 'ING-PLAN', 'ING02', 'ING02', 'Fonetica I'],
+      ['', 'Perez', 'Ana', '30111222', 'ana@example.com', 'ING', 'ING-PLAN', 'ING03', 'ING03', 'Gramatica I'],
+      ['', 'Perez', 'Ana', '30111222', 'ana@example.com', 'ING', 'ING-PLAN', 'ING03', 'ING03', 'Gramatica I'],
+      ['', 'Gomez', 'Luis', '30999888', 'luis@example.com', 'ING', 'ING-PLAN', 'ING01', 'ING01', 'Ingles I'],
+    ])
+
+    const result = await parseTemplateV2StudentsWorkbook(file, { planesEstudio: plan })
+
+    expect(result.datasets.alumnos).toHaveLength(2)
+    expect(result.summary).toEqual({ alumnos: 2, inscripcionesAlumnos: 4 })
+    const ana = result.datasets.inscripcionesAlumnos.filter((row) => row.dni === '30111222')
+    expect(ana.map((row) => row.materia_codigo)).toEqual(['ING01', 'ING02', 'ING03'])
+    expect(ana[0]).toEqual(expect.objectContaining({
+      id: 'dni-30111222::ing::ing01',
+      email: 'ana@example.com',
+      apellido: 'Perez',
+      nombre: 'Ana',
+      carrera: 'PROFESORADO DE INGLES',
+      carrera_id: 'ING',
+      plan_id: 'ING-PLAN',
+      materia_nombre: 'Ingles I',
+    }))
+  })
+
+  it('una fila de alumno sin materia entra al padron pero no genera inscripcion', async () => {
+    const file = await studentsWorkbook([
+      ['', 'Diaz', 'Eva', '30555444', 'eva@example.com', 'ING', 'ING-PLAN', '', '', ''],
+    ])
+
+    const result = await parseTemplateV2StudentsWorkbook(file, { planesEstudio: plan })
+
+    expect(result.datasets.alumnos).toHaveLength(1)
+    expect(result.datasets.inscripcionesAlumnos).toEqual([])
   })
 })

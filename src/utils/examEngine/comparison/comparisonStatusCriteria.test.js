@@ -312,7 +312,7 @@ describe('criterios institucionales de auditoria comparativa', () => {
 
     expect(report.status).toBe('CRITICAL')
     expect(summary.status).toBe('CRITICAL')
-    expect(summary.title).toBe('Resumen de auditoria comparativa - CRITICAL')
+    expect(summary.title).toBe('Resumen de auditoría comparativa - CRITICAL')
     expect(summary.summaryText).toContain('estado CRITICAL')
     expect(summary.summaryText).toContain('Requiere revision manual')
     expect(summary.summaryText.toLowerCase()).not.toContain('error tecnico')

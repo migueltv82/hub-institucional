@@ -30,11 +30,11 @@ function SessionSlotsModal({ isOpen, onClose, currentSlot }) {
 
     const slug = sanitizeSessionSlot(label)
     if (!slug) {
-      toast.error('Pone un nombre para identificar la sesion (ej: docente, alumno).')
+      toast.error('Pone un nombre para identificar la sesión (ej: docente, alumno).')
       return
     }
     if (slots.some((entry) => entry.slug === slug)) {
-      toast.error('Ya existe una sesion guardada con ese nombre.')
+      toast.error('Ya existe una sesión guardada con ese nombre.')
       return
     }
 
@@ -63,15 +63,15 @@ function SessionSlotsModal({ isOpen, onClose, currentSlot }) {
         </header>
 
         <p className="mb-4 text-sm leading-6 text-slate-600">
-          Cada sesion abre una pestana nueva con su propio inicio de sesion, independiente de esta
-          (por ejemplo: admin, docente, alumno, a la vez). Las guardadas quedan para la proxima vez.
+          Cada sesión abre una pestaña nueva con su propio inicio de sesión, independiente de esta
+          (por ejemplo: admin, docente, alumno, a la vez). Las guardadas quedan para la próxima vez.
         </p>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
             <span className="text-sm font-semibold text-slate-700">
-              Sesion principal
-              {!currentSlot && <span className="ml-2 text-xs font-normal text-cyan-600">esta pestana</span>}
+              Sesión principal
+              {!currentSlot && <span className="ml-2 text-xs font-normal text-cyan-600">esta pestaña</span>}
             </span>
             <button
               type="button"
@@ -91,7 +91,7 @@ function SessionSlotsModal({ isOpen, onClose, currentSlot }) {
               <span className="text-sm font-semibold text-slate-700">
                 {entry.label}
                 {currentSlot === entry.slug && (
-                  <span className="ml-2 text-xs font-normal text-cyan-600">esta pestana</span>
+                  <span className="ml-2 text-xs font-normal text-cyan-600">esta pestaña</span>
                 )}
               </span>
               <div className="flex items-center gap-2">
@@ -107,7 +107,7 @@ function SessionSlotsModal({ isOpen, onClose, currentSlot }) {
                   type="button"
                   className="text-slate-400 hover:text-red-600"
                   onClick={() => handleRemove(entry.slug)}
-                  aria-label={`Eliminar sesion ${entry.label}`}
+                  aria-label={`Eliminar sesión ${entry.label}`}
                 >
                   <Trash2 size={16} />
                 </button>
@@ -119,7 +119,7 @@ function SessionSlotsModal({ isOpen, onClose, currentSlot }) {
         <form onSubmit={handleAdd} className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4">
           <input
             className="input-base flex-1"
-            placeholder="Nombre de la sesion (ej: docente)"
+            placeholder="Nombre de la sesión (ej: docente)"
             value={label}
             onChange={(event) => setLabel(event.target.value)}
           />

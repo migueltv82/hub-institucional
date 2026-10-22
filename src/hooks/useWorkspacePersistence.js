@@ -8,7 +8,9 @@ import {
 import {
   clearWorkspaceData,
   createEmptyWorkspaceSnapshot,
+  discardLocalWorkspaceSnapshot,
   fetchWorkspaceSnapshot,
+  isWorkspaceConflictError,
   saveWorkspaceSnapshot,
 } from '../services/workspaceSnapshot.js'
 import { isSupabaseConfigured } from '../lib/supabase.js'
@@ -103,14 +105,28 @@ export function useWorkspacePersistence({
   const [localActiveInstitutionId, setLocalActiveInstitutionId] = useState(null)
   const [isLoadingLocalInstitutions, setIsLoadingLocalInstitutions] = useState(true)
   const [isHydrating, setIsHydrating] = useState(true)
+  // AUD.18 H1: de que institucion son los datos que hay en pantalla. Al cambiar de institucion pasa a null hasta
+  // que la nueva termina de cargar; si la carga falla queda en null (los datos que se ven son de la anterior).
+  const [hydratedInstitutionId, setHydratedInstitutionId] = useState(null)
   const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'syncing' : 'local-only')
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
   const [workspaceSource, setWorkspaceSource] = useState('workspace-snapshot')
+  // Aviso de conflicto: otra sesion (o la Edge) guardo el snapshot despues de que este panel lo cargo.
+  // Mientras dure no se autoguarda; se resuelve recargando o subiendo los cambios propios a conciencia.
+  const [workspaceConflict, setWorkspaceConflict] = useState(null)
+  const [reloadToken, setReloadToken] = useState(0)
+  const workspaceConflictRef = useRef(null)
   const skipAutoSaveRef = useRef(true)
   const dirtySnapshotRef = useRef(false)
   const autosaveInFlightRef = useRef(false)
   const autosaveBackoffUntilRef = useRef(0)
   const latestSaveContextRef = useRef(null)
+  const markWorkspaceConflict = useCallback((error) => {
+    const conflict = { remoteUpdatedAt: error?.remoteUpdatedAt ?? null }
+    workspaceConflictRef.current = conflict
+    setWorkspaceConflict(conflict)
+    setSyncStatus('conflict')
+  }, [])
   const hasContextInstitutions = Array.isArray(contextInstitutions)
   const institutions = hasContextInstitutions ? contextInstitutions : localInstitutions
   const activeInstitutionId = hasContextInstitutions ? contextActiveInstitutionId : localActiveInstitutionId
@@ -153,22 +169,50 @@ export function useWorkspacePersistence({
   const saveSnapshotNow = useCallback(async (payloadOverride = snapshotPayload, options = {}) => {
     if (!activeInstitutionId) throw new Error('No hay una institucion activa para guardar los datos.')
     if (!canWriteRemoteWorkspace) throw new Error('Tu rol institucional es de solo lectura.')
+    if (workspaceConflictRef.current && !options.force) {
+      throw new Error('Hay cambios de otra sesion sin resolver. Recarga o subi tus cambios desde el aviso.')
+    }
     setSyncStatus(useRemoteWorkspace ? 'syncing' : 'local-only')
-    const result = await saveWorkspaceSnapshot({
-      institutionId: activeInstitutionId,
-      workspaceKey: WORKSPACE_KEY,
-      ownerEmail: ownerEmail ?? null,
-      ownerUserId: ownerUserId ?? null,
-      payload: payloadOverride,
-      useRemote: useRemoteWorkspace,
-      syncOperational: options.syncOperational,
-    })
+    let result
+    try {
+      result = await saveWorkspaceSnapshot({
+        institutionId: activeInstitutionId,
+        workspaceKey: WORKSPACE_KEY,
+        ownerEmail: ownerEmail ?? null,
+        ownerUserId: ownerUserId ?? null,
+        payload: payloadOverride,
+        useRemote: useRemoteWorkspace,
+        syncOperational: options.syncOperational,
+        force: Boolean(options.force),
+      })
+    } catch (error) {
+      if (isWorkspaceConflictError(error)) markWorkspaceConflict(error)
+      throw error
+    }
+    workspaceConflictRef.current = null
+    setWorkspaceConflict(null)
     setLastSyncedAt(result.updatedAt)
     setWorkspaceSource(result.source)
     setSyncStatus(result.source === 'supabase' ? 'saved' : 'local-only')
     autosaveBackoffUntilRef.current = 0
     return result
-  }, [activeInstitutionId, canWriteRemoteWorkspace, ownerEmail, ownerUserId, snapshotPayload, useRemoteWorkspace])
+  }, [activeInstitutionId, canWriteRemoteWorkspace, markWorkspaceConflict, ownerEmail, ownerUserId, snapshotPayload, useRemoteWorkspace])
+
+  // "Ver los cambios": descarta la copia local de este equipo y vuelve a cargar desde la base.
+  // "Subir los mios igual": guarda la version de este panel pisando la otra (el aviso pide confirmarlo).
+  const resolveWorkspaceConflict = useCallback(async (mode) => {
+    if (!activeInstitutionId) return null
+    if (mode === 'overwrite') {
+      const context = latestSaveContextRef.current
+      return saveSnapshotNow(context?.payload ?? snapshotPayload, { force: true, syncOperational: false })
+    }
+    discardLocalWorkspaceSnapshot({ institutionId: activeInstitutionId, workspaceKey: WORKSPACE_KEY })
+    workspaceConflictRef.current = null
+    setWorkspaceConflict(null)
+    dirtySnapshotRef.current = false
+    setReloadToken((token) => token + 1)
+    return null
+  }, [activeInstitutionId, saveSnapshotNow, snapshotPayload])
 
   const clearWorkspaceNow = useCallback(async () => {
     if (!activeInstitutionId) throw new Error('No hay una institucion activa para borrar los datos.')
@@ -274,10 +318,12 @@ export function useWorkspacePersistence({
           workspaceKey: WORKSPACE_KEY,
         })
         setWorkspaceSource('none')
+        setHydratedInstitutionId(null)
         setIsHydrating(false)
         return
       }
 
+      setHydratedInstitutionId(null)
       setIsHydrating(true)
       setSyncStatus(useRemoteWorkspace ? 'syncing' : 'local-only')
 
@@ -306,6 +352,7 @@ export function useWorkspacePersistence({
                 counts: diagnostics?.counts ?? getSnapshotCounts(relationalSnapshot),
               })
               onHydrate(relationalSnapshot)
+              setHydratedInstitutionId(activeInstitutionId)
               dirtySnapshotRef.current = false
               setLastSyncedAt(null)
               setWorkspaceSource(RELATIONAL_WORKSPACE_SOURCE)
@@ -355,6 +402,7 @@ export function useWorkspacePersistence({
           counts: getSnapshotCounts(hydratedSnapshot),
         })
         onHydrate(hydratedSnapshot)
+        setHydratedInstitutionId(activeInstitutionId)
         dirtySnapshotRef.current = useRemoteWorkspace && source === 'local'
         setLastSyncedAt(updatedAt)
         setWorkspaceSource(source)
@@ -386,7 +434,7 @@ export function useWorkspacePersistence({
       cancelled = true
       controller.abort()
     }
-  }, [activeInstitutionId, onHydrate, useRemoteWorkspace])
+  }, [activeInstitutionId, onHydrate, reloadToken, useRemoteWorkspace])
 
   useEffect(() => {
     if (isHydrating) return
@@ -425,6 +473,7 @@ export function useWorkspacePersistence({
     }
 
     dirtySnapshotRef.current = true
+    if (workspaceConflictRef.current) return
     if (autosaveInFlightRef.current) {
       logWorkspacePersistenceDiagnostic('info', 'autosave:skipped-in-flight', {
         activeInstitutionId,
@@ -493,6 +542,17 @@ export function useWorkspacePersistence({
       } catch (error) {
         if (cancelled) return
 
+        if (isWorkspaceConflictError(error)) {
+          markWorkspaceConflict(error)
+          logWorkspacePersistenceDiagnostic('warn', 'autosave:conflict', {
+            activeInstitutionId,
+            remoteUpdatedAt: error.remoteUpdatedAt,
+            useRemoteWorkspace,
+            workspaceKey: WORKSPACE_KEY,
+          })
+          return
+        }
+
         if (useRemoteWorkspace && shouldBackoffAutosave(error)) {
           autosaveBackoffUntilRef.current = Date.now() + AUTOSAVE_FAILURE_BACKOFF_MS
         }
@@ -536,6 +596,7 @@ export function useWorkspacePersistence({
     const flushPendingSnapshot = () => {
       const context = latestSaveContextRef.current
       if (!dirtySnapshotRef.current || !context?.activeInstitutionId || !context.canWriteRemoteWorkspace) return
+      if (workspaceConflictRef.current) return
       if (autosaveInFlightRef.current) return
       if (context.useRemoteWorkspace && autosaveBackoffUntilRef.current > Date.now()) return
 
@@ -575,6 +636,7 @@ export function useWorkspacePersistence({
     activeInstitutionId,
     institutions,
     isHydrating,
+    hydratedInstitutionId,
     isLoadingInstitutions,
     lastSyncedAt,
     clearWorkspaceNow,
@@ -586,5 +648,7 @@ export function useWorkspacePersistence({
     workspaceKey: WORKSPACE_KEY,
     workspaceSource,
     isRelationalWorkspaceSource,
+    workspaceConflict,
+    resolveWorkspaceConflict,
   }
 }

@@ -6,7 +6,6 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
-  Trash2,
   Users,
   UsersRound,
 } from 'lucide-react'
@@ -15,7 +14,7 @@ import { NavLink } from 'react-router-dom'
 import PaginationControls from '../components/PaginationControls.jsx'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { usePaginatedInstitutions } from '../hooks/usePaginatedInstitutions.js'
-import { deleteInstitution, updateInstitution } from '../services/superAdmin.js'
+import { updateInstitution } from '../services/superAdmin.js'
 import InstitutionPreviewControl from '../features/exams/components/InstitutionPreviewControl.jsx'
 
 const CreateInstitutionModal = lazy(() => import('../components/CreateInstitutionModal.jsx'))
@@ -44,7 +43,7 @@ function CareerBreakdownTable({ careers = [] }) {
   if (careers.length === 0) {
     return (
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-        Todavia no se detectaron carreras activas en el snapshot institucional.
+        Todavía no se detectaron carreras activas en el snapshot institucional.
       </div>
     )
   }
@@ -117,8 +116,8 @@ function SuperAdminInstitutionsPage() {
   async function handleToggleStatus(institution) {
     const newStatus = institution.status === 'active' ? 'suspended' : 'active'
     const confirmMessage = newStatus === 'suspended'
-      ? `Estas por bloquear el acceso a ${institution.name}.`
-      : `Estas por volver a habilitar ${institution.name}.`
+      ? `¿Suspender ${institution.name}? Sus usuarios no van a poder entrar hasta que la reactives. No se borra ningún dato.`
+      : `¿Reactivar ${institution.name}? Sus usuarios vuelven a poder entrar.`
 
     if (!window.confirm(confirmMessage)) return
 
@@ -128,19 +127,7 @@ function SuperAdminInstitutionsPage() {
         updates: { status: newStatus },
         useRemote: isRemoteSession,
       })
-      toast.success(newStatus === 'active' ? 'Institucion habilitada' : 'Institucion bloqueada')
-      await refreshData()
-    } catch (mutationError) {
-      toast.error(mutationError.message)
-    }
-  }
-
-  async function handleDelete(institution) {
-    if (!window.confirm(`Eliminar ${institution.name}? Esta accion no se puede deshacer.`)) return
-
-    try {
-      await deleteInstitution({ id: institution.id, useRemote: isRemoteSession })
-      toast.success('Institucion eliminada correctamente')
+      toast.success(newStatus === 'active' ? 'Institución reactivada' : 'Institución suspendida')
       await refreshData()
     } catch (mutationError) {
       toast.error(mutationError.message)
@@ -171,11 +158,12 @@ function SuperAdminInstitutionsPage() {
         </div>
 
         <div className="flex w-full flex-col gap-3 lg:w-auto sm:flex-row">
-          <label className="relative w-full sm:max-w-sm">
+          <label className="relative w-full sm:w-72">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
-              className="input-base pl-9"
-              placeholder="Buscar por nombre, slug o plan"
+              aria-label="Buscar por nombre, slug o plan"
+              className="input-base pl-9!"
+              placeholder="Nombre, slug o plan"
               type="search"
               value={searchTerm}
               onChange={(event) => {
@@ -187,7 +175,7 @@ function SuperAdminInstitutionsPage() {
 
           <button className="btn-primary w-full sm:w-auto" onClick={() => setIsModalOpen(true)} type="button">
             <PlusCircle className="h-4 w-4" />
-            Crear nueva institucion
+            Crear nueva institución
           </button>
         </div>
       </div>
@@ -195,7 +183,7 @@ function SuperAdminInstitutionsPage() {
       <div className="rounded-lg border border-slate-200 bg-white/86 px-4 py-3 text-sm text-slate-600">
         {total === 0
           ? 'No hay instituciones activas para el criterio aplicado.'
-          : `Mostrando ${institutions.length} instituciones activas en esta pagina. Cada tarjeta resume alumnos, docentes, carreras y administradores.`}
+          : `Mostrando ${institutions.length} ${institutions.length === 1 ? 'institución activa' : 'instituciones activas'} en esta página. Cada tarjeta resume alumnos, docentes, carreras y administradores.`}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -226,11 +214,11 @@ function SuperAdminInstitutionsPage() {
                   </div>
                   <p className="mt-2 text-sm text-slate-500">{institution.slug}</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Creada {institution.created_at ? new Date(institution.created_at).toLocaleDateString() : 'N/D'}
+                    Creada {institution.created_at ? new Date(institution.created_at).toLocaleDateString('es-AR') : 'N/D'}
                   </p>
                 </div>
 
-                <div className="flex gap-2 self-start">
+                <div className="flex shrink-0 gap-2 self-start">
                   <button
                     className={`btn-secondary p-2 ${
                       institution.status === 'active'
@@ -238,7 +226,8 @@ function SuperAdminInstitutionsPage() {
                         : 'text-emerald-600 hover:bg-emerald-50'
                     }`}
                     onClick={() => handleToggleStatus(institution)}
-                    title={institution.status === 'active' ? 'Bloquear' : 'Habilitar'}
+                    title={institution.status === 'active' ? 'Suspender' : 'Reactivar'}
+                    aria-label={`${institution.status === 'active' ? 'Suspender' : 'Reactivar'} ${institution.name}`}
                     type="button"
                   >
                     {institution.status === 'active' ? (
@@ -247,14 +236,6 @@ function SuperAdminInstitutionsPage() {
                       <ShieldCheck className="h-4 w-4" />
                     )}
                   </button>
-                  <button
-                    className="btn-secondary p-2 text-red-600 hover:bg-red-50"
-                    onClick={() => handleDelete(institution)}
-                    title="Eliminar"
-                    type="button"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
                 </div>
               </div>
 
@@ -262,7 +243,7 @@ function SuperAdminInstitutionsPage() {
                 <SummaryTile
                   label="Administradores"
                   value={institution.admin_count ?? 0}
-                  helper="Usuarios con acceso de gestion"
+                  helper="Usuarios con acceso de gestión"
                   tone="slate"
                 />
                 <SummaryTile
@@ -274,13 +255,13 @@ function SuperAdminInstitutionsPage() {
                 <SummaryTile
                   label="Alumnos"
                   value={institution.student_count ?? 0}
-                  helper="Personas en padron"
+                  helper="Personas en padrón"
                   tone="blue"
                 />
                 <SummaryTile
                   label="Docentes"
                   value={institution.teacher_count ?? 0}
-                  helper="Personas en padron"
+                  helper="Personas en padrón"
                   tone="teal"
                 />
               </div>
@@ -318,7 +299,7 @@ function SuperAdminInstitutionsPage() {
                 <div className="mt-5 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-bold text-slate-950">Distribucion por carrera</p>
+                      <p className="text-sm font-bold text-slate-950">Distribución por carrera</p>
                       <p className="mt-1 text-sm text-slate-500">
                         Cantidad de alumnos y docentes detectados por carrera.
                       </p>

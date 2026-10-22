@@ -210,7 +210,7 @@ function buildGapBreakdown({
     {
       cause: GAP_TYPES.MISSING_PLAN_ID_MATERIA_CODIGO,
       count: explainedByWeakKeys,
-      description: 'Hay claves debiles que impiden comparar de forma contractual.',
+      description: 'Hay claves débiles que impiden comparar de forma contractual.',
       blocksFairComparison: true,
     },
     {

@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { isLeaveReplacement, teacherAssignmentAccessState } from './lib/teacherAssignmentAccess.js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
@@ -27,6 +28,8 @@ import SubjectDetailView from './pages/SubjectDetailView.jsx'
 import SubjectsView from './pages/SubjectsView.jsx'
 import { buildSubjectDisplayIndex, buildSubjectKey, fetchTeacherSubjects } from './services/teacherSubjects.js'
 import { fetchTeacherExamAssignments } from './services/teacherExamAssignments.js'
+import { fetchExamTableRoster } from './services/teacherExamRoster.js'
+import ExamActaEditor from '../../features/examActas/ExamActaEditor.jsx'
 import {
   buildTeacherScheduleGrids,
   buildTeacherWeeklyOverviewGrid,
@@ -309,7 +312,7 @@ function TeacherScheduleGrid({ group, tone = 0 }) {
           </colgroup>
           <thead>
             <tr>
-              <th className={`border-b border-slate-200 px-2 py-3 text-xs font-extrabold uppercase ${palette.headerCell}`}>Dia</th>
+              <th className={`border-b border-slate-200 px-2 py-3 text-xs font-extrabold uppercase ${palette.headerCell}`}>Día</th>
               {group.slots.map((slot) => (
                 <th key={slot.key} className={`border-b border-slate-200 px-2 py-3 text-[11px] font-extrabold ${palette.headerCell}`}>
                   {slot.label}
@@ -367,7 +370,7 @@ function TeacherWeeklyOverviewTable({ grid }) {
         </colgroup>
         <thead>
           <tr>
-            <th className="border-b border-slate-200 bg-teal-50 px-2 py-3 text-xs font-extrabold uppercase text-teal-700">Dia</th>
+            <th className="border-b border-slate-200 bg-teal-50 px-2 py-3 text-xs font-extrabold uppercase text-teal-700">Día</th>
             {grid.slots.map((slot) => (
               <th key={slot.key} className="border-b border-slate-200 bg-teal-50 px-2 py-3 text-[11px] font-extrabold text-teal-700">
                 {slot.label}
@@ -567,23 +570,85 @@ function ExamAssignmentCard({ assignment }) {
   )
 }
 
+function ExamRosterPanel({ institutionId, examKey }) {
+  const [state, setState] = useState({ loading: true, error: '', roster: null })
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    fetchExamTableRoster({ institutionId, examKey })
+      .then((roster) => { if (active) setState({ loading: false, error: '', roster }) })
+      .catch((error) => { if (active) setState({ loading: false, error: error.message, roster: null }) })
+    return () => { active = false }
+  }, [institutionId, examKey, reloadKey])
+
+  const alumnos = state.roster?.alumnos ?? EMPTY_ARRAY
+  if (state.loading) return <p className="mt-3 text-sm text-slate-500">Cargando inscriptos...</p>
+  if (state.error) return <p className="mt-3 text-sm text-red-700">{state.error}</p>
+  if (!alumnos.length) return <p className="mt-3 text-sm text-slate-500">Todavía no hay alumnos inscriptos.</p>
+  // F1a: desde el dia del examen el titular carga el acta; cerrada queda en solo lectura.
+  if (state.roster.puedeCargarNotas || state.roster.actaCerrada) {
+    return (
+      <ExamActaEditor
+        examKey={examKey}
+        institutionId={institutionId}
+        key={reloadKey}
+        onSaved={() => {
+          setState((current) => ({ ...current, loading: true }))
+          setReloadKey((value) => value + 1)
+        }}
+        roster={state.roster}
+      />
+    )
+  }
+
+  return (
+    <div className="mt-3 overflow-x-auto rounded-md border border-slate-200 bg-white">
+      <table className="min-w-full text-left text-sm">
+        <thead className="bg-slate-100 text-xs font-bold uppercase text-slate-600">
+          <tr>
+            <th className="px-3 py-2">#</th>
+            <th className="px-3 py-2">Alumno</th>
+            <th className="px-3 py-2">DNI</th>
+            <th className="px-3 py-2">Carrera</th>
+          </tr>
+        </thead>
+        <tbody>
+          {alumnos.map((alumno, index) => (
+            <tr key={`${alumno.dni}-${index}`} className="border-t border-slate-100">
+              <td className="px-3 py-2 text-slate-500">{index + 1}</td>
+              <td className="px-3 py-2 font-semibold text-slate-900">{alumno.nombre || '-'}</td>
+              <td className="px-3 py-2 text-slate-700">{alumno.dni || '-'}</td>
+              <td className="px-3 py-2 text-slate-700">{alumno.carrera || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+        {alumnos.length} {alumnos.length === 1 ? 'alumno inscripto' : 'alumnos inscriptos'}
+      </p>
+    </div>
+  )
+}
+
 export function ExamsView({ data, examAssignments = EMPTY_ARRAY }) {
   const exams = data?.exams ?? EMPTY_ARRAY
+  const institutionId = data?.currentInstitution?.id
+  const [openRosterKey, setOpenRosterKey] = useState('')
 
   return (
     <div className="space-y-6">
-      <Section title="Precronograma en revision" icon={CalendarDays}>
-        <p className="mb-4 text-sm text-slate-600">La gestion de decisiones sobre mesas no esta habilitada en esta version.</p>
-        {examAssignments.length > 0 ? (
+      {/* D1 P3: solo aparece si hay mesas en preparacion; es de lectura y no anuncia funciones deshabilitadas. */}
+      {examAssignments.length > 0 && (
+        <Section title="Mesas en preparación" icon={CalendarDays}>
+          <p className="mb-4 text-sm text-slate-600">Tus mesas del próximo llamado. Las confirmaciones las gestiona secretaría.</p>
           <div className="grid gap-4 lg:grid-cols-2">
             {examAssignments.map((assignment) => (
               <ExamAssignmentCard key={assignment.id} assignment={assignment} />
             ))}
           </div>
-        ) : (
-          <EmptyBlock>No hay mesas publicadas para tu revision por el momento.</EmptyBlock>
-        )}
-      </Section>
+        </Section>
+      )}
 
       <Section title="Mesas asignadas" icon={CalendarDays}>
         {exams.length > 0 ? (
@@ -605,6 +670,20 @@ export function ExamsView({ data, examAssignments = EMPTY_ARRAY }) {
                   <p><strong className="text-slate-900">Vocales:</strong> {[exam.vocal1 || exam.primerVocal, exam.vocal2 || exam.segundoVocal].filter(Boolean).join(' / ') || '-'}</p>
                   <p><strong className="text-slate-900">Aula:</strong> {exam.aula || exam.location || '-'}</p>
                 </div>
+                {exam.id && institutionId && exam.esTitular && (
+                  <>
+                    <button
+                      aria-expanded={openRosterKey === exam.id}
+                      className="btn-secondary mt-4 w-full sm:w-auto"
+                      onClick={() => setOpenRosterKey((current) => (current === exam.id ? '' : exam.id))}
+                      type="button"
+                    >
+                      <UsersRound className="h-4 w-4" />
+                      {openRosterKey === exam.id ? 'Ocultar inscriptos' : 'Ver inscriptos'}
+                    </button>
+                    {openRosterKey === exam.id && <ExamRosterPanel examKey={exam.id} institutionId={institutionId} />}
+                  </>
+                )}
               </article>
             ))}
           </div>
@@ -648,11 +727,11 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
       })
       await queryClient.invalidateQueries({ queryKey: ['teacher-portal'] })
       toast.success(profile.email !== teacherEmail
-        ? 'Informacion actualizada. Tu proximo ingreso sera con el nuevo email.'
-        : 'Informacion actualizada.')
+        ? 'Información actualizada. Tu próximo ingreso sera con el nuevo email.'
+        : 'Información actualizada.')
       setIsProfileOpen(false)
     } catch (error) {
-      toast.error(error?.message || 'No se pudo actualizar tu informacion.')
+      toast.error(error?.message || 'No se pudo actualizar tu información.')
     } finally {
       setIsSavingProfile(false)
     }
@@ -707,13 +786,13 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
               })}
             <button className="teacher-profile-button inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md border px-3 py-2 text-sm font-extrabold" type="button" onClick={openProfile}>
               <Pencil className="h-4 w-4" />
-              Mi informacion
+              Mi información
             </button>
 
             {isRemoteSession && (
               <button className="teacher-signout-button ml-auto inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-extrabold text-red-700" type="button" onClick={signOutRemote}>
                 <LogOut className="h-4 w-4" />
-                Cerrar sesion
+                Cerrar sesión
               </button>
             )}
           </nav>
@@ -725,7 +804,7 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
             <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
               <div>
                 <p className="soft-title">Perfil docente</p>
-                <h2 id="teacher-profile-title" className="mt-1 text-2xl font-extrabold text-slate-950">Mi informacion</h2>
+                <h2 id="teacher-profile-title" className="mt-1 text-2xl font-extrabold text-slate-950">Mi información</h2>
                 <p className="mt-2 text-sm text-slate-600">Estos datos se guardan en tu registro institucional.</p>
               </div>
               <button className="btn-secondary h-10 w-10 p-0" type="button" aria-label="Cerrar" disabled={isSavingProfile} onClick={() => setIsProfileOpen(false)}><X className="h-4 w-4" /></button>
@@ -736,7 +815,7 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
                 <span className="mt-2 flex items-center gap-2"><Mail className="h-4 w-4 text-teal-700" /><input className="input-base" type="email" required value={profileForm.email} onChange={(event) => setProfileForm((current) => ({ ...current, email: event.target.value }))} /></span>
               </label>
               <label className="block text-sm font-bold text-slate-700">
-                Telefono
+                Teléfono
                 <span className="mt-2 flex items-center gap-2"><Phone className="h-4 w-4 text-teal-700" /><input className="input-base" type="tel" maxLength={40} value={profileForm.telefono} onChange={(event) => setProfileForm((current) => ({ ...current, telefono: event.target.value }))} /></span>
               </label>
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">Si cambias el email, el próximo inicio de sesión será con la nueva dirección.</p>
@@ -753,7 +832,7 @@ function TeacherPortalLayout({ data, examAssignments, subjects, subjectsLoading 
         <section className="teacher-portal-alert rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p className="flex items-center gap-2 font-semibold">
             <AlertCircle className="h-4 w-4" />
-            No se encontro una coincidencia exacta entre tu usuario y el padron docente. Por seguridad, no se muestran datos de otros docentes.
+            No se encontro una coincidencia exacta entre tu usuario y el padrón docente. Por seguridad, no se muestran datos de otros docentes.
           </p>
         </section>
       )}
@@ -850,12 +929,9 @@ export default function TeacherPortalModule() {
       const subjectId = clean(assignment.subject_id)
       const programId = clean(assignment.program_id)
       const display = subjectDisplayIndex.get(buildSubjectKey(subjectId, programId)) ?? {}
-      const today = new Date().toISOString().slice(0, 10)
-      const startsOn = clean(assignment.metadata?.leave_starts_on)
-      const endsOn = clean(assignment.metadata?.leave_ends_on)
-      const leaveIsCurrent = (!startsOn || startsOn <= today) && (!endsOn || today <= endsOn)
-
-      if (assignment.source === 'teacher_leave_replacement' && !leaveIsCurrent) return null
+      // Gate Codex P1: misma regla temporal que la base (lib/teacherAssignmentAccess.js).
+      const access = teacherAssignmentAccessState(assignment)
+      if (!access.visible) return null
 
       return {
         id: assignment.id,
@@ -864,10 +940,8 @@ export default function TeacherPortalModule() {
         nombre: display.nombre || subjectId,
         carrera: display.carrera || programId,
         anio: display.anio || '',
-        role: assignment.role === 'licencia' && !leaveIsCurrent
-          ? (assignment.metadata?.original_role || 'titular')
-          : (assignment.role || ''),
-        assignmentSource: assignment.source || '',
+        role: access.effectiveRole || '',
+        assignmentSource: isLeaveReplacement(assignment) ? 'teacher_leave_replacement' : (assignment.source || ''),
         leave: assignment.metadata || null,
       }
     }).filter(Boolean)

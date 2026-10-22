@@ -170,8 +170,8 @@ describe('StudentCourseEnrollmentInternalPreview', () => {
       detectedRole: 'admin_instituto',
       loadPreview: vi.fn().mockResolvedValue(adminModel),
     })} />)
-    expect(await screen.findByText('Resultados y auditoria')).toBeInTheDocument()
-    expect(screen.getByText('Fuente academica transitoria')).toBeInTheDocument()
+    expect(await screen.findByText('Resultados y auditoría')).toBeInTheDocument()
+    expect(screen.getByText('Fuente académica transitoria')).toBeInTheDocument()
     expect(screen.getByText('COURSE_ENROLLMENT_CREATED')).toBeInTheDocument()
     expect(screen.getByTestId('student-career-link-admin-panel')).toBeInTheDocument()
     expect(screen.queryByText(/RPC pendiente/i)).not.toBeInTheDocument()
@@ -179,7 +179,7 @@ describe('StudentCourseEnrollmentInternalPreview', () => {
 
   it('el alumno no ve acciones administrativas de vinculo', async () => {
     render(<StudentCourseEnrollmentInternalPreview {...props()} />)
-    await screen.findByText('Diagnostico previo')
+    await screen.findByText('Diagnóstico previo')
     expect(screen.queryByTestId('student-career-link-admin-panel')).not.toBeInTheDocument()
   })
 

@@ -60,7 +60,7 @@ function DeletedPersonRecordsSection({
                 <th className="px-4 py-3">DNI</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Baja</th>
-                <th className="px-4 py-3 text-right">Accion</th>
+                <th className="px-4 py-3 text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -82,7 +82,7 @@ function DeletedPersonRecordsSection({
                         className="btn-secondary px-3 py-2"
                         disabled={!canRestore || restoringId === record.id}
                         onClick={() => onRestore?.(record)}
-                        title={canRestore ? 'Restaurar en el padron activo' : 'La restauracion de administrativos requiere superadmin/Auth'}
+                        title={canRestore ? 'Restaurar en el padrón activo' : 'La restauración de administrativos requiere superadmin/Auth'}
                       >
                         <RotateCcw className="h-4 w-4" />
                         {restoringId === record.id ? 'Restaurando...' : 'Restaurar'}

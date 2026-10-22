@@ -112,4 +112,17 @@ describe('mutateStudentPortal', () => {
       }),
     ).resolves.toEqual(expect.objectContaining({ source: 'supabase' }))
   })
+
+  it.each(['register_exam', 'cancel_exam'])('PB.4: rechaza %s snapshot_only sin escritura relacional (la RPC de mesa es la autoridad)', async (mutationType) => {
+    const { mutateStudentPortal } = await loadService({
+      invokeResult: {
+        data: { success: true, sources: { snapshot: true, relational: false }, transition: { read_mode: 'snapshot_only' } },
+        error: null,
+      },
+    })
+
+    await expect(
+      mutateStudentPortal({ institutionId: 'inst-1', mutationType, payload: { exam_enrollment: { id: 'exam-1' } }, useRemote: true }),
+    ).rejects.toThrow('No se pudo confirmar la inscripcion en las tablas academicas.')
+  })
 })

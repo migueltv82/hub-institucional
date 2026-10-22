@@ -236,17 +236,17 @@ describe('ExamAdminReviewWorkflowPanel', () => {
       env: { VITE_ENABLE_EXAM_ADMIN_REVIEW_WORKFLOW: 'false' },
     })} />)
 
-    expect(screen.queryByRole('region', { name: 'Revision administrativa experimental de examenes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Revisión administrativa experimental de exámenes' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Promover borrador' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Solicitar aprobacion' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Registrar segunda aprobacion' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Solicitar aprobación' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Registrar segunda aprobación' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Plan de oficializacion segura' })).not.toBeInTheDocument()
   })
 
   it('muestra precronograma titular-only, sugerencias y recomendaciones con la flag prendida', () => {
     render(<ExamAdminReviewWorkflowPanel {...props()} />)
 
-    expect(screen.getByRole('region', { name: 'Revision administrativa experimental de examenes' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Revisión administrativa experimental de exámenes' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Precronograma solo con titulares' })).toBeInTheDocument()
     expect(screen.getAllByText('PENDIENTE_VOCALES').length).toBeGreaterThan(0)
     expect(screen.getByRole('region', { name: 'Sugerencias de agrupamiento administrativo' })).toBeInTheDocument()
@@ -259,7 +259,7 @@ describe('ExamAdminReviewWorkflowPanel', () => {
     expect(screen.getByText(/Preview no oficial/)).toBeInTheDocument()
     const readiness = screen.getByRole('region', { name: 'Readiness final experimental' })
     expect(within(readiness).getByText('Bloqueado hasta resolver las validaciones pendientes.')).toBeInTheDocument()
-    expect(within(readiness).getByText('Esto todavia no oficializa ni reemplaza el cronograma.')).toBeInTheDocument()
+    expect(within(readiness).getByText('Esto todavía no oficializa ni reemplaza el cronograma.')).toBeInTheDocument()
     const plan = screen.getByRole('region', { name: 'Plan de oficializacion segura' })
     expect(within(plan).getByText('El plan no puede prepararse con el estado actual.')).toBeInTheDocument()
     expect(within(plan).getByText('Este plan no oficializa el cronograma.')).toBeInTheDocument()
@@ -283,8 +283,8 @@ describe('ExamAdminReviewWorkflowPanel', () => {
     expect(within(readiness).getByRole('region', { name: 'Candidato final experimental' })).toBeInTheDocument()
     expect(within(readiness).getByText(/READY_FOR_OFFICIALIZATION/)).toBeInTheDocument()
     const plan = screen.getByRole('region', { name: 'Plan de oficializacion segura' })
-    expect(within(plan).getByText('Plan tecnico preparado para validacion servidor-side.')).toBeInTheDocument()
-    const technicalPlan = within(plan).getByRole('region', { name: 'Plan tecnico de oficializacion' })
+    expect(within(plan).getByText('Plan técnico preparado para validación servidor-side.')).toBeInTheDocument()
+    const technicalPlan = within(plan).getByRole('region', { name: 'Plan técnico de oficializacion' })
     expect(within(technicalPlan).getByText(/Fingerprint actual: [a-f0-9]{64}/)).toBeInTheDocument()
     expect(within(technicalPlan).getByText(/Fingerprint propuesto: [a-f0-9]{64}/)).toBeInTheDocument()
     expect(within(technicalPlan).getByText(/AUTHORIZATION, HASH_REVERIFICATION/)).toBeInTheDocument()
@@ -420,7 +420,7 @@ describe('ExamAdminReviewWorkflowPanel', () => {
       onAdminReviewDecisionsChange: onChange,
     })} />)
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Quitar seleccion' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Quitar selección' })[0])
 
     expect(onChange).toHaveBeenCalledTimes(1)
     expect(onChange.mock.calls[0][0][0]).toMatchObject({
@@ -591,7 +591,7 @@ describe('ExamAdminReviewWorkflowPanel', () => {
 
     const promotions = screen.getByRole('region', { name: 'Promociones experimentales preparadas' })
     expect(within(promotions).getByText('admin-review-promotion-admin-review-draft-ready-r1')).toBeInTheDocument()
-    expect(within(promotions).getByText(/PROMOTED_EXPERIMENTAL \/ revision 1 \/ oficial: no \/ mesas 1/)).toBeInTheDocument()
+    expect(within(promotions).getByText(/PROMOTED_EXPERIMENTAL \/ revisión 1 \/ oficial: no \/ mesas 1/)).toBeInTheDocument()
     expect(within(promotions).getByText(`Sello: ${fixture.promotion.integrity.hash.slice(0, 12)}`)).toBeInTheDocument()
     expect(within(promotions).getByText('Workflow: 1.1.0')).toBeInTheDocument()
     expect(within(promotions).getByText('Administrador: Admin Instituto / admin_instituto')).toBeInTheDocument()
@@ -644,9 +644,9 @@ describe('ExamAdminReviewWorkflowPanel', () => {
 
     const promotions = screen.getByRole('region', { name: 'Promociones experimentales preparadas' })
     expect(within(promotions).getByText('Integridad: MISMATCH')).toBeInTheDocument()
-    expect(within(promotions).getByRole('alert')).toHaveTextContent('Promocion alterada: no es candidata a una aprobacion futura.')
+    expect(within(promotions).getByRole('alert')).toHaveTextContent('Promocion alterada: no es candidata a una aprobación futura.')
     expect(within(promotions).getByText(/promotion.schedule/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Solicitar aprobacion' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Solicitar aprobación' })).not.toBeInTheDocument()
   })
 
   it('muestra error de verificacion si falta el borrador fuente', () => {
@@ -697,8 +697,8 @@ describe('ExamAdminReviewWorkflowPanel', () => {
       cargaHorariaDocente: fixture.cargaHorariaDocente,
     })} />)
 
-    const eligibility = screen.getByRole('region', { name: 'Elegibilidad para aprobacion futura' })
-    expect(within(eligibility).getByText('Esto todavia no aprueba ni reemplaza el cronograma oficial.')).toBeInTheDocument()
+    const eligibility = screen.getByRole('region', { name: 'Elegibilidad para aprobación futura' })
+    expect(within(eligibility).getByText('Esto todavía no aprueba ni reemplaza el cronograma oficial.')).toBeInTheDocument()
     expect(within(eligibility).getByText('Elegibles: 1 / bloqueadas: 1 / superadas: 1')).toBeInTheDocument()
     expect(within(eligibility).getByText('Promocion elegible actual')).toBeInTheDocument()
     expect(within(eligibility).getByText(second.promotionId)).toBeInTheDocument()
@@ -725,7 +725,7 @@ describe('ExamAdminReviewWorkflowPanel', () => {
       onAdminReviewApprovalRequestsChange: onRequestsChange,
     })} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Solicitar aprobacion' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Solicitar aprobación' }))
     expect(onRequestsChange).not.toHaveBeenCalled()
     expect(screen.getByText('Esto no convierte el cronograma en oficial.')).toBeInTheDocument()
 
@@ -775,11 +775,11 @@ describe('ExamAdminReviewWorkflowPanel', () => {
       cargaHorariaDocente: fixture.cargaHorariaDocente,
     })} />)
 
-    expect(screen.queryByRole('button', { name: 'Solicitar aprobacion' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Solicitar aprobación' })).not.toBeInTheDocument()
     expect(screen.getByText('Solicitud activa: REQUESTED')).toBeInTheDocument()
-    const requests = screen.getByRole('region', { name: 'Solicitudes de aprobacion administrativa' })
+    const requests = screen.getByRole('region', { name: 'Solicitudes de aprobación administrativa' })
     expect(within(requests).getByText('request-existing')).toBeInTheDocument()
-    expect(within(requests).getByText(/REQUESTED \/ revision 1 \/ oficial: no/)).toBeInTheDocument()
+    expect(within(requests).getByText(/REQUESTED \/ revisión 1 \/ oficial: no/)).toBeInTheDocument()
   })
 
   it('muestra elegibilidad y bloqueos para segunda aprobacion sin aprobar oficialmente', () => {
@@ -810,13 +810,13 @@ describe('ExamAdminReviewWorkflowPanel', () => {
       cargaHorariaDocente: fixture.cargaHorariaDocente,
     })} />)
 
-    const secondApproval = screen.getByRole('region', { name: 'Elegibilidad para segunda aprobacion' })
-    expect(within(secondApproval).getByText('Esto todavia no aprueba ni reemplaza el cronograma oficial.')).toBeInTheDocument()
+    const secondApproval = screen.getByRole('region', { name: 'Elegibilidad para segunda aprobación' })
+    expect(within(secondApproval).getByText('Esto todavía no aprueba ni reemplaza el cronograma oficial.')).toBeInTheDocument()
     expect(within(secondApproval).getByText('Elegibles: 1 / bloqueadas: 1')).toBeInTheDocument()
     expect(within(secondApproval).getByText('Solicitud elegible')).toBeInTheDocument()
     expect(within(secondApproval).getByText('request-eligible')).toBeInTheDocument()
     expect(within(secondApproval).getByText(/SAME_ACTOR_NOT_ALLOWED/)).toBeInTheDocument()
-    expect(within(secondApproval).getByRole('button', { name: 'Registrar segunda aprobacion' })).toBeInTheDocument()
+    expect(within(secondApproval).getByRole('button', { name: 'Registrar segunda aprobación' })).toBeInTheDocument()
   })
 
   it('registra segunda aprobacion para request elegible con confirmacion explicita', () => {
@@ -839,11 +839,11 @@ describe('ExamAdminReviewWorkflowPanel', () => {
       onAdminReviewSecondApprovalsChange: onSecondApprovalsChange,
     })} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Registrar segunda aprobacion' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar segunda aprobación' }))
     expect(onSecondApprovalsChange).not.toHaveBeenCalled()
     expect(screen.getByText('Esto no convierte el cronograma en oficial.')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar segunda aprobacion' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar segunda aprobación' }))
 
     expect(onSecondApprovalsChange).toHaveBeenCalledTimes(1)
     expect(onSecondApprovalsChange.mock.calls[0][0][0]).toMatchObject({
@@ -901,11 +901,11 @@ describe('ExamAdminReviewWorkflowPanel', () => {
       cargaHorariaDocente: fixture.cargaHorariaDocente,
     })} />)
 
-    expect(screen.queryByRole('button', { name: 'Registrar segunda aprobacion' })).not.toBeInTheDocument()
-    expect(screen.getByText('Segunda aprobacion registrada: SECOND_APPROVED')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Registrar segunda aprobación' })).not.toBeInTheDocument()
+    expect(screen.getByText('Segunda aprobación registrada: SECOND_APPROVED')).toBeInTheDocument()
     const approvals = screen.getByRole('region', { name: 'Segundas aprobaciones registradas' })
     expect(within(approvals).getByText('second-existing')).toBeInTheDocument()
-    expect(within(approvals).getByText(/SECOND_APPROVED \/ revision 1 \/ oficial: no/)).toBeInTheDocument()
+    expect(within(approvals).getByText(/SECOND_APPROVED \/ revisión 1 \/ oficial: no/)).toBeInTheDocument()
   })
 
   it('muestra compatibilidad y warning para promociones antiguas sin sello ni actor', () => {
@@ -948,7 +948,7 @@ describe('ExamAdminReviewWorkflowPanel', () => {
   it('no permite marcar tribunal incompleto como valido', () => {
     render(<ExamAdminReviewWorkflowPanel {...props()} />)
 
-    const validation = screen.getByRole('region', { name: 'Validacion del precronograma experimental' })
+    const validation = screen.getByRole('region', { name: 'Validación del precronograma experimental' })
     expect(within(validation).getByText(/Confirmable: no/)).toBeInTheDocument()
     expect(within(validation).getByText(/TRIBUNAL_INCOMPLETE:/)).toBeInTheDocument()
   })

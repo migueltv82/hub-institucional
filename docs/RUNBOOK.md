@@ -97,7 +97,7 @@ El workflow no define variables `VITE_*`, secretos de GitHub ni `.env` reales. E
 
 El workflow declara permisos mínimos (`contents: read`), no despliega, no escribe ramas, no aplica SQL, no modifica Supabase y no publica releases. Usa `concurrency` por workflow y PR/ref para cancelar ejecuciones obsoletas de la misma rama sin interferir con otras.
 
-`quality:deps` no forma parte de este CI automático porque `npm audit --audit-level=high` conserva advisories high conocidos y documentados bajo `EX-001` en `CONSTRAINTS.md`. El workflow [`.github/workflows/quality.yml`](../.github/workflows/quality.yml) queda como auditoría manual de dependencias hasta completar una etapa específica de triage/actualización; no resolver esos advisories en tareas de CI.
+Actualización 2026-10-17: `EX-001` cerrada; `quality:deps` pasa con 0 high/critical (ver `docs/DEPENDENCY_TRIAGE_2026-10-16.md`). Texto anterior: `quality:deps` no forma parte de este CI automático porque `npm audit --audit-level=high` conserva advisories high conocidos y documentados bajo `EX-001` en `CONSTRAINTS.md`. El workflow [`.github/workflows/quality.yml`](../.github/workflows/quality.yml) queda como auditoría manual de dependencias hasta completar una etapa específica de triage/actualización; no resolver esos advisories en tareas de CI.
 
 Para revisar una ejecución, abrir GitHub → Actions → CI → `Quality gate (Node 22.13)` y localizar el primer paso fallido. Registrar su salida sin secretos, corregir la causa y repetir `npm.cmd run check` localmente antes de enviar el cambio. Un paso omitido por un fallo anterior queda sin verificar. Consultar el resultado local vigente en [preparación para producción](PRODUCTION_READINESS.md); crear el workflow no acredita su ejecución remota.
 

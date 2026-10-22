@@ -33,7 +33,7 @@ function WorkspaceSidebar({
     {
       key: 'dashboard',
       label: 'Inicio',
-      helper: dataReady ? 'Institucion lista' : 'Completar datos base',
+      helper: dataReady ? 'Institución lista' : 'Completar datos base',
       icon: Home,
       accent: 'text-sky-300',
     },
@@ -58,6 +58,13 @@ function WorkspaceSidebar({
       icon: Sparkles,
       accent: 'text-amber-300',
     },
+    {
+      key: 'exam-actas',
+      label: 'Mesas y actas',
+      helper: 'Inscriptos e impresion',
+      icon: ClipboardCheck,
+      accent: 'text-emerald-300',
+    },
   ]
 
   return (
@@ -74,7 +81,7 @@ function WorkspaceSidebar({
             Panel admin
           </h2>
           <p className="admin-sidebar-description mt-3 text-sm leading-6 text-slate-300">
-            Inicio institucional, alumnos, docentes y mesas en modulos separados.
+            Inicio institucional, alumnos, docentes y mesas en módulos separados.
           </p>
         </div>
 
@@ -98,7 +105,7 @@ function WorkspaceSidebar({
 
         <div className="admin-sidebar-nav mt-8 border-t border-white/10 pt-5">
           <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-cyan-200">
-            Modulos
+            Módulos
           </p>
           <div className="admin-sidebar-nav-grid mt-4 min-w-0 space-y-2">
             {navItems.map((item) => {

@@ -31,7 +31,7 @@ import { useStudentStore } from './stores/studentStore.js'
 
 const baseNavItems = [
   { to: '/app/dashboard', label: 'Dashboard', icon: GraduationCap },
-  { to: '/app/estado-academico', label: 'Estado academico', icon: ListChecks },
+  { to: '/app/estado-academico', label: 'Estado académico', icon: ListChecks },
   { to: '/app/materias', label: 'Materias', icon: BookOpenCheck },
   { to: '/app/companeros', label: 'Compañeros', icon: UsersRound },
   { to: '/app/calificaciones', label: 'Calificaciones', icon: ClipboardList },
@@ -138,7 +138,7 @@ function StudentPortalLayout({
 
   const navItems = [...baseNavItems, ...(showCourseEnrollmentPreview ? [{
     to: '/app/inscripcion-cursado-preview',
-    label: 'Inscripcion al cursado',
+    label: 'Inscripción al cursado',
     icon: BookMarked,
   }] : [])]
 
@@ -199,7 +199,7 @@ function StudentPortalLayout({
               onClick={signOutRemote}
             >
               <LogOut className="h-4 w-4" />
-              Cerrar sesion
+              Cerrar sesión
             </button>
           )}
         </nav>
@@ -527,7 +527,7 @@ export default function StudentPortalModule() {
           <span className="soft-title">Institutional Hub</span>
           <h1 className="mt-2 text-2xl font-extrabold text-slate-900">Cargando portal de alumno</h1>
           <p className="mt-3 text-sm text-slate-600">
-            Estamos preparando tu espacio academico.
+            Estamos preparando tu espacio académico.
           </p>
         </section>
       </main>

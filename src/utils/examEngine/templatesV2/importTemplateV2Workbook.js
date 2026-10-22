@@ -164,6 +164,38 @@ function buildCareerById(planesEstudio = []) {
   return result
 }
 
+// I2e: alumnos_inscripciones trae una fila por alumno y materia. El padron (alumnos) queda con una fila
+// por alumno, como antes; las materias van aparte para no perderlas (antes sobrevivia solo la primera).
+function studentEnrollmentKey(row = {}) {
+  const identity = getStudentImportIdentity(row)
+  const subject = clean(row.materia_codigo || row.materia || row.materia_id)
+  if (!identity || !subject) return ''
+  return [identity, normalizeIdentityPart(clean(row.carrera_id || row.carrera)), normalizeIdentityPart(subject)].join('::')
+}
+
+function buildStudentImportDatasets(rows = []) {
+  const withIdentity = rows.filter(hasStudentRosterIdentity)
+  const inscripcionesAlumnos = uniqueRows(withIdentity, studentEnrollmentKey).map((row) => ({
+    id: studentEnrollmentKey(row),
+    alumno_id: row.alumno_id,
+    dni: clean(firstClean(row.dni, row.documento, row.document_number, row.documentNumber)),
+    email: clean(firstClean(row.email, row.correo, row.mail, row.login_email, row.loginEmail)),
+    apellido: clean(row.apellido),
+    nombre: clean(row.nombre),
+    carrera_id: clean(row.carrera_id),
+    carrera: clean(row.carrera),
+    plan_id: clean(row.plan_id),
+    materia_id: clean(row.materia_id),
+    materia_codigo: clean(row.materia_codigo || row.materia),
+    materia_nombre: clean(row.materia_nombre || row.nombreMateria),
+    materia: clean(row.materia || row.materia_codigo),
+  }))
+  return {
+    alumnos: uniqueRows(withIdentity, (row) => getStudentImportIdentity(row)),
+    inscripcionesAlumnos,
+  }
+}
+
 function uniqueRows(rows, keyFn) {
   const seen = new Set()
   return rows.filter((row) => {
@@ -259,7 +291,7 @@ export async function parseTemplateV2MasterWorkbook(file) {
 
   const disponibilidadDocente = buildAvailabilityRows(source.disponibilidad_docente, teacherById)
 
-  const alumnos = uniqueRows(source.alumnos_inscripciones.map((row) => {
+  const { alumnos, inscripcionesAlumnos } = buildStudentImportDatasets(source.alumnos_inscripciones.map((row) => {
     const studentIdentity = getStudentImportIdentity(row)
     const subject = resolvedSubject(row)
     return {
@@ -272,7 +304,7 @@ export async function parseTemplateV2MasterWorkbook(file) {
       carrera: careerName(subject),
       materia: subjectCode(subject),
     }
-  }).filter(hasStudentRosterIdentity), (row) => getStudentImportIdentity(row))
+  }))
 
   const correlativityGroups = new Map()
   source.correlatividades.forEach((row) => {
@@ -313,9 +345,10 @@ export async function parseTemplateV2MasterWorkbook(file) {
   if (!planesEstudio.length) throw new Error('La hoja plan_estudios no contiene materias validas.')
 
   return {
-    datasets: { alumnos, correlatividades, disponibilidadDocente, docenteMateria, docentes, horariosDocentes, planesEstudio },
+    datasets: { alumnos, inscripcionesAlumnos, correlatividades, disponibilidadDocente, docenteMateria, docentes, horariosDocentes, planesEstudio },
     summary: {
       alumnos: alumnos.length,
+      inscripcionesAlumnos: inscripcionesAlumnos.length,
       correlatividades: correlatividades.length,
       disponibilidadDocente: disponibilidadDocente.length,
       docenteMateria: docenteMateria.length,
@@ -433,7 +466,7 @@ export async function parseTemplateV2StudentsWorkbook(file, { planesEstudio = []
   const source = readDedicatedWorkbookSource(workbook, ['alumnos_inscripciones'], 'La plantilla de alumnos')
   const subjectById = buildSubjectById(planesEstudio)
   const careerById = buildCareerById(planesEstudio)
-  const alumnos = uniqueRows(source.alumnos_inscripciones.map((row) => {
+  const { alumnos, inscripcionesAlumnos } = buildStudentImportDatasets(source.alumnos_inscripciones.map((row) => {
     const studentIdentity = getStudentImportIdentity(row)
     const subject = subjectById.get(clean(row.materia_id)) ?? row
     const code = subjectCode(subject) || subjectCode(row)
@@ -444,6 +477,9 @@ export async function parseTemplateV2StudentsWorkbook(file, { planesEstudio = []
       ...subject,
       id: studentIdentity,
       alumno_id: clean(row.alumno_id) || studentIdentity,
+      // PB.5: la fila del plan trae `nombre` (de la materia) y `observaciones`; no pisan los del alumno.
+      nombre: row.nombre,
+      observaciones: row.observaciones,
       plan_id: clean(subject.plan_id ?? subject.planId ?? row.plan_id),
       carrera_id: careerId,
       carrera: clean(subject.carrera) || careerById.get(careerId) || '',
@@ -453,6 +489,6 @@ export async function parseTemplateV2StudentsWorkbook(file, { planesEstudio = []
       materia: code,
       nombreMateria: name,
     }
-  }).filter(hasStudentRosterIdentity), (row) => getStudentImportIdentity(row))
-  return { datasets: { alumnos }, summary: { alumnos: alumnos.length } }
+  }))
+  return { datasets: { alumnos, inscripcionesAlumnos }, summary: { alumnos: alumnos.length, inscripcionesAlumnos: inscripcionesAlumnos.length } }
 }

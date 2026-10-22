@@ -290,9 +290,12 @@ as $$
     select 1
     from public.memberships membership
     join public.profiles profile on profile.user_id = membership.user_id
+    -- 06.3: suspender la institucion corta RLS y RPCs de sus miembros; is_super_admin no depende de esto.
+    join public.institutions institution on institution.id = membership.institution_id
     where membership.institution_id = target_institution_id
       and membership.user_id = (select auth.uid())
       and profile.is_blocked = false
+      and institution.status = 'active'
       and (
         allowed_roles is null
         or membership.role = any(allowed_roles)
@@ -304,6 +307,30 @@ revoke execute on function public.is_super_admin() from public, anon;
 revoke execute on function public.is_member_of_institution(uuid, text[]) from public, anon;
 grant execute on function public.is_super_admin() to authenticated;
 grant execute on function public.is_member_of_institution(uuid, text[]) to authenticated;
+
+-- SEC.3: personal de la institucion = panel admin (owner/admin/editor) o docente. Los alumnos (membership viewer
+-- con account_role alumno) solo leen sus propias filas de las tablas con datos personales.
+create or replace function public.is_staff_of_institution(target_institution_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
+    or (
+      public.is_member_of_institution(target_institution_id)
+      and exists (
+        select 1
+        from public.profiles profile
+        where profile.user_id = (select auth.uid())
+          and profile.account_role in ('docente', 'teacher', 'profesor')
+      )
+    );
+$$;
+
+revoke execute on function public.is_staff_of_institution(uuid) from public, anon;
+grant execute on function public.is_staff_of_institution(uuid) to authenticated;
 
 -- ============================================================
 -- Login publico: institucion activa + estado de mantenimiento
@@ -981,7 +1008,8 @@ using (
   public.is_super_admin()
   or (
     institution_id is not null
-    and public.is_member_of_institution(institution_id)
+    -- SEC.3: guarda datos personales de bajas; solo el personal de la institucion.
+    and public.is_staff_of_institution(institution_id)
   )
 );
 
@@ -1108,3 +1136,45 @@ begin
     where id = target_user_id;
   end if;
 end $$;
+
+-- Logo del colegio (encabezado de las actas de examen). El owner/admin de la institucion lo cambia sin
+-- poder tocar el resto de la fila (institutions solo la administra el superadmin). Se guarda como data URL
+-- PNG/JPEG chica: la imprime el navegador sin depender de un servidor de archivos. '' lo quita.
+create or replace function public.set_institution_logo(
+  target_institution_id uuid,
+  target_logo_url text
+)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  clean_logo text := btrim(coalesce(target_logo_url, ''));
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+  if target_institution_id is null or not (
+    public.is_super_admin()
+    or public.is_member_of_institution(target_institution_id, array['owner', 'admin'])
+  ) then
+    raise exception 'Acceso denegado: solo el owner o admin de la institucion cambia el logo.' using errcode = '42501';
+  end if;
+  if clean_logo <> '' and (
+    clean_logo !~ '^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$'
+    or length(clean_logo) > 400000
+  ) then
+    raise exception 'INSTITUTION_LOGO_INVALID' using errcode = '22023';
+  end if;
+
+  update public.institutions
+  set logo_url = nullif(clean_logo, '')
+  where id = target_institution_id;
+
+  return nullif(clean_logo, '');
+end;
+$$;
+
+revoke execute on function public.set_institution_logo(uuid, text) from public, anon;
+grant execute on function public.set_institution_logo(uuid, text) to authenticated;

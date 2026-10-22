@@ -310,27 +310,29 @@ export async function syncRosterRecords({ institutionId, workspaceKey = 'main', 
     workspaceKey,
   })
 
-  const [students, teachers] = await Promise.all([
-    syncTableRows({
-      tableName: STUDENT_TABLE_NAME,
-      rows: studentRows,
-      selectFields: 'id, email, career',
-      conflictColumns: ['institution_id', 'workspace_key', 'email', 'career'],
-      keyForRow: getStudentRecordKey,
-      institutionId,
-      workspaceKey,
-      deleteMissing: false,
-    }),
-    syncTableRows({
-      tableName: TEACHER_TABLE_NAME,
-      rows: teacherRows,
-      selectFields: 'id, dni, full_name',
-      conflictColumns: ['institution_id', 'workspace_key', 'dni'],
-      keyForRow: getTeacherRecordKey,
-      institutionId,
-      workspaceKey,
-    }),
-  ])
+  // En serie: en paralelo chocaban contra el lock del workspace (SOURCE_FILE_WORKSPACE_BUSY).
+  const students = await syncTableRows({
+    tableName: STUDENT_TABLE_NAME,
+    rows: studentRows,
+    selectFields: 'id, email, career',
+    conflictColumns: ['institution_id', 'workspace_key', 'email', 'career'],
+    keyForRow: getStudentRecordKey,
+    institutionId,
+    workspaceKey,
+    deleteMissing: false,
+  })
+  const teachers = await syncTableRows({
+    tableName: TEACHER_TABLE_NAME,
+    rows: teacherRows,
+    selectFields: 'id, dni, full_name',
+    conflictColumns: ['institution_id', 'workspace_key', 'dni'],
+    keyForRow: getTeacherRecordKey,
+    institutionId,
+    workspaceKey,
+    // PB.2: igual que alumnos, el autosave nunca borra legajos docentes. Un docente que falta en la planilla
+    // puede tener acceso, asignaciones o haber sido creado por otra via; la baja es una accion explicita.
+    deleteMissing: false,
+  })
 
   return {
     source: 'supabase',

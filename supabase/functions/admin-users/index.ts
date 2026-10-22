@@ -67,6 +67,12 @@ const fallbackCorsHeaders = {
 const membershipRoles = new Set(['owner', 'admin', 'editor', 'viewer'])
 const planTypes = new Set(['free', 'pro', 'business'])
 const institutionStatuses = new Set(['active', 'suspended'])
+// I2d: marca de cambio obligatorio de la contrasena inicial (DNI), en app_metadata.
+const MUST_CHANGE_PASSWORD_FLAG = 'must_change_password'
+// AUD.I2f P1: un admin creado en un alta nace "en alta" (app_metadata, atomico con createUser) y ningun
+// camino de reutilizacion lo toma mientras siga asi. Solo esa misma alta lo libera (al terminar) o lo borra
+// (al fallar): asi la compensacion nunca borra una cuenta que otra alta ya reutilizo.
+const ADMIN_PROVISIONING_FLAG = 'institution_admin_provisioning'
 
 class HttpError extends Error {
   status: number
@@ -203,6 +209,13 @@ function getAuditTarget(action: string, payload: Record<string, unknown>, result
   }
 
   if (action === 'bulk_create_students') {
+    return {
+      target_type: 'institution',
+      target_id: typeof payload.institution_id === 'string' ? payload.institution_id : null,
+    }
+  }
+
+  if (action === 'repair_student_access') {
     return {
       target_type: 'institution',
       target_id: typeof payload.institution_id === 'string' ? payload.institution_id : null,
@@ -358,6 +371,20 @@ async function getAuthenticatedContext(req: Request) {
   return { userClient, adminClient, caller: userData.user, profile }
 }
 
+// 06.3: la Edge consulta memberships con service role (sin RLS), asi que la suspension se valida aca.
+async function assertInstitutionActive(adminClient: ReturnType<typeof getClients>['adminClient'], institutionId: string) {
+  const { data: institution, error } = await adminClient
+    .from('institutions')
+    .select('status')
+    .eq('id', institutionId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (institution?.status !== 'active') {
+    throw new HttpError('Acceso denegado: la institucion esta suspendida.', 403)
+  }
+}
+
 async function requireStudentPortalMember(req: Request, institutionId: string) {
   if (!institutionId) {
     throw badRequest('La institucion es obligatoria para guardar cambios del alumno.')
@@ -383,6 +410,7 @@ async function requireStudentPortalMember(req: Request, institutionId: string) {
     throw new HttpError('Acceso denegado: el alumno no pertenece a esta institucion.', 403)
   }
 
+  await assertInstitutionActive(context.adminClient, institutionId)
   return context
 }
 
@@ -410,6 +438,7 @@ async function requireTeacherPortalMember(req: Request, institutionId: string) {
     throw new HttpError('Acceso denegado: el docente no pertenece a esta institucion.', 403)
   }
 
+  await assertInstitutionActive(context.adminClient, institutionId)
   return context
 }
 
@@ -437,6 +466,7 @@ async function requireInstitutionAdmin(req: Request, institutionId: string) {
     throw new HttpError('Acceso denegado: se requieren permisos de administrador institucional.', 403)
   }
 
+  await assertInstitutionActive(context.adminClient, institutionId)
   return context
 }
 
@@ -565,10 +595,36 @@ async function findStudentProvisioningLinks(
   return records
 }
 
+// D2: las tablas del workspace tienen el trigger del gateway de Storage, que toma un lock no bloqueante por
+// workspace y falla con SOURCE_FILE_WORKSPACE_BUSY (55P03) si otra escritura del mismo workspace esta en curso.
+// Las escrituras de provision son idempotentes (upserts y updates), asi que se reintentan con una espera corta.
+function isWorkspaceBusyError(error: unknown) {
+  const record = error as { code?: string; message?: string } | null
+  return record?.code === '55P03' || String(record?.message ?? '').includes('SOURCE_FILE_WORKSPACE_BUSY')
+}
+
+async function retryOnWorkspaceBusy<T>(operation: () => Promise<T>, attempts = 6): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (attempt >= attempts || !isWorkspaceBusyError(error)) throw error
+      await new Promise((done) => setTimeout(done, 120 * attempt + Math.floor(Math.random() * 80)))
+    }
+  }
+}
+
+function assertNotInAdminProvisioning(user: { app_metadata?: Record<string, unknown> | null }) {
+  if (user.app_metadata?.[ADMIN_PROVISIONING_FLAG] === true) {
+    throw new HttpError('Hay un alta de administrador en curso con ese email. Espera a que termine y volve a intentar.', 409)
+  }
+}
+
 async function assertStudentProvisioningIdentity(
   adminClient: ReturnType<typeof getClients>['adminClient'], institutionId: string, email: string,
   user: NonNullable<Awaited<ReturnType<typeof findAuthUserByEmail>>>,
 ) {
+  assertNotInAdminProvisioning(user)
   const { data: profile, error: profileError } = await adminClient.from('profiles')
     .select('email, account_role, is_global_admin, is_blocked').eq('user_id', user.id).maybeSingle()
   if (profileError) throw profileError
@@ -585,7 +641,36 @@ async function assertStudentProvisioningIdentity(
   return records
 }
 
-async function createOrReuseAuthUser({
+// I2f/I2g: un email existente solo se reutiliza como admin si ya es admin_instituto y no esta bloqueado.
+// Nunca se le cambia la contrasena, el rol global ni el bloqueo. Se valida antes de escribir nada.
+async function readReusableAdminProfile(adminClient: ReturnType<typeof getClients>['adminClient'], userId: string) {
+  const { data: existingProfile, error: profileLookupError } = await adminClient
+    .from('profiles')
+    .select('account_role, is_global_admin, is_blocked')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (profileLookupError) throw profileLookupError
+  // AUD.I2f P2: una cuenta sin perfil no prueba que sea admin; no se reutiliza ni se repara aca.
+  if (!existingProfile) {
+    throw new HttpError('El email tiene una cuenta sin perfil. Revisala antes de asignarle una institucion.', 409)
+  }
+  if (existingProfile.is_global_admin || String(existingProfile.account_role ?? '').toLowerCase() !== 'admin_instituto') {
+    throw new HttpError('El email ya pertenece a un usuario con otro rol. Usa otro email para el administrador.', 409)
+  }
+  if (existingProfile.is_blocked) {
+    throw new HttpError('El email pertenece a un administrador bloqueado. Desbloquealo antes de asignarle otra institucion.', 409)
+  }
+}
+
+async function findReusableInstitutionAdmin(adminClient: ReturnType<typeof getClients>['adminClient'], email: string) {
+  const existingUser = await findAuthUserByEmail(adminClient, email)
+  if (!existingUser) return null
+  assertNotInAdminProvisioning(existingUser)
+  await readReusableAdminProfile(adminClient, existingUser.id)
+  return existingUser
+}
+
+async function createInstitutionAdminUser({
   adminClient,
   email,
   password,
@@ -596,48 +681,39 @@ async function createOrReuseAuthUser({
   password: string
   displayName: string
 }) {
-  const existingUser = await findAuthUserByEmail(adminClient, email)
-
-  if (existingUser) {
-    // Si el email ya existe, actualizamos metadata y opcionalmente la contrasena.
-    // Esto permite reutilizar admins existentes sin duplicar cuentas Auth.
-    const { error: updateError } = await adminClient.auth.admin.updateUserById(existingUser.id, {
-      ...(password?.trim() ? { password: password.trim() } : {}),
-      email_confirm: true,
-      user_metadata: {
-        ...existingUser.user_metadata,
-        full_name: displayName || existingUser.user_metadata?.full_name || email,
-        account_role: existingUser.user_metadata?.account_role ?? 'admin_instituto',
-      },
-    })
-
-    if (updateError) throw updateError
-    return existingUser
-  }
-
   // La creacion real de credenciales debe hacerse con Auth Admin API.
   // Evitamos insertar directo en auth.users porque genera usuarios que pueden no loguear.
-  if (!password || password.trim().length < 8) {
-    throw badRequest('La contrasena debe tener al menos 8 caracteres.')
-  }
-
   const { data, error } = await adminClient.auth.admin.createUser({
     email,
     password: password.trim(),
     email_confirm: true,
-    app_metadata: {
-      provider: 'email',
-      providers: ['email'],
-    },
-    user_metadata: {
-      full_name: displayName || email,
-      account_role: 'admin_instituto',
-    },
+    app_metadata: { provider: 'email', providers: ['email'], [ADMIN_PROVISIONING_FLAG]: true },
+    user_metadata: { full_name: displayName || email, account_role: 'admin_instituto' },
   })
-
   if (error) throw error
   if (!data.user) throw new Error('Supabase no devolvio el usuario creado.')
   return data.user
+}
+
+// Fin de un alta nueva: la cuenta queda reutilizable. Hasta aca solo esta alta podia tocarla.
+async function finishInstitutionAdminProvisioning(
+  adminClient: ReturnType<typeof getClients>['adminClient'],
+  user: { id: string, app_metadata?: Record<string, unknown> | null },
+) {
+  const { error } = await adminClient.auth.admin.updateUserById(user.id, {
+    app_metadata: { ...(user.app_metadata ?? {}), [ADMIN_PROVISIONING_FLAG]: false },
+  })
+  if (error) throw error
+}
+
+// Compensacion de un alta nueva: borra la cuenta solo si sigue "en alta". Si ya se libero (la liberacion
+// llego a aplicarse aunque devolvio error), otra alta pudo reutilizarla y no se toca.
+async function discardProvisionalInstitutionAdmin(adminClient: ReturnType<typeof getClients>['adminClient'], userId: string) {
+  const { data, error } = await adminClient.auth.admin.getUserById(userId)
+  if (error) return false
+  if (data.user?.app_metadata?.[ADMIN_PROVISIONING_FLAG] !== true) return false
+  const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId)
+  return !deleteError
 }
 
 async function upsertProfile({
@@ -716,6 +792,13 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
     ? payload.admin_display_name.trim()
     : institutionName
 
+  // I2f: primero todo lo que puede rechazar sin escribir; despues institucion, usuario, perfil y membresia,
+  // y si algo falla se deshace lo creado en esta llamada (institucion y, si es nuevo, el usuario Auth).
+  const existingUser = await findReusableInstitutionAdmin(adminClient, email)
+  if (!existingUser && password.trim().length < 8) {
+    throw badRequest('La contrasena debe tener al menos 8 caracteres.')
+  }
+
   const { data: institution, error: institutionError } = await adminClient
     .from('institutions')
     .insert({
@@ -728,33 +811,58 @@ async function handleCreateTenantWithAdmin(adminClient: ReturnType<typeof getCli
     .select('id, created_at')
     .single()
 
-  if (institutionError) throw institutionError
+  if (institutionError) {
+    if (institutionError.code === '23505') throw new HttpError('Ya existe una institucion con ese slug.', 409)
+    throw institutionError
+  }
 
-  const authUser = await createOrReuseAuthUser({
-    adminClient,
-    email,
-    password,
-    displayName,
-  })
+  let createdUserId: string | null = null
+  try {
+    let adminUserId = existingUser?.id ?? ''
+    let createdUser: Awaited<ReturnType<typeof createInstitutionAdminUser>> | null = null
+    if (!existingUser) {
+      createdUser = await createInstitutionAdminUser({ adminClient, email, password, displayName })
+      createdUserId = createdUser.id
+      adminUserId = createdUser.id
+      await upsertProfile({ adminClient, userId: adminUserId, email, displayName })
+    }
 
-  await upsertProfile({
-    adminClient,
-    userId: authUser.id,
-    email,
-    displayName,
-  })
+    await assignMemberships({
+      adminClient,
+      userId: adminUserId,
+      institutionIds: [institution.id],
+      role: 'owner',
+    })
 
-  await assignMemberships({
-    adminClient,
-    userId: authUser.id,
-    institutionIds: [institution.id],
-    role: 'owner',
-  })
+    // AUD.I2f P2: un admin reutilizado no se reescribe (no pisa una democion o un bloqueo concurrente);
+    // se revalida despues de darle owner y, si ya no califica, se deshace la institucion.
+    if (existingUser) await readReusableAdminProfile(adminClient, adminUserId)
+    if (createdUser) await finishInstitutionAdminProvisioning(adminClient, createdUser)
 
-  return {
-    institution_id: institution.id,
-    admin_user_id: authUser.id,
-    created_at: institution.created_at,
+    return {
+      institution_id: institution.id,
+      admin_user_id: adminUserId,
+      admin_reused: Boolean(existingUser),
+      created_at: institution.created_at,
+    }
+  } catch (error) {
+    const rollbackErrors: string[] = []
+    // D1/D2: al crear la institucion se registran su snapshot 'main' y los recursos del gateway de Storage. Borrar el
+    // snapshot deja una fila de revisiones del gateway; esas tablas no tienen cascada, asi que se limpian antes.
+    const { error: snapshotDeleteError } = await adminClient.from('workspace_snapshots').delete().eq('institution_id', institution.id)
+    if (snapshotDeleteError && !isMissingRelationError(snapshotDeleteError, 'workspace_snapshots')) rollbackErrors.push('snapshot del workspace')
+    const { error: resourcesDeleteError } = await adminClient.from('source_file_storage_resources').delete().eq('institution_id', institution.id)
+    if (resourcesDeleteError && !isMissingRelationError(resourcesDeleteError, 'source_file_storage_resources')) rollbackErrors.push('recursos de archivos')
+    const { error: revisionsDeleteError } = await adminClient.from('source_file_workspace_revisions').delete().eq('institution_id', institution.id)
+    if (revisionsDeleteError && !isMissingRelationError(revisionsDeleteError, 'source_file_workspace_revisions')) rollbackErrors.push('revisiones de archivos')
+    const { error: institutionDeleteError } = await adminClient.from('institutions').delete().eq('id', institution.id)
+    if (institutionDeleteError) rollbackErrors.push('institucion')
+    if (createdUserId && !(await discardProvisionalInstitutionAdmin(adminClient, createdUserId))) rollbackErrors.push('usuario')
+    const reason = error instanceof Error ? error.message : 'Error inesperado.'
+    if (rollbackErrors.length) {
+      throw new HttpError(`No se pudo crear la institucion (${reason}) y no se pudo deshacer: ${rollbackErrors.join(', ')}. Revisar a mano el slug ${slug}.`, 500)
+    }
+    throw new HttpError(`No se pudo crear la institucion; no quedo nada creado. Detalle: ${reason}`, error instanceof HttpError ? error.status : 500)
   }
 }
 
@@ -763,35 +871,81 @@ async function handleCreateOrAssignInstitutionUser(adminClient: ReturnType<typeo
   const password = requireString(payload.user_password, 'La contrasena inicial')
   const displayName = requireString(payload.user_display_name, 'El nombre visible')
   const institutionIds = Array.isArray(payload.institution_ids)
-    ? payload.institution_ids.filter((entry): entry is string => typeof entry === 'string')
+    ? [...new Set(payload.institution_ids.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== ''))]
     : []
   const role = requireString(payload.membership_role, 'El rol institucional')
 
-  const authUser = await createOrReuseAuthUser({
-    adminClient,
-    email,
-    password,
-    displayName,
-  })
+  // I2g: todo lo que puede rechazar va antes de escribir (rol, instituciones, identidad, contrasena).
+  if (!membershipRoles.has(role)) throw badRequest(`Rol invalido: ${role}`)
+  if (institutionIds.length === 0) throw badRequest('Debes asignar al menos una institucion.')
+  const { data: foundInstitutions, error: institutionsError } = await adminClient
+    .from('institutions')
+    .select('id')
+    .in('id', institutionIds)
+  if (institutionsError) throw institutionsError
+  if ((foundInstitutions ?? []).length !== institutionIds.length) throw badRequest('Alguna de las instituciones elegidas no existe.')
+  const existingUser = await findReusableInstitutionAdmin(adminClient, email)
+  if (!existingUser && password.trim().length < 8) {
+    throw badRequest('La contrasena debe tener al menos 8 caracteres.')
+  }
 
-  await upsertProfile({
-    adminClient,
-    userId: authUser.id,
-    email,
-    displayName,
-  })
+  // AUD.I2f P2: si el admin reutilizado deja de calificar durante la asignacion, se restauran sus membresias.
+  let previousMemberships: { institution_id: string, role: string }[] = []
+  if (existingUser) {
+    const { data, error } = await adminClient.from('memberships').select('institution_id, role')
+      .eq('user_id', existingUser.id).in('institution_id', institutionIds)
+    if (error) throw error
+    previousMemberships = data ?? []
+  }
 
-  await assignMemberships({
-    adminClient,
-    userId: authUser.id,
-    institutionIds,
-    role,
-  })
+  let createdUserId: string | null = null
+  let membershipsWritten = false
+  try {
+    let userId = existingUser?.id ?? ''
+    let createdUser: Awaited<ReturnType<typeof createInstitutionAdminUser>> | null = null
+    if (!existingUser) {
+      createdUser = await createInstitutionAdminUser({ adminClient, email, password, displayName })
+      createdUserId = createdUser.id
+      userId = createdUser.id
+      await upsertProfile({ adminClient, userId, email, displayName })
+    }
 
-  return {
-    user_id: authUser.id,
-    email,
-    created_at: new Date().toISOString(),
+    membershipsWritten = true
+    await assignMemberships({
+      adminClient,
+      userId,
+      institutionIds,
+      role,
+    })
+
+    if (existingUser) await readReusableAdminProfile(adminClient, userId)
+    if (createdUser) await finishInstitutionAdminProvisioning(adminClient, createdUser)
+
+    return {
+      user_id: userId,
+      email,
+      user_reused: Boolean(existingUser),
+      created_at: new Date().toISOString(),
+    }
+  } catch (error) {
+    // Si el usuario se creo en esta llamada y sigue "en alta", se borra (perfil y membresias caen en cascada).
+    if (createdUserId && !(await discardProvisionalInstitutionAdmin(adminClient, createdUserId))) {
+      throw new HttpError(`No se pudo asignar el usuario y no se pudo deshacer su alta. Revisar a mano ${email}.`, 500)
+    }
+    if (existingUser && membershipsWritten) {
+      const kept = new Map(previousMemberships.map((membership) => [membership.institution_id, membership.role]))
+      const added = institutionIds.filter((institutionId) => !kept.has(institutionId))
+      const { error: removeError } = added.length
+        ? await adminClient.from('memberships').delete().eq('user_id', existingUser.id).in('institution_id', added)
+        : { error: null }
+      const { error: restoreError } = previousMemberships.length
+        ? await adminClient.from('memberships').upsert(previousMemberships.map((membership) => ({ ...membership, user_id: existingUser.id })), { onConflict: 'institution_id,user_id' })
+        : { error: null }
+      if (removeError || restoreError) {
+        throw new HttpError(`No se pudo asignar el usuario y no se pudieron restaurar sus membresias. Revisar a mano ${email}.`, 500)
+      }
+    }
+    throw error
   }
 }
 
@@ -837,6 +991,7 @@ async function createOrReuseStudentAuthUser({
     app_metadata: {
       provider: 'email',
       providers: ['email'],
+      [MUST_CHANGE_PASSWORD_FLAG]: true,
     },
     user_metadata: {
       full_name: displayName || email,
@@ -880,6 +1035,7 @@ async function createOrReuseTeacherAuthUser({
   }
 
   if (existingUser) {
+    assertNotInAdminProvisioning(existingUser)
     const { data: existingProfile, error: profileLookupError } = await adminClient
       .from('profiles')
       .select('account_role, is_global_admin')
@@ -897,8 +1053,8 @@ async function createOrReuseTeacherAuthUser({
       throw badRequest(`El DNI ${dni} ya pertenece a un usuario con otro rol. No se modifico ese acceso.`)
     }
 
+    // I2d: volver a crear accesos no pisa la contrasena de quien ya la cambio; solo actualiza datos.
     const { error: updateError } = await adminClient.auth.admin.updateUserById(existingUser.id, {
-      password,
       email_confirm: true,
       user_metadata: {
         ...existingUser.user_metadata,
@@ -919,6 +1075,7 @@ async function createOrReuseTeacherAuthUser({
     app_metadata: {
       provider: 'email',
       providers: ['email'],
+      [MUST_CHANGE_PASSWORD_FLAG]: true,
     },
     user_metadata: {
       full_name: displayName || email,
@@ -1203,57 +1360,60 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof getClient
         continue
       }
 
-      if (status === 'created') {
-        const { error: profileError } = await adminClient
-          .from('profiles')
-          .upsert({
-            user_id: user.id,
-            email,
-            display_name: displayName,
-            account_role: 'alumno',
-            is_global_admin: false,
-            is_blocked: false,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' })
+      const provisioned = await retryOnWorkspaceBusy(async () => {
+        if (status === 'created') {
+          const { error: profileError } = await adminClient
+            .from('profiles')
+            .upsert({
+              user_id: user.id,
+              email,
+              display_name: displayName,
+              account_role: 'alumno',
+              is_global_admin: false,
+              is_blocked: false,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id' })
 
-        if (profileError) throw profileError
+          if (profileError) throw profileError
 
-        await assignMemberships({
+          await assignMemberships({
+            adminClient,
+            userId: user.id,
+            institutionIds: [institutionId],
+            role: 'viewer',
+          })
+        }
+
+        const studentRecordId = await persistStudentRecord({
           adminClient,
+          institutionId,
+          student,
+          email,
+          displayName,
           userId: user.id,
-          institutionIds: [institutionId],
-          role: 'viewer',
         })
-      }
+        const studentCareerPlanId = await persistStudentCareerPlan({
+          adminClient,
+          institutionId,
+          student,
+          studentRecordId,
+        })
 
-      const studentRecordId = await persistStudentRecord({
-        adminClient,
-        institutionId,
-        student,
-        email,
-        displayName,
-        userId: user.id,
-      })
-      const studentCareerPlanId = await persistStudentCareerPlan({
-        adminClient,
-        institutionId,
-        student,
-        studentRecordId,
-      })
-
-      const linkedStudentRecords = await linkStudentRecordsToProfile({
-        adminClient,
-        institutionId,
-        email,
-        userId: user.id,
+        const linkedStudentRecords = await linkStudentRecordsToProfile({
+          adminClient,
+          institutionId,
+          email,
+          userId: user.id,
+        })
+        return { linkedStudentRecords, studentRecordId, studentCareerPlanId }
       })
 
       results.push({
         email,
         user_id: user.id,
-        linked_student_records: linkedStudentRecords,
-        student_record_id: studentRecordId,
-        student_career_plan_id: studentCareerPlanId,
+        linked_student_records: provisioned.linkedStudentRecords,
+        student_record_id: provisioned.studentRecordId,
+        student_career_plan_id: provisioned.studentCareerPlanId,
         status,
       })
     } catch (error) {
@@ -1281,6 +1441,82 @@ async function handleBulkCreateStudents(adminClient: ReturnType<typeof getClient
     results,
     errors,
   }
+}
+
+// Decision de Miguel (20/10): reparar cuentas de alumno que quedaron a medias (la cuenta se creo pero una
+// provision anterior se corto antes de vincular el legajo). Accion explicita y aparte de bulk_create_students,
+// que sigue fallando cerrada ante legajos sin vincular. Solo vincula si la cuenta NUNCA se uso (cambio de
+// contrasena inicial pendiente), es alumno no bloqueado con el mismo email, es miembro lector SOLO de esta
+// institucion y todos sus legajos con ese email estan sin duenio. Cualquier otra cosa se rechaza con su motivo.
+async function handleRepairStudentAccess(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
+  const institutionId = requireString(payload.institution_id, 'La institucion')
+  const emails = Array.isArray(payload.emails)
+    ? [...new Set(payload.emails.flatMap((value) => {
+      try {
+        return [normalizeEmail(value)]
+      } catch {
+        return []
+      }
+    }))]
+    : []
+  if (emails.length === 0) throw badRequest('Indica los emails de los alumnos a reparar.')
+  if (emails.length > 200) throw badRequest('Se reparan hasta 200 alumnos por vez.')
+
+  const usersByEmail = await findStudentProvisioningUsers(adminClient, emails)
+  const repaired: Array<Record<string, unknown>> = []
+  const rejected: Array<Record<string, unknown>> = []
+  let withoutAccount = 0
+
+  for (const email of emails) {
+    try {
+      const user = usersByEmail.get(email)
+      // Sin cuenta no hay nada que reparar: lo resuelve "Crear accesos".
+      if (!user) {
+        withoutAccount += 1
+        continue
+      }
+      assertNotInAdminProvisioning(user)
+      if (user.app_metadata?.[MUST_CHANGE_PASSWORD_FLAG] !== true) {
+        throw new HttpError('La cuenta ya se uso: no se repara automaticamente.', 409)
+      }
+      const { data: profile, error: profileError } = await adminClient.from('profiles')
+        .select('email, account_role, is_global_admin, is_blocked').eq('user_id', user.id).maybeSingle()
+      if (profileError) throw profileError
+      if (!profile || profile.is_global_admin || profile.is_blocked ||
+        !['alumno', 'student'].includes(String(profile.account_role).toLowerCase()) ||
+        profile.email?.trim().toLowerCase() !== email) {
+        throw new HttpError('La cuenta no es de un alumno habilitado con ese email.', 409)
+      }
+      const { data: memberships, error: membershipsError } = await adminClient.from('memberships')
+        .select('institution_id, role').eq('user_id', user.id)
+      if (membershipsError) throw membershipsError
+      if (!memberships || memberships.length !== 1 || memberships[0].institution_id !== institutionId || memberships[0].role !== 'viewer') {
+        throw new HttpError('La cuenta tiene accesos en otra institucion o con otro rol.', 409)
+      }
+      const records = await findStudentProvisioningLinks(adminClient, institutionId, email)
+      if (!records.length) throw new HttpError('No hay legajo con ese email en esta institucion.', 404)
+      if (records.some((record) => record.profile_id)) {
+        throw new HttpError('El legajo ya esta vinculado: no hay nada que reparar.', 409)
+      }
+      const linked = await retryOnWorkspaceBusy(async () => {
+        const { data, error } = await adminClient.from('student_records')
+          .update({ profile_id: user.id, updated_at: new Date().toISOString() })
+          .eq('institution_id', institutionId).eq('email', email).is('profile_id', null)
+          .select('id')
+        if (error) throw error
+        return data?.length ?? 0
+      })
+      repaired.push({ email, user_id: user.id, linked_student_records: linked })
+    } catch (error) {
+      rejected.push({
+        email,
+        error: error instanceof Error ? error.message : 'Error inesperado.',
+        status: error instanceof HttpError ? error.status : 500,
+      })
+    }
+  }
+
+  return { success: rejected.length === 0, repaired: repaired.length, failed: rejected.length, without_account: withoutAccount, results: repaired, errors: rejected }
 }
 
 async function handleBulkCreateTeachers(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
@@ -1330,35 +1566,38 @@ async function handleBulkCreateTeachers(adminClient: ReturnType<typeof getClient
       })
       authUsersByEmail.set(email, user)
 
-      const { error: profileError } = await adminClient
-        .from('profiles')
-        .upsert({
-          user_id: user.id,
+      const teacherRecordId = await retryOnWorkspaceBusy(async () => {
+        // I2d: un docente existente conserva su bloqueo; solo el alta nueva arranca desbloqueada.
+        const { error: profileError } = await adminClient
+          .from('profiles')
+          .upsert({
+            user_id: user.id,
+            email,
+            display_name: displayName,
+            account_role: 'docente',
+            is_global_admin: false,
+            ...(status === 'created' ? { is_blocked: false } : {}),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' })
+
+        if (profileError) throw profileError
+
+        await assignMemberships({
+          adminClient,
+          userId: user.id,
+          institutionIds: [institutionId],
+          role: 'viewer',
+        })
+
+        return await persistAndLinkTeacherRecord({
+          adminClient,
+          institutionId,
+          teacher,
           email,
-          display_name: displayName,
-          account_role: 'docente',
-          is_global_admin: false,
-          is_blocked: false,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' })
-
-      if (profileError) throw profileError
-
-      await assignMemberships({
-        adminClient,
-        userId: user.id,
-        institutionIds: [institutionId],
-        role: 'viewer',
-      })
-
-      const teacherRecordId = await persistAndLinkTeacherRecord({
-        adminClient,
-        institutionId,
-        teacher,
-        email,
-        displayName,
-        dni,
-        userId: user.id,
+          displayName,
+          dni,
+          userId: user.id,
+        })
       })
 
       results.push({
@@ -1812,7 +2051,8 @@ function shouldDualWriteAcademics(config: AcademicTransitionConfig) {
   )
 }
 
-const studentPortalRelationalWriteRequiredMutations = new Set(['enroll_subject', 'withdraw_subject'])
+// PB.4: las mesas tambien son estrictas: la RPC de inscripcion a mesa es la autoridad de la regla.
+const studentPortalRelationalWriteRequiredMutations = new Set(['enroll_subject', 'withdraw_subject', 'register_exam', 'cancel_exam'])
 
 function shouldRequireStudentPortalRelationalWrite(mutationType: string) {
   return studentPortalRelationalWriteRequiredMutations.has(mutationType)
@@ -1877,24 +2117,33 @@ function teacherRosterProgramMatches(left: unknown, right: unknown) {
 }
 
 function getTeacherRosterIsoDate(value: unknown) {
-  const raw = getOptionalString(value)
-  if (!raw) return ''
-
-  const parsed = Date.parse(raw)
-  if (Number.isNaN(parsed)) return raw.slice(0, 10)
-  return new Date(parsed).toISOString().slice(0, 10)
+  // academic_try_iso_date accepts only an exact, real ISO calendar date. Date.parse alone
+  // normalizes impossible dates and accepts timestamps that SQL deliberately rejects.
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-')) return ''
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value ? '' : value
 }
 
+// Gate Codex P1: misma regla que public.academic_teacher_assignment_grants_access (06).
+// - Titular en licencia: accede solo fuera del periodo de la licencia (leave_starts_on / leave_ends_on).
+// - Suplencia: accede solo dentro de su periodo (starts_on / ends_on de la fila o de su metadata).
+// Antes se buscaba source 'teacher_leave_replacement', que la RPC de licencias nunca escribe ('leave').
 function isTeacherRosterAssignmentInActiveWindow(row: Record<string, unknown>, today: string) {
   const metadata = isRecord(row.metadata) ? row.metadata : {}
   const role = getOptionalString(row.role).toLowerCase()
-  const source = getOptionalString(row.source).toLowerCase()
-  const startsOn = getTeacherRosterIsoDate(metadata.leave_starts_on)
-  const endsOn = getTeacherRosterIsoDate(metadata.leave_ends_on)
-  const leaveIsCurrent = (!startsOn || startsOn <= today) && (!endsOn || today <= endsOn)
+  if (row.status !== 'active' || row.deleted_at != null || !['titular', 'suplente', 'licencia'].includes(role)) return false
+  const inWindow = (startsOn: string, endsOn: string) => (!startsOn || startsOn <= today) && (!endsOn || today <= endsOn)
 
-  if (role === 'licencia' && leaveIsCurrent) return false
-  if (source === 'teacher_leave_replacement' && !leaveIsCurrent) return false
+  // Native columns, including NULL, are authoritative just as in the SQL rule.
+  const ownStartsOn = getTeacherRosterIsoDate(row.starts_on)
+  const ownEndsOn = getTeacherRosterIsoDate(row.ends_on)
+  if (!inWindow(ownStartsOn, ownEndsOn)) return false
+
+  if (role === 'licencia') {
+    const leaveStartsOn = getTeacherRosterIsoDate(metadata.leave_starts_on)
+    const leaveEndsOn = getTeacherRosterIsoDate(metadata.leave_ends_on)
+    if (inWindow(leaveStartsOn, leaveEndsOn)) return false
+  }
 
   return true
 }
@@ -2612,7 +2861,11 @@ async function writeExamEnrollmentRelational({
   const studentRecordId = getOptionalString(enrollment.student_record_id)
   const status = getOptionalString(enrollment.status) || (mutationType === 'cancel_exam' ? 'cancelled' : 'registered')
   const legacySnapshotId = getOptionalString(enrollment.id)
-  const clientMutationId = getOptionalString(enrollment.client_mutation_id) || legacySnapshotId || null
+  // PB.1: la RPC es idempotente por client_mutation_id. La baja necesita su propio id: si reusa el de
+  // la inscripcion (el id estable de la fila del snapshot), la RPC devuelve la fila sin cancelarla.
+  const clientMutationId = mutationType === 'cancel_exam'
+    ? `${legacySnapshotId || examTableId}:cancel_exam:${now}`
+    : getOptionalString(enrollment.client_mutation_id) || legacySnapshotId || null
 
   const { data, error } = await context.userClient.rpc('upsert_exam_enrollment_from_portal', {
     target_institution_id: institutionId,
@@ -2750,16 +3003,39 @@ async function handleStudentPortalMutation(
       updated_at: now,
     }
 
+    const isSameSubjectEnrollment = (row: Record<string, unknown>) => sameOwner(row, callerId) && row.subject_id === subjectId && row.program_id === programId
     snapshot.enrollments = upsertRecord(
       asRecordArray(snapshot.enrollments),
       nextEnrollment,
-      (row) => sameOwner(row, callerId) && row.subject_id === subjectId && row.program_id === programId,
+      isSameSubjectEnrollment,
     )
-    result = nextEnrollment
+    // PB.3: igual que register_exam, se devuelve la fila guardada (upsertRecord conserva el id previo).
+    result = asRecordArray(snapshot.enrollments).find(isSameSubjectEnrollment) ?? nextEnrollment
   } else if (mutationType === 'withdraw_subject') {
-    const enrollmentId = requireString(payload.enrollment_id, 'La inscripcion')
+    const requestedEnrollmentId = requireString(payload.enrollment_id, 'La inscripcion')
     const rows = asRecordArray(snapshot.enrollments)
+    let enrollmentId = requestedEnrollmentId
+    let relationalEnrollment: Record<string, unknown> | null = null
     let found = false
+
+    // PB.3: la lectura segura del portal lista las cursadas relacionales, con su uuid. Se resuelve a la fila del
+    // snapshot por legacy_snapshot_id, solo si es propia; una cursada cargada solo en la tabla (p. ej. por el admin)
+    // no tiene fila de snapshot y se da de baja directo en la tabla.
+    if (!rows.some((row) => row.id === requestedEnrollmentId && sameOwner(row, callerId)) && isUuid(requestedEnrollmentId)) {
+      const { data, error: relationalLookupError } = await adminClient
+        .from('subject_enrollments')
+        .select('id, legacy_snapshot_id, subject_id, program_id, student_record_id')
+        .eq('id', requestedEnrollmentId)
+        .eq('institution_id', institutionId)
+        .eq('workspace_key', workspaceKey)
+        .eq('student_id', callerId)
+        .is('deleted_at', null)
+        .maybeSingle()
+
+      if (relationalLookupError) throw relationalLookupError
+      relationalEnrollment = isRecord(data) ? data : null
+      enrollmentId = getOptionalString(relationalEnrollment?.legacy_snapshot_id) || requestedEnrollmentId
+    }
 
     snapshot.enrollments = rows.map((row) => {
       if (row.id !== enrollmentId || !sameOwner(row, callerId)) return row
@@ -2772,6 +3048,22 @@ async function handleStudentPortalMutation(
       }
       return result
     })
+
+    if (!found && relationalEnrollment) {
+      found = true
+      result = {
+        id: getOptionalString(relationalEnrollment.legacy_snapshot_id) || requestedEnrollmentId,
+        profile_id: callerId,
+        student_id: callerId,
+        institution_id: institutionId,
+        subject_id: relationalEnrollment.subject_id,
+        program_id: relationalEnrollment.program_id,
+        student_record_id: relationalEnrollment.student_record_id ?? undefined,
+        status: 'dropped',
+        dropped_at: now,
+        updated_at: now,
+      }
+    }
 
     if (!found) {
       throw new HttpError('No se encontro una inscripcion propia para dar de baja.', 404)
@@ -2830,16 +3122,36 @@ async function handleStudentPortalMutation(
       updated_at: now,
     }
 
+    const isSameExamEnrollment = (row: Record<string, unknown>) => sameOwner(row, callerId) && row.exam_session_id === examSessionId
     snapshot.examEnrollments = upsertRecord(
       asRecordArray(snapshot.examEnrollments),
       nextExamEnrollment,
-      (row) => sameOwner(row, callerId) && row.exam_session_id === examSessionId,
+      isSameExamEnrollment,
     )
-    result = nextExamEnrollment
+    // PB.1: upsertRecord conserva el id de una fila previa (reinscripcion). Se devuelve la fila guardada,
+    // asi la UI y legacy_snapshot_id usan el mismo id que despues busca cancel_exam.
+    result = asRecordArray(snapshot.examEnrollments).find(isSameExamEnrollment) ?? nextExamEnrollment
   } else if (mutationType === 'cancel_exam') {
-    const examEnrollmentId = requireString(payload.exam_enrollment_id, 'La inscripcion a mesa')
+    const requestedEnrollmentId = requireString(payload.exam_enrollment_id, 'La inscripcion a mesa')
     const rows = asRecordArray(snapshot.examEnrollments)
+    let examEnrollmentId = requestedEnrollmentId
     let found = false
+
+    // PB.1: la lectura segura del portal lista las inscripciones relacionales, con su uuid.
+    // Ese uuid se resuelve a la fila del snapshot por legacy_snapshot_id, solo si es propia.
+    if (!rows.some((row) => row.id === requestedEnrollmentId && sameOwner(row, callerId)) && isUuid(requestedEnrollmentId)) {
+      const { data: relationalEnrollment, error: relationalLookupError } = await adminClient
+        .from('exam_enrollments')
+        .select('legacy_snapshot_id')
+        .eq('id', requestedEnrollmentId)
+        .eq('institution_id', institutionId)
+        .eq('workspace_key', workspaceKey)
+        .eq('student_id', callerId)
+        .maybeSingle()
+
+      if (relationalLookupError) throw relationalLookupError
+      examEnrollmentId = getOptionalString(relationalEnrollment?.legacy_snapshot_id) || requestedEnrollmentId
+    }
 
     snapshot.examEnrollments = rows.map((row) => {
       if (row.id !== examEnrollmentId || !sameOwner(row, callerId)) return row
@@ -2912,21 +3224,6 @@ async function handleStudentPortalMutation(
     throw badRequest(`Tipo de cambio no soportado: ${mutationType}`)
   }
 
-  if (snapshotWriteEnabled) {
-    const { error: upsertError } = await adminClient
-      .from('workspace_snapshots')
-      .upsert({
-        institution_id: institutionId,
-        workspace_key: workspaceKey,
-        owner_user_id: typeof snapshotRow?.owner_user_id === 'string' ? snapshotRow.owner_user_id : callerId,
-        owner_email: typeof snapshotRow?.owner_email === 'string' ? snapshotRow.owner_email : context.caller.email ?? null,
-        payload: snapshot,
-        updated_at: now,
-      })
-
-    if (upsertError) throw upsertError
-  }
-
   let relationalResult: unknown = null
   let relationalErrorMessage: string | null = null
 
@@ -2996,9 +3293,26 @@ async function handleStudentPortalMutation(
       })
 
       if (relationalWriteRequired || transitionConfig.strictDriftBlockEnabled || shouldReadRelationalAcademics(transitionConfig)) {
-        throw new Error(`El snapshot se actualizo, pero fallo la sincronizacion relacional estricta. ${relationalErrorMessage}`)
+        // PB.4: el snapshot todavia no se escribio, asi que un rechazo de la RPC no deja drift.
+        throw new HttpError(`No se guardo el cambio: ${relationalErrorMessage}`, 409)
       }
     }
+  }
+
+  // PB.4: el snapshot se escribe despues de la escritura relacional, para no quedar distinto de la tabla.
+  if (snapshotWriteEnabled) {
+    const { error: upsertError } = await adminClient
+      .from('workspace_snapshots')
+      .upsert({
+        institution_id: institutionId,
+        workspace_key: workspaceKey,
+        owner_user_id: typeof snapshotRow?.owner_user_id === 'string' ? snapshotRow.owner_user_id : callerId,
+        owner_email: typeof snapshotRow?.owner_email === 'string' ? snapshotRow.owner_email : context.caller.email ?? null,
+        payload: snapshot,
+        updated_at: now,
+      })
+
+    if (upsertError) throw upsertError
   }
 
   return {
@@ -3097,19 +3411,24 @@ async function fetchTeacherRosterAssignments({
   institutionId: string
   workspaceKey: string
 }) {
-  const { data, error } = await adminClient
-    .from('subject_teacher_assignments')
-    .select('id, teacher_id, teacher_record_id, subject_id, program_id, status, role, source, metadata')
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-    .eq('status', 'active')
+  const assignments: Array<Record<string, unknown>> = []
+  const pageSize = 500
+  // Include revocations and other teachers: an old snapshot must not restore a subject
+  // that has already moved to the relational model. Page so API row limits cannot hide it.
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await adminClient
+      .from('subject_teacher_assignments')
+      .select('id, teacher_id, teacher_record_id, subject_id, program_id, status, role, source, metadata, starts_on, ends_on, deleted_at')
+      .eq('institution_id', institutionId)
+      .eq('workspace_key', workspaceKey)
+      .order('id')
+      .range(offset, offset + pageSize - 1)
 
-  if (error) {
-    if (isMissingRelationError(error, 'subject_teacher_assignments')) return []
-    throw error
+    if (error) throw error
+    const page = asRecordArray(data)
+    assignments.push(...page)
+    if (page.length < pageSize) return assignments
   }
-
-  return asRecordArray(data)
 }
 
 function collectAccessibleTeacherRosterSubjects({
@@ -3128,14 +3447,11 @@ function collectAccessibleTeacherRosterSubjects({
   const accessibleSubjects: Array<{ subjectId: string; programId: string; source: string }> = []
   const today = new Date().toISOString().slice(0, 10)
   const callerId = getOptionalString(context.caller.id)
-  const teacherRecordIds = new Set(teacherRecords.map((record) => getOptionalString(record.id)).filter(Boolean))
 
   assignments
     .filter((assignment) => (
-      (
-        getOptionalString(assignment.teacher_id) === callerId ||
-        teacherRecordIds.has(getOptionalString(assignment.teacher_record_id))
-      ) &&
+      // SQL authorizes the account, never a stale or homonymous record link.
+      getOptionalString(assignment.teacher_id) === callerId &&
       isTeacherRosterAssignmentInActiveWindow(assignment, today)
     ))
     .forEach((assignment) => addAccessibleTeacherRosterSubject(
@@ -3153,6 +3469,15 @@ function collectAccessibleTeacherRosterSubjects({
   ]
 
   snapshotRows
+    // Snapshot-only subjects remain supported. Once there is a relational assignment
+    // for this subject/career, only that model may authorize it, including after a revoke.
+    .filter((row) => !assignments.some((assignment) => (
+      teacherRosterSubjectMatches(assignment.subject_id, getTeacherRosterSubjectId(row)) &&
+      (
+        teacherRosterProgramMatches(assignment.program_id, getTeacherRosterProgramId(row)) ||
+        !getTeacherRosterProgramId(row)
+      )
+    )))
     .filter((row) => snapshotTeacherRosterRowMatchesCaller({
       row,
       context,
@@ -3520,6 +3845,31 @@ async function handleTeacherProfileUpdate(
   }
 
   return { success: true, user_id: context.caller.id, email, telefono: phone }
+}
+
+// I2d: cambio de la contrasena inicial (DNI). Verifica la actual y cambia contrasena y marca en una sola
+// llamada de Auth Admin; la marca vive en app_metadata, que el usuario no puede editar por su cuenta.
+async function handleCompleteInitialPasswordChange(
+  adminClient: ReturnType<typeof getClients>['adminClient'],
+  payload: Record<string, unknown>,
+  context?: Awaited<ReturnType<typeof getAuthenticatedContext>>,
+) {
+  if (!context?.caller?.id) throw new HttpError('Sesion invalida. Inicia sesion nuevamente.', 401)
+  const currentPassword = requireString(payload.current_password, 'La contrasena actual')
+  const newPassword = requireString(payload.new_password, 'La nueva contrasena')
+  if (newPassword.length < 8) throw badRequest('La nueva contrasena debe tener al menos 8 caracteres.')
+  if (newPassword === currentPassword) throw badRequest('La nueva contrasena debe ser distinta de la actual.')
+  const dni = getOptionalString(context.caller.user_metadata?.dni).replace(/\D/g, '')
+  if (dni && newPassword.includes(dni)) throw badRequest('La nueva contrasena no puede contener el DNI.')
+  await assertCallerPassword(context.caller, currentPassword)
+
+  const appMetadata = isRecord(context.caller.app_metadata) ? context.caller.app_metadata : {}
+  const { error } = await adminClient.auth.admin.updateUserById(context.caller.id, {
+    password: newPassword,
+    app_metadata: { ...appMetadata, [MUST_CHANGE_PASSWORD_FLAG]: false },
+  })
+  if (error) throw error
+  return { success: true, user_id: context.caller.id }
 }
 
 async function handleSetUserPassword(adminClient: ReturnType<typeof getClients>['adminClient'], payload: Record<string, unknown>) {
@@ -3958,6 +4308,7 @@ const actionHandlers: Record<string, (
   create_or_assign_institution_user: handleCreateOrAssignInstitutionUser,
   bulk_create_students: handleBulkCreateStudents,
   bulk_create_teachers: handleBulkCreateTeachers,
+  repair_student_access: handleRepairStudentAccess,
   student_portal_mutation: handleStudentPortalMutation,
   reset_student_academic_records: handleResetStudentAcademicRecords,
   teacher_subject_rosters: handleTeacherSubjectRosters,
@@ -3965,6 +4316,7 @@ const actionHandlers: Record<string, (
   teacher_remove_student_subject_records: handleTeacherRemoveStudentSubjectRecords,
   teacher_reset_student_subject_academic_records: handleTeacherResetStudentSubjectAcademicRecords,
   set_user_password: handleSetUserPassword,
+  complete_initial_password_change: handleCompleteInitialPasswordChange,
 }
 
 Deno.serve(async (req) => {
@@ -4018,8 +4370,10 @@ Deno.serve(async (req) => {
       ? await requireStudentPortalMember(req, typeof payload.institution_id === 'string' ? payload.institution_id : '')
       : action === 'teacher_profile_update' || action === 'teacher_remove_student_subject_records' || action === 'teacher_reset_student_subject_academic_records' || action === 'teacher_subject_rosters'
         ? await requireTeacherPortalMember(req, typeof payload.institution_id === 'string' ? payload.institution_id : '')
-      : action === 'bulk_create_students' || action === 'bulk_create_teachers' || action === 'reset_student_academic_records'
+      : action === 'bulk_create_students' || action === 'bulk_create_teachers' || action === 'reset_student_academic_records' || action === 'repair_student_access'
         ? await requireInstitutionAdmin(req, typeof payload.institution_id === 'string' ? payload.institution_id : '')
+      : action === 'complete_initial_password_change'
+        ? await getAuthenticatedContext(req)
         : await requireSuperAdmin(req)
     const { adminClient, caller } = authContext
     auditClient = adminClient

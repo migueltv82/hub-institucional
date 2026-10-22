@@ -43,17 +43,17 @@ describe('RegularExamComparisonAudit', () => {
   it('genera auditoría normal', () => {
     generateNormalAudit()
 
-    const summary = screen.getByRole('region', { name: 'Resumen de auditoria' })
+    const summary = screen.getByRole('region', { name: 'Resumen de auditoría' })
     expect(summary).toBeInTheDocument()
-    expect(within(summary).getByText(/Resumen de auditoria comparativa/)).toBeInTheDocument()
+    expect(within(summary).getByText(/Resumen de auditoría comparativa/)).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Export interno serializable' })).toBeInTheDocument()
   })
 
   it('genera auditoría stress', () => {
     generateStressAudit()
 
-    expect(screen.getByRole('region', { name: 'Resumen de auditoria' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Estado de auditoria')).toHaveTextContent(/WARNING|CRITICAL/)
+    expect(screen.getByRole('region', { name: 'Resumen de auditoría' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Estado de auditoría')).toHaveTextContent(/WARNING|CRITICAL/)
     expect(screen.getByText(/Fixture stress/)).toBeInTheDocument()
   })
 
@@ -66,20 +66,20 @@ describe('RegularExamComparisonAudit', () => {
   it('genera auditoría institucional', () => {
     generateInstitutionalAudit()
 
-    expect(screen.getByRole('region', { name: 'Resumen de auditoria' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Resumen de auditoría' })).toBeInTheDocument()
     expect(screen.getByText(/Fixture institucional/)).toBeInTheDocument()
   })
 
   it('muestra modo activo institucional', () => {
     generateInstitutionalAudit()
 
-    expect(screen.getByLabelText('Modo activo de auditoria')).toHaveTextContent('Modo activo: institucional')
+    expect(screen.getByLabelText('Modo activo de auditoría')).toHaveTextContent('Modo activo: institucional')
   })
 
   it('muestra métricas', () => {
     generateNormalAudit()
 
-    const metrics = screen.getByRole('region', { name: 'Metricas de auditoria' })
+    const metrics = screen.getByRole('region', { name: 'Metricas de auditoría' })
     expect(within(metrics).getByText('Mesas legacy')).toBeInTheDocument()
     expect(within(metrics).getByText('Mesas nuevo')).toBeInTheDocument()
     expect(within(metrics).getByText('Diferencias')).toBeInTheDocument()
@@ -89,7 +89,7 @@ describe('RegularExamComparisonAudit', () => {
   it('muestra métricas institucionales', () => {
     generateInstitutionalAudit()
 
-    const metrics = screen.getByRole('region', { name: 'Metricas de auditoria' })
+    const metrics = screen.getByRole('region', { name: 'Metricas de auditoría' })
     expect(within(metrics).getByText('Mesas legacy')).toBeInTheDocument()
     expect(within(metrics).getByText('Mesas nuevo')).toBeInTheDocument()
     expect(within(metrics).getByText('Diferencias')).toBeInTheDocument()
@@ -112,7 +112,7 @@ describe('RegularExamComparisonAudit', () => {
   it('muestra estado warning o critical cuando corresponde', () => {
     generateStressAudit()
 
-    expect(screen.getByLabelText('Estado de auditoria')).toHaveTextContent(/Estado: (WARNING|CRITICAL)/)
+    expect(screen.getByLabelText('Estado de auditoría')).toHaveTextContent(/Estado: (WARNING|CRITICAL)/)
   })
 
   it('muestra mesas sin equivalente', () => {
@@ -125,11 +125,11 @@ describe('RegularExamComparisonAudit', () => {
   it('limpia resultado', () => {
     generateNormalAudit()
 
-    expect(screen.getByRole('region', { name: 'Resumen de auditoria' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Resumen de auditoría' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Limpiar resultado' }))
 
     expect(screen.getByText('Sin auditoría generada.')).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Resumen de auditoria' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Resumen de auditoría' })).not.toBeInTheDocument()
   })
 
   it('no importa cronogramaInteligente', () => {

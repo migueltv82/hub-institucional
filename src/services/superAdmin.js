@@ -367,7 +367,7 @@ function buildUserRoleSummary(users) {
     {
       key: 'administrators',
       label: 'Administradores',
-      description: 'Usuarios con gestion institucional.',
+      description: 'Usuarios con gestión institucional.',
       count: counts.administrators,
     },
     {
@@ -1188,6 +1188,8 @@ export async function createInstitutionWithAdmin({
       tenant_id: data?.institution_id,
       is_global_admin: false,
     },
+    // I2f: si el email ya era de un admin, conserva su contrasena; la ingresada no se usa.
+    adminReused: Boolean(data?.admin_reused),
     source: 'supabase',
   }
 }
@@ -1276,6 +1278,8 @@ export async function createOrAssignInstitutionUser({
       display_name: normalizedDisplayName,
       role: 'admin_instituto',
     },
+    // I2g: si el email ya era de un admin, conserva su contrasena; la ingresada no se usa.
+    userReused: Boolean(data?.user_reused),
     source: 'supabase',
   }
 }

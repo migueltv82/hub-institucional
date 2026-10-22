@@ -2,7 +2,8 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 
 const STUDENT_ACCESS_BATCH_SIZE = 20
 const MIN_STUDENT_ACCESS_BATCH_SIZE = 1
-const STUDENT_ACCESS_CONCURRENCY = 2
+// D2: de a un lote. Dos lotes en paralelo escriben el mismo workspace y el lock del gateway de Storage rechaza a uno.
+const STUDENT_ACCESS_CONCURRENCY = 1
 
 function clean(value) {
   return String(value ?? '').trim()
@@ -238,4 +239,42 @@ export async function provisionStudentAccess({ institutionId, students, useRemot
     skippedExisting: withAccess.length,
     totalRequested: students.length,
   }
+}
+
+// Decision de Miguel (20/10): cuentas de alumno que quedaron a medias (cuenta creada, legajo sin vincular)
+// tras un corte en "Crear accesos". "Crear accesos" las rechaza a proposito; esta accion aparte las repara
+// solo si la cuenta nunca se uso (la Edge valida todo). Se mandan los alumnos del padron sin acceso vinculado.
+export const INCOMPLETE_ACCESS_PATTERN = /sin vinculo inequivoco|no autorizada o ambigua/i
+
+export function hasIncompleteStudentAccess(result) {
+  return Boolean(result?.needsRepair) ||
+    (Array.isArray(result?.errors) && result.errors.some((entry) => INCOMPLETE_ACCESS_PATTERN.test(String(entry?.error ?? ''))))
+}
+
+export async function repairStudentAccess({ institutionId, students, useRemote }) {
+  if (!institutionId) throw new Error('No hay una institucion activa para reparar accesos.')
+  if (!useRemote || !isSupabaseConfigured || !supabase) {
+    throw new Error('Reparar accesos requiere una sesion remota con Supabase configurado.')
+  }
+  const emails = [...new Set(splitStudentsByAccessStatus(students).pending
+    .map((student) => clean(student?.email ?? student?.correo ?? student?.mail).toLowerCase())
+    .filter(Boolean))]
+  if (emails.length === 0) return { repaired: 0, failed: 0, withoutAccount: 0, results: [], errors: [] }
+
+  let merged = { repaired: 0, failed: 0, withoutAccount: 0, results: [], errors: [] }
+  for (const batch of chunkRows(emails, 100)) {
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: { action: 'repair_student_access', institution_id: institutionId, emails: batch },
+    })
+    if (error) throw new Error(`No se pudieron reparar los accesos. ${await readInvokeErrorDetail(error)}`)
+    if (data?.error) throw new Error(data.error)
+    merged = {
+      repaired: merged.repaired + (data?.repaired ?? 0),
+      failed: merged.failed + (data?.failed ?? 0),
+      withoutAccount: merged.withoutAccount + (data?.without_account ?? 0),
+      results: [...merged.results, ...(data?.results ?? [])],
+      errors: [...merged.errors, ...(data?.errors ?? [])],
+    }
+  }
+  return merged
 }

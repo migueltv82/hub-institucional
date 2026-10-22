@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { BookOpenCheck, Trash2 } from 'lucide-react'
+import { buildStudentEnrollmentRows } from '../../services/bulkRoster.js'
 import {
   createSubjectEnrollment,
   dropSubjectEnrollment,
@@ -52,10 +53,13 @@ function StudentSubjectEnrollmentSection({
   activeInstitution,
   alumnos = [],
   canEditWorkspace = false,
+  inscripcionesAlumnos = [],
   isRelationalWorkspaceSource = false,
   planesEstudio = [],
   workspaceKey = 'main',
 }) {
+  // D1 P3: la planilla puede traer inscripciones que todavia no se aplicaron; se explica en vez de decir "no hay".
+  const pendingSheetEnrollments = buildStudentEnrollmentRows(inscripcionesAlumnos).length
   const queryClient = useQueryClient()
   const [enrollments, setEnrollments] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -261,7 +265,7 @@ function StudentSubjectEnrollmentSection({
     <section className="rise-in soft-card soft-card--tint-sky border-l-4 border-l-sky-500 space-y-4">
       <div className="flex items-center gap-2">
         <BookOpenCheck className="h-4 w-4 text-sky-700" />
-        <h4 className="font-extrabold text-slate-950">Inscripcion de alumnos a materias</h4>
+        <h4 className="font-extrabold text-slate-950">Inscripción de alumnos a materias</h4>
       </div>
       <p className="text-sm leading-6 text-slate-600">
         Inscribi a cada alumno materia por materia. Es lo que habilita al docente titular a verlo en su roster para cargar asistencia y notas.
@@ -338,7 +342,7 @@ function StudentSubjectEnrollmentSection({
                         className="btn-secondary px-3 py-2 text-red-700"
                         onClick={() => handleDrop(enrollment.id)}
                         disabled={isRelationalWorkspaceSource || !canEditWorkspace}
-                        title="Dar de baja inscripcion"
+                        title="Dar de baja inscripción"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -350,7 +354,15 @@ function StudentSubjectEnrollmentSection({
           </tbody>
         </table>
         {!isLoading && enrollments.length === 0 && (
-          <div className="p-6 text-sm text-slate-500">No hay inscripciones cargadas.</div>
+          <div className="p-6 text-sm text-slate-500">
+            No hay inscripciones cargadas.
+            {pendingSheetEnrollments > 0 && (
+              <span className="mt-1 block">
+                La planilla de alumnos trae {pendingSheetEnrollments} {pendingSheetEnrollments === 1 ? 'inscripción' : 'inscripciones'} a materias.
+                Se aplican con «Inscribir cursadas», en la sección Cursadas y titulares.
+              </span>
+            )}
+          </div>
         )}
         {isLoading && (
           <div className="p-6 text-sm text-slate-500">Cargando inscripciones...</div>

@@ -99,10 +99,10 @@ export default function LoginPage() {
         password: adminForm.password,
       })
 
-      toast.success('Sesion iniciada correctamente')
+      toast.success('Sesión iniciada correctamente')
       navigate('/super-admin')
     } catch (error) {
-      toast.error(error.message || 'Error al iniciar sesion')
+      toast.error(error.message || 'Error al iniciar sesión')
     } finally {
       setIsLoadingAdmin(false)
     }
@@ -138,7 +138,7 @@ export default function LoginPage() {
       toast.success(`Bienvenido a ${institution.name}`)
       navigate('/app')
     } catch (error) {
-      toast.error(error.message || 'Error al iniciar sesion')
+      toast.error(error.message || 'Error al iniciar sesión')
     } finally {
       setIsLoadingInstitution(false)
     }
@@ -164,18 +164,18 @@ export default function LoginPage() {
     <main className="login-shell">
       <section className="login-form-surface">
         <div className="login-panel">
-          <header className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <header className="grid gap-4 2xl:grid-cols-[1fr_auto] 2xl:items-end">
             <div>
               <ProductBrand className="mb-4" />
-              <p className="soft-title">Acceso academico seguro</p>
+              <p className="soft-title">Acceso académico seguro</p>
               <h1 className="mt-2 max-w-2xl text-3xl font-extrabold leading-tight text-slate-950 md:text-4xl">
                 {accessMode === 'admin'
-                  ? 'Acceso de administracion.'
+                  ? 'Acceso de administración.'
                   : accessMode === 'student'
                     ? 'Ingreso estudiantil.'
                     : accessMode === 'teacher'
                       ? 'Ingreso docente.'
-                    : 'Ingreso por institucion.'}
+                    : 'Ingreso por institución.'}
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                 {accessMode === 'admin'
@@ -184,7 +184,7 @@ export default function LoginPage() {
                     ? 'Ingresa con tu cuenta de alumno y accede a tu portal educativo institucional.'
                     : accessMode === 'teacher'
                       ? 'Ingresa con tu cuenta docente para revisar horarios, mesas y alumnos vinculados.'
-                    : 'Selecciona tu institucion, valida tu cuenta y trabaja en un entorno aislado y conectado.'}
+                    : 'Selecciona tu institución, valida tu cuenta y trabaja en un entorno aislado y conectado.'}
               </p>
             </div>
 
@@ -198,7 +198,7 @@ export default function LoginPage() {
                 type="button"
               >
                 <Building2 className="h-4 w-4" />
-                Institucion
+                Institución
               </button>
 
               <button
@@ -252,10 +252,10 @@ export default function LoginPage() {
                     Gobierno
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Administra instituciones, usuarios, roles, auditoria operativa y estado de cada cuenta.
+                    Administra instituciones, usuarios, roles, auditoría operativa y estado de cada cuenta.
                   </p>
                 </div>
-                <span className="status-chip border-cyan-200 bg-cyan-50 text-cyan-900">
+                <span className="status-chip shrink-0 whitespace-nowrap border-cyan-200 bg-cyan-50 text-cyan-900">
                   Control
                 </span>
               </div>
@@ -280,7 +280,7 @@ export default function LoginPage() {
                 <div className="space-y-1.5">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
                     <Lock className="h-4 w-4 text-slate-400" />
-                    Contrasena
+                    Contraseña
                   </label>
                   <input
                     required
@@ -305,7 +305,7 @@ export default function LoginPage() {
                 {isSupabaseConfigured && (
                   <div className="login-magic-box">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p>Acceso por correo sin contrasena.</p>
+                      <p>Acceso por correo sin contraseña.</p>
                       <button
                         type="button"
                         onClick={() => setShowMagicLink((current) => !current)}
@@ -360,17 +360,17 @@ export default function LoginPage() {
                     ) : (
                       <Building2 className="h-6 w-6 text-blue-700" />
                     )}
-                    {accessMode === 'student' ? 'Alumno' : accessMode === 'teacher' ? 'Docente' : 'Institucion'}
+                    {accessMode === 'student' ? 'Alumno' : accessMode === 'teacher' ? 'Docente' : 'Institución'}
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
                     {accessMode === 'student'
                       ? 'Usa tu cuenta de alumno para abrir el portal del estudiante.'
                       : accessMode === 'teacher'
-                        ? 'Usa tu cuenta docente para abrir el modulo de horarios, mesas y alumnos.'
-                      : 'Selecciona la institucion, valida tu cuenta y trabaja sobre su espacio academico.'}
+                        ? 'Usa tu cuenta docente para abrir el módulo de horarios, mesas y alumnos.'
+                      : 'Selecciona la institución, valida tu cuenta y trabaja sobre su espacio académico.'}
                   </p>
                 </div>
-                <span className="status-chip border-blue-200 bg-blue-50 text-blue-900">
+                <span className="status-chip shrink-0 whitespace-nowrap border-blue-200 bg-blue-50 text-blue-900">
                   {accessMode === 'student' ? 'Alumno' : accessMode === 'teacher' ? 'Docente' : 'Workspace'}
                 </span>
               </div>
@@ -379,7 +379,7 @@ export default function LoginPage() {
                 <div className="space-y-1.5">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-slate-400" />
-                    Institucion
+                    Institución
                   </label>
                   <select
                     required
@@ -418,7 +418,7 @@ export default function LoginPage() {
                 <div className="space-y-1.5">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
                     <Lock className="h-4 w-4 text-slate-400" />
-                    {accessMode === 'teacher' ? 'Contrasena inicial: DNI' : 'Contrasena'}
+                    {accessMode === 'teacher' ? 'Contraseña inicial: DNI' : 'Contraseña'}
                   </label>
                   <input
                     required
@@ -448,7 +448,7 @@ export default function LoginPage() {
                     : accessMode === 'student'
                       ? 'Entrar al portal de alumnos'
                       : accessMode === 'teacher'
-                        ? 'Entrar al modulo docente'
+                        ? 'Entrar al módulo docente'
                       : 'Entrar al workspace institucional'}
                   <LogIn className="ml-2 h-5 w-5" />
                 </button>
@@ -460,7 +460,7 @@ export default function LoginPage() {
               <div className="flex items-start gap-3">
                 <span className="login-insight-dot bg-cyan-500" />
                 <div>
-                  <p className="font-extrabold text-slate-950">Aislamiento por institucion</p>
+                  <p className="font-extrabold text-slate-950">Aislamiento por institución</p>
                   <p className="mt-1 text-sm leading-5 text-slate-600">
                     Cada cuenta trabaja solo sobre su tenant autorizado.
                   </p>
@@ -471,7 +471,7 @@ export default function LoginPage() {
                 <div>
                   <p className="font-extrabold text-slate-950">Workspace persistente</p>
                   <p className="mt-1 text-sm leading-5 text-slate-600">
-                    La carga academica se recupera por institucion y sesion.
+                    La carga académica se recupera por institución y sesión.
                   </p>
                 </div>
               </div>
@@ -490,7 +490,7 @@ export default function LoginPage() {
           <footer className="border-t border-slate-200 pt-3">
             <div className="flex items-center gap-3 text-xs text-slate-600 md:text-sm">
               <ShieldCheck className="h-5 w-5 text-cyan-600" />
-              <p>Autenticacion protegida, aislamiento institucional y control de acceso centralizado.</p>
+              <p>Autenticación protegida, aislamiento institucional y control de acceso centralizado.</p>
             </div>
             <AppFooter compact />
           </footer>
@@ -515,10 +515,10 @@ export default function LoginPage() {
             Institutional Security Layer
           </p>
           <h2 className="mt-3 text-3xl font-extrabold leading-tight text-slate-950">
-            Una puerta de entrada confiable para cada institucion.
+            Una puerta de entrada confiable para cada institución.
           </h2>
           <p className="mt-3 text-base leading-7 text-slate-600">
-            Gobierno, administracion y operacion academica comparten una misma base,
+            Gobierno, administración y operación académica comparten una misma base,
             con permisos separados y datos listos para operar.
           </p>
         </div>

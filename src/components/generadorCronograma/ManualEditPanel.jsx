@@ -100,7 +100,7 @@ function ManualEditPanel({
           className="input-base mt-2 min-h-[112px] resize-y"
           value={edicionMesa.observacionManual}
           onChange={(event) => onFieldChange('observacionManual', event.target.value)}
-          placeholder="Ejemplo: docente afectado a otra institucion, se mueve la mesa al jueves."
+          placeholder="Ejemplo: docente afectado a otra institución, se mueve la mesa al jueves."
         />
       </label>
 

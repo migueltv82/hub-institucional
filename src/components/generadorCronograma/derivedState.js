@@ -176,13 +176,13 @@ export function createWorkspaceChecklist({
       done: Boolean(teacherSourceReadiness?.hasValidTeacherSource),
     },
     {
-      label: 'Plantilla academica cargada',
+      label: 'Plantilla académica cargada',
       done: Boolean(uploadedFiles.masterWorkbook),
     },
     { label: 'Plantilla de docentes cargada', done: Boolean(uploadedFiles.docentesWorkbook) },
     { label: 'Plantilla de alumnos cargada', done: Boolean(uploadedFiles.alumnosWorkbook) },
     {
-      label: isRegularExam(examType) ? 'Llamados definidos' : 'Periodo definido',
+      label: isRegularExam(examType) ? 'Llamados definidos' : 'Período definido',
       done: Boolean(periodoDefinido && !periodoInvalido),
     },
   ]

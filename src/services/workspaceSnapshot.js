@@ -1,5 +1,6 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 import { syncRosterRecords } from './rosterRecords.js'
+import { retryThrownWorkspaceBusy, retryWhenWorkspaceBusy, serializeWorkspaceWrite } from './workspaceWriteGuard.js'
 import { invokeSourceFileStorage } from './sourceFileStorageGateway.js'
 import { canonicalStorageUuid } from './sourceFileStoragePath.js'
 import {
@@ -21,6 +22,72 @@ const MAX_LOCAL_SNAPSHOT_BYTES = 4_000_000
 const MAX_REMOTE_AUTOSAVE_SNAPSHOT_BYTES = MAX_LOCAL_SNAPSHOT_BYTES
 const disabledLocalSnapshotWrites = new Set()
 
+// Aviso de conflicto: el snapshot tambien lo escriben otras sesiones del panel y la Edge (portal alumno,
+// perfil docente, reseteos). Se recuerda la version remota (updated_at) sobre la que se esta trabajando y se
+// guarda solo si sigue siendo esa. La version base tambien queda en localStorage (clave ':base'), asi una copia
+// local editada sin conexion se compara contra la version de la que partio, no contra la actual.
+const knownRemoteVersions = new Map()
+export const WORKSPACE_CONFLICT_CODE = 'WORKSPACE_CONFLICT'
+
+export class WorkspaceConflictError extends Error {
+  constructor(remoteUpdatedAt) {
+    super('Otra sesion guardo cambios en este panel. Tus cambios quedaron en este equipo y no se subieron.')
+    this.name = 'WorkspaceConflictError'
+    this.code = WORKSPACE_CONFLICT_CODE
+    this.remoteUpdatedAt = remoteUpdatedAt ?? null
+  }
+}
+
+export function isWorkspaceConflictError(error) {
+  return error?.code === WORKSPACE_CONFLICT_CODE
+}
+
+function readStoredBaseVersion(storageKey) {
+  try {
+    return localStorage.getItem(`${storageKey}:base`) || null
+  } catch {
+    return null
+  }
+}
+
+function rememberRemoteVersion(params, version, { persist = true } = {}) {
+  const storageKey = getLocalSnapshotStorageKey(params)
+  if (!version) {
+    knownRemoteVersions.delete(storageKey)
+    return
+  }
+  knownRemoteVersions.set(storageKey, version)
+  if (!persist) return
+  try {
+    localStorage.setItem(`${storageKey}:base`, version)
+  } catch {
+    // Best-effort: sin la base persistida, la proxima carga compara contra la version remota de ese momento.
+  }
+}
+
+// Al recargar despues de un conflicto se descarta la copia local, para no volver a preferirla.
+export function discardLocalWorkspaceSnapshot(params) {
+  const storageKey = getLocalSnapshotStorageKey(params)
+  knownRemoteVersions.delete(storageKey)
+  try {
+    localStorage.removeItem(storageKey)
+    localStorage.removeItem(`${storageKey}:base`)
+  } catch {
+    // Best-effort.
+  }
+}
+
+// Despues de una accion propia que la Edge aplica sobre el snapshot (por ejemplo, un reseteo academico),
+// se toma la version nueva para que el proximo guardado no la confunda con la de otra sesion.
+export async function refreshKnownWorkspaceVersion({ institutionId, workspaceKey, useRemote }) {
+  if (!canUseRemoteWorkspace({ institutionId, useRemote })) return null
+  const { data, error } = await supabase.from(TABLE_NAME).select('updated_at')
+    .eq('institution_id', institutionId).eq('workspace_key', workspaceKey).maybeSingle()
+  if (error) throw error
+  rememberRemoteVersion({ institutionId, workspaceKey }, data?.updated_at ?? null)
+  return data?.updated_at ?? null
+}
+
 // Este snapshot agrupa todo el estado operativo que antes vivia solo en memoria del cliente.
 const emptySnapshot = {
   horariosDocentes: [],
@@ -36,6 +103,7 @@ const emptySnapshot = {
   estadoAcademico: [],
   academicStatusRows: [],
   enrollments: [],
+  inscripcionesAlumnos: [],
   courseClassmates: [],
   grades: [],
   examEnrollments: [],
@@ -349,8 +417,10 @@ function mapSubjectTeacherAssignmentToSnapshotRow({
     assignment_id: clean(assignment.id),
     teacher_id: teacherId,
     teacher_record_id: teacherRecordId,
-    docenteId: teacherRecordId || teacherId,
-    docente_id: teacherRecordId || teacherId,
+    // D1: si el docente esta en el padron de la planilla, la fila usa esa identidad; si no, el motor de mesas
+    // lo veia como otro docente (sin nombre ni DNI). teacher_record_id conserva el id relacional.
+    docenteId: teacher?.id || teacherRecordId || teacherId,
+    docente_id: teacher?.id || teacherRecordId || teacherId,
     docente: teacherName,
     profesor: teacherName,
     full_name: teacherName,
@@ -375,11 +445,13 @@ function mapSubjectTeacherAssignmentToSnapshotRow({
 }
 
 function docenteMateriaMergeKey(row = {}) {
+  // La identidad del padron va primero: asi la titularidad relacional reemplaza a la fila de la planilla del
+  // mismo docente y materia en lugar de sumarse como otra.
   const teacherKey = firstClean(
-    row.teacher_record_id,
-    row.teacherRecordId,
     row.docenteId,
     row.docente_id,
+    row.teacher_record_id,
+    row.teacherRecordId,
     row.teacher_id,
     row.teacherId,
     row.dni_docente,
@@ -726,6 +798,7 @@ export function normalizeWorkspaceSnapshot(payload) {
     estadoAcademico: normalizeArray(payload.estadoAcademico),
     academicStatusRows: normalizeArray(payload.academicStatusRows),
     enrollments: normalizeArray(payload.enrollments),
+    inscripcionesAlumnos: normalizeArray(payload.inscripcionesAlumnos),
     courseClassmates: normalizeArray(payload.courseClassmates),
     grades: normalizeArray(payload.grades),
     examEnrollments: normalizeArray(payload.examEnrollments),
@@ -794,6 +867,12 @@ async function fetchWorkspaceSnapshotUncached({ institutionId, workspaceKey, use
     (!remoteUpdatedAt || new Date(localSnapshot.updatedAt).getTime() > new Date(remoteUpdatedAt).getTime()),
   )
   if (localIsNewer) {
+    // La copia local parte de su version base: si la remota cambio desde entonces, el proximo guardado avisa.
+    rememberRemoteVersion(
+      { institutionId, workspaceKey },
+      readStoredBaseVersion(getLocalSnapshotStorageKey({ institutionId, workspaceKey })) ?? remoteUpdatedAt,
+      { persist: false },
+    )
     logWorkspaceSnapshotDiagnostic('info', 'fetch:local-newer-than-supabase', {
       destination: TABLE_NAME,
       hasInstitutionId: Boolean(institutionId),
@@ -870,6 +949,7 @@ async function fetchWorkspaceSnapshotUncached({ institutionId, workspaceKey, use
   })
 
   writeLocalSnapshot({ institutionId, workspaceKey }, mergedSnapshot, remoteUpdatedAt)
+  rememberRemoteVersion({ institutionId, workspaceKey }, remoteUpdatedAt)
 
   return {
     snapshot: mergedSnapshot,
@@ -900,7 +980,13 @@ export async function fetchWorkspaceSnapshot({ institutionId, workspaceKey, useR
   return fetchPromise
 }
 
-export async function saveWorkspaceSnapshot({
+export { isWorkspaceBusyError, retryWhenWorkspaceBusy, WORKSPACE_BUSY_MESSAGE } from './workspaceWriteGuard.js'
+
+export function saveWorkspaceSnapshot(options = {}) {
+  return serializeWorkspaceWrite(options, () => saveWorkspaceSnapshotNow(options))
+}
+
+async function saveWorkspaceSnapshotNow({
   institutionId,
   workspaceKey,
   ownerEmail,
@@ -909,6 +995,7 @@ export async function saveWorkspaceSnapshot({
   useRemote,
   syncOperational = true,
   allowLargeRemotePayload = true,
+  force = false,
 }) {
   clearInFlightWorkspaceSnapshotFetches({ institutionId, workspaceKey })
 
@@ -962,15 +1049,37 @@ export async function saveWorkspaceSnapshot({
     }
   }
 
-  // Se usa upsert para que el mismo workspace se actualice sin requerir un create inicial.
-  const { error } = await supabase.from(TABLE_NAME).upsert({
+  // Con version conocida se guarda solo si la fila sigue en esa version (aviso de conflicto). Sin version
+  // conocida (primer guardado) o con force, upsert: el mismo workspace se actualiza sin un create inicial.
+  const row = {
     institution_id: institutionId,
     workspace_key: workspaceKey,
     owner_user_id: ownerUserId ?? null,
     owner_email: ownerEmail,
     payload: normalizedPayload,
     updated_at: updatedAt,
-  })
+  }
+  const knownVersion = knownRemoteVersions.get(storageKey)
+  const { data: savedRows, error } = await retryWhenWorkspaceBusy(() => (knownVersion && !force
+    ? supabase.from(TABLE_NAME).update(row)
+      .eq('institution_id', institutionId).eq('workspace_key', workspaceKey).eq('updated_at', knownVersion)
+      .select('updated_at')
+    : supabase.from(TABLE_NAME).upsert(row).select('updated_at')))
+
+  if (!error && knownVersion && !force && !savedRows?.length) {
+    const { data: current } = await supabase.from(TABLE_NAME).select('updated_at')
+      .eq('institution_id', institutionId).eq('workspace_key', workspaceKey).maybeSingle()
+    logWorkspaceSnapshotDiagnostic('warn', 'save:conflict', {
+      destination: TABLE_NAME,
+      hasInstitutionId: Boolean(institutionId),
+      knownVersion,
+      remoteUpdatedAt: current?.updated_at ?? null,
+      source: 'supabase',
+      workspaceKey,
+    })
+    throw new WorkspaceConflictError(current?.updated_at ?? null)
+  }
+  if (!error) rememberRemoteVersion({ institutionId, workspaceKey }, savedRows?.[0]?.updated_at ?? updatedAt)
 
   if (error) {
     logWorkspaceSnapshotDiagnostic('warn', 'save:supabase-error', {
@@ -1003,12 +1112,12 @@ export async function saveWorkspaceSnapshot({
   }
 
   try {
-    await syncRosterRecords({
+    await retryThrownWorkspaceBusy(() => syncRosterRecords({
       institutionId,
       workspaceKey,
       snapshot: normalizedPayload,
       useRemote,
-    })
+    }))
   } catch (error) {
     logWorkspaceSnapshotDiagnostic('warn', 'roster-sync:error', {
       counts: getSnapshotCounts(normalizedPayload),
@@ -1023,12 +1132,12 @@ export async function saveWorkspaceSnapshot({
   }
 
   try {
-    await syncTeacherAcademicRecords({
+    await retryThrownWorkspaceBusy(() => syncTeacherAcademicRecords({
       institutionId,
       workspaceKey,
       snapshot: normalizedPayload,
       useRemote,
-    })
+    }))
   } catch (error) {
     logWorkspaceSnapshotDiagnostic('warn', 'teacher-academic-sync:error', {
       counts: getSnapshotCounts(normalizedPayload),
@@ -1043,11 +1152,11 @@ export async function saveWorkspaceSnapshot({
   }
 
   try {
-    await Promise.all([
-      syncLegacySubjectsCatalog({ institutionId, workspaceKey, snapshot: normalizedPayload, useRemote }),
-      syncLegacySubjectPrerequisites({ institutionId, workspaceKey, snapshot: normalizedPayload, useRemote }),
-      syncLegacyExamSessions({ institutionId, workspaceKey, snapshot: normalizedPayload, useRemote }),
-    ])
+    // En serie: en paralelo chocaban entre si contra el lock del workspace.
+    const legacyContext = { institutionId, workspaceKey, snapshot: normalizedPayload, useRemote }
+    await retryThrownWorkspaceBusy(() => syncLegacySubjectsCatalog(legacyContext))
+    await retryThrownWorkspaceBusy(() => syncLegacySubjectPrerequisites(legacyContext))
+    await retryThrownWorkspaceBusy(() => syncLegacyExamSessions(legacyContext))
   } catch (error) {
     logWorkspaceSnapshotDiagnostic('warn', 'legacy-prerequisites-sync:error', {
       counts: getSnapshotCounts(normalizedPayload),

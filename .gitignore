@@ -46,3 +46,6 @@ public/plantillas/base-datos/
 *.njsproj
 *.sln
 *.sw?
+
+# D2: planillas de demo generadas por scripts/buildDemoWorkbooks.mjs (no se versionan binarios)
+docs/demo-data/*.xlsx

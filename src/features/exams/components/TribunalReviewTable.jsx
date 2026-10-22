@@ -37,13 +37,19 @@ function TribunalReviewTable({
             Precronograma completo
           </h3>
           <p className="mt-2 text-sm font-bold text-slate-600">
-            {previewOnly ? 'Borrador con fechas, agrupaciones, titular y vocales. Podes volver al armado para seguir probando.' : 'Incluye fechas, agrupaciones, titular y vocales. Si un docente solicita un cambio, vuelve a la mesa correspondiente, editala y guarda nuevamente.'}
+            {previewOnly ? 'Borrador con fechas, agrupaciones, titular y vocales. Podés volver al armado para seguir probando.' : 'Incluye fechas, agrupaciones, titular y vocales. Si un docente solicita un cambio, vuelve a la mesa correspondiente, editala y guarda nuevamente.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!previewOnly && <button className="btn-primary" disabled={!rows.length} onClick={onPublishForReview} type="button">
+          {!previewOnly && <button
+            className="btn-primary"
+            disabled={!rows.length || !onPublishForReview}
+            onClick={onPublishForReview}
+            title={onPublishForReview ? undefined : 'Disponible en una próxima versión'}
+            type="button"
+          >
             <Send className="h-4 w-4" />
-            Publicar para revision docente
+            {onPublishForReview ? 'Publicar para revisión docente' : 'Revisión docente en el portal (proximamente)'}
           </button>}
           {!previewOnly && <button className="btn-secondary" disabled={!rows.length} onClick={onExportPdf} type="button">
             <FileText className="h-4 w-4" />
@@ -56,9 +62,9 @@ function TribunalReviewTable({
         </div>
       </div>
       {!previewOnly && <p className="mt-3 rounded-md bg-sky-50 px-3 py-2 text-xs font-bold text-sky-900">
-        &quot;Publicar para revision docente&quot; solo llega a los docentes que ya tienen cuenta de
-        portal creada con el mismo email cargado en la planilla de docentes. Al resto seguí
-        enviándoles el PDF por fuera.
+        {onPublishForReview
+          ? <>&quot;Publicar para revisión docente&quot; solo llega a los docentes que ya tienen cuenta de portal creada con el mismo email cargado en la planilla de docentes. Al resto seguí enviándoles el PDF por fuera.</>
+          : <>Enviales el PDF a los docentes por fuera. Cuando el tribunal este acordado, usa &quot;Confirmar sin cambios&quot; para pasar al cronograma final y publicarlo.</>}
       </p>}
 
       {rows.length ? (

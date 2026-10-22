@@ -1436,6 +1436,41 @@ describe('buildRegularExamInputFromWorkspaceSnapshot', () => {
     })
   })
 
+  it('regla dura: con horarios como fuente, el vocal solo esta disponible los dias que asiste', () => {
+    const carrera = 'PROFESORADO DE PRUEBA UAT'
+    const horario = (docenteId, docente, materia, dia) => ({
+      docente_id: docenteId, docente, profesor: docente, materia, materia_codigo: materia, carrera,
+      dia, hora_inicio: '18:00', hora_fin: '20:00', requiere_mesa: 'SI',
+    })
+    const input = buildInput({
+      docentes: [
+        { id: 'doc-1', docente: 'DOCENTE Uno', horas_catedra: 6, especialidad: carrera },
+        { id: 'doc-2', docente: 'VOCAL Dos', horas_catedra: 6, especialidad: carrera },
+      ],
+      planesEstudio: [
+        { materia: 'UAT01', nombreMateria: 'MATERIA UAT', carrera, anio: 1, requiere_mesa: 'SI' },
+        { materia: 'UAT02', nombreMateria: 'TALLER UAT', carrera, anio: 1, requiere_mesa: 'NO' },
+      ],
+      horariosDocentes: [
+        horario('doc-1', 'DOCENTE Uno', 'UAT01', 'LUNES'),
+        horario('doc-2', 'VOCAL Dos', 'UAT02', 'MARTES'),
+      ],
+      // Carga generada desde horarios, sin titulares: la fuente estructurada no se activa.
+      cargaHorariaDocente: [{
+        docenteId: 'doc-2', docente: 'VOCAL Dos', carrera, materia: 'UAT02', horasCatedra: 3,
+        titularidad: 'false', source: 'horarios_docentes', estado_asignacion: 'ACTIVE',
+      }],
+      // Declarar disponibilidad no agrega dias en los que el docente no asiste.
+      disponibilidadDocente: ['LUNES', 'MARTES'].map((dia) => ({
+        docenteId: 'doc-2', docente: 'VOCAL Dos', dia, turno: 'NOCHE',
+        hora_desde: '18:00', hora_hasta: '22:00', estado: 'ACTIVE', disponible_mesa: true,
+      })),
+    })
+
+    const vocal = input.docentes.find((docente) => docente.id === 'doc-2')
+    expect(vocal.diasAsistencia).toEqual(['martes'])
+  })
+
   it('no muta snapshot original', () => {
     const snapshot = structuredClone(legacyWorkspaceSnapshot)
     const original = structuredClone(snapshot)

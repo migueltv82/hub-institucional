@@ -20,7 +20,7 @@ function AssetsSection({
           accentClass="upload-card upload-card--teal hover:border-teal-300 md:col-span-2"
           eyebrow="Respaldo de la carga"
           title="Descargar Excel originales"
-          description="Descarga los archivos que subiste y que estan almacenados para la institucion activa."
+          description="Descarga los archivos que subiste y que están almacenados para la institución activa."
           iconClass="text-teal-700"
           onClick={onDownloadOriginals}
         />
@@ -35,7 +35,7 @@ function AssetsSection({
         <DownloadCard
           accentClass="upload-card upload-card--violet hover:border-violet-300"
           eyebrow="Workbook Excel"
-          title="Plantilla academica"
+          title="Plantilla académica"
           description="Carreras, planes, materias, afinidades, correlatividades y calendario."
           iconClass="text-violet-700"
           onClick={onDownloadKitExamEngineV2}

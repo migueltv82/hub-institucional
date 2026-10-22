@@ -385,6 +385,47 @@ describe('examEngineV21FieldTestService', () => {
     expect(csv).toBe('fecha,materiaMesa\n2026-11-27,"Geografia, Regional"')
   })
 
+  it('D1 P3: sin aula en la mesa usa el aula de cursada de la materia; si no hay, "A confirmar"', () => {
+    const mesa = (materiaId, extra = {}) => ({ id: `mesa-${materiaId}`, carrera: 'PROFESORADO DE INGLES', materiaId, fechaSugerida: '2026-11-02', estadoFinal: 'FINAL_CONFIRMED', ...extra })
+    const cronograma = buildPublishedCronogramaFromFinalTribunals([mesa('ING01'), mesa('ING02'), mesa('ING03', { aula: 'Aula Magna' }), mesa('ING04')], {
+      horarios: [
+        { carrera: 'Profesorado de Ingles', materia: 'ing01', aula: 'Sede Centro - Aula 4' },
+        { carrera: 'PROFESORADO DE INGLES', materia: 'ING02', aula: 'A definir' },
+        { carrera: 'PROFESORADO DE INGLES', materia: 'ING03', aula: 'Aula 9' },
+        // Plantilla de docentes: la ubicacion viene en "sede" (parseTemplateV2TeachersWorkbook la conserva).
+        { carrera: 'PROFESORADO DE INGLES', materia: 'ING04', aula: '', sede: 'Anexo Norte' },
+      ],
+    })
+
+    expect(cronograma.map((row) => row.aula)).toEqual(['Sede Centro - Aula 4', 'A confirmar', 'Aula Magna', 'Anexo Norte'])
+  })
+
+  it('publica con el codigo de materia del catalogo, no con el id interno del motor (EX.6)', () => {
+    const cronograma = buildPublishedCronogramaFromFinalTribunals([{
+      id: 'draft:profesorado de prueba uat::uat01:PRIMER_LLAMADO',
+      carrera: 'PROFESORADO DE PRUEBA UAT',
+      materiaId: 'subject-profesorado-de-prueba-uat-uat01',
+      materiaMesa: 'MATERIA DE PRUEBA UAT',
+      fechaSugerida: '2026-11-02',
+      estadoFinal: 'FINAL_CONFIRMED',
+      llamado: 'PRIMER_LLAMADO',
+      titularId: 'doc-uat-1',
+      vocal1Id: 'doc-uat-3',
+      vocal2Id: 'doc-sin-dni',
+    }], {
+      materias: [{ id: 'subject-profesorado-de-prueba-uat-uat01', codigo: 'UAT01', materia: 'UAT01' }],
+      docentes: [{ id: 'doc-uat-1', dni: '90000001' }, { id: 'doc-uat-3', dni: '90.000.004' }, { id: 'doc-sin-dni' }],
+    })
+
+    expect(cronograma[0]).toMatchObject({
+      materia: 'UAT01',
+      codigo: 'UAT01',
+      materiaId: 'subject-profesorado-de-prueba-uat-uat01',
+      tribunal_dnis: ['90000001', '90000004'],
+      titular_dni: '90000001',
+    })
+  })
+
   it('convierte tribunales finales confirmados en cronograma publicable para portales', () => {
     const cronograma = buildPublishedCronogramaFromFinalTribunals([{
       id: 'mesa-ing06',

@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+// Git puede entregar CRLF en Windows: las comparaciones de este archivo usan LF.
 const edgeFunction = readFileSync(
   join(process.cwd(), 'supabase/functions/admin-users/index.ts'),
   'utf8',
-)
+).replace(/\r\n/g, '\n')
 const supabaseConfig = readFileSync(
   join(process.cwd(), 'supabase/config.toml'),
   'utf8',
@@ -106,7 +107,7 @@ describe('admin-users edge function security posture', () => {
   })
 
   it('obliga escritura relacional para inscripciones que alimentan el panel docente', () => {
-    expect(edgeFunction).toContain("new Set(['enroll_subject', 'withdraw_subject'])")
+    expect(edgeFunction).toContain("new Set(['enroll_subject', 'withdraw_subject', 'register_exam', 'cancel_exam'])")
     expect(edgeFunction).toContain('relationalWriteRequired = shouldRequireStudentPortalRelationalWrite(mutationType)')
     expect(edgeFunction).toContain('relationalWriteEnabled = dualWriteEnabled || relationalWriteRequired')
     expect(edgeFunction).toContain('if (relationalWriteRequired || transitionConfig.strictDriftBlockEnabled || shouldReadRelationalAcademics(transitionConfig))')
@@ -119,6 +120,130 @@ describe('admin-users edge function security posture', () => {
     expect(edgeFunction).toContain('teacherRosterEnrollmentMatchesAccessibleSubject')
     expect(edgeFunction).toContain('snapshot.enrollments')
     expect(edgeFunction).toContain('mapSnapshotEnrollmentToTeacherRosterEnrollment')
+  })
+
+  it('I2d: re-crear accesos docentes no pisa contrasena ni bloqueo, y el alta con DNI exige cambiarla', () => {
+    const teacherReuse = edgeFunction.slice(edgeFunction.indexOf('async function createOrReuseTeacherAuthUser('), edgeFunction.indexOf('async function linkStudentRecordsToProfile('))
+    const existingBranch = teacherReuse.slice(teacherReuse.indexOf('if (existingUser) {'), teacherReuse.indexOf('const { data, error } = await adminClient.auth.admin.createUser({'))
+    expect(existingBranch).toContain('updateUserById(existingUser.id, {')
+    expect(existingBranch).not.toMatch(/\bpassword\b,/)
+    expect(edgeFunction).toContain("...(status === 'created' ? { is_blocked: false } : {}),")
+    expect(edgeFunction.match(/\[MUST_CHANGE_PASSWORD_FLAG\]: true,/g)).toHaveLength(2)
+  })
+
+  it('I2d: solo complete_initial_password_change limpia la marca, verificando la contrasena actual', () => {
+    const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleCompleteInitialPasswordChange('), edgeFunction.indexOf('async function handleSetUserPassword('))
+    expect(edgeFunction).toContain('complete_initial_password_change: handleCompleteInitialPasswordChange')
+    expect(edgeFunction).toContain("action === 'complete_initial_password_change'\n        ? await getAuthenticatedContext(req)")
+    expect(handler).toContain('await assertCallerPassword(context.caller, currentPassword)')
+    expect(handler.indexOf('assertCallerPassword')).toBeLessThan(handler.indexOf('updateUserById'))
+    expect(handler).toContain('updateUserById(context.caller.id, {')
+    expect(handler).toContain('[MUST_CHANGE_PASSWORD_FLAG]: false')
+    expect(edgeFunction.match(/\[MUST_CHANGE_PASSWORD_FLAG\]: false/g)).toHaveLength(1)
+  })
+
+  it('I2f: el alta de institucion + admin valida antes de escribir y deshace todo si falla', () => {
+    const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleCreateTenantWithAdmin('), edgeFunction.indexOf('async function handleCreateOrAssignInstitutionUser('))
+    const insertAt = handler.indexOf(".from('institutions')\n    .insert({")
+    expect(insertAt).toBeGreaterThan(0)
+    expect(handler.indexOf('await findReusableInstitutionAdmin(adminClient, email)')).toBeLessThan(insertAt)
+    expect(handler.indexOf("throw badRequest('La contrasena debe tener al menos 8 caracteres.')")).toBeLessThan(insertAt)
+    expect(handler).toContain("await adminClient.from('institutions').delete().eq('id', institution.id)")
+    expect(handler).toContain('await discardProvisionalInstitutionAdmin(adminClient, createdUserId)')
+    expect(handler).not.toContain('deleteUser(')
+  })
+
+  it('I2g: asignar usuario a institucion valida antes de crear el usuario y lo borra si la asignacion falla', () => {
+    const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleCreateOrAssignInstitutionUser('), edgeFunction.indexOf('async function createOrReuseStudentAuthUser({'))
+    const createAt = handler.indexOf('await createInstitutionAdminUser(')
+    expect(createAt).toBeGreaterThan(0)
+    for (const guard of ['if (!membershipRoles.has(role))', 'if (institutionIds.length === 0)', "throw badRequest('Alguna de las instituciones elegidas no existe.')", 'await findReusableInstitutionAdmin(adminClient, email)']) {
+      expect(handler.indexOf(guard)).toBeGreaterThan(-1)
+      expect(handler.indexOf(guard)).toBeLessThan(createAt)
+    }
+    expect(handler).toContain('await discardProvisionalInstitutionAdmin(adminClient, createdUserId)')
+    expect(handler).not.toContain('deleteUser(')
+    expect(handler).toContain("await adminClient.from('memberships').upsert(previousMemberships.map(")
+  })
+
+  it('AUD.I2f P1: un admin en alta no se reutiliza y la compensacion solo borra cuentas que siguen en alta', () => {
+    const create = edgeFunction.slice(edgeFunction.indexOf('async function createInstitutionAdminUser({'), edgeFunction.indexOf('// Fin de un alta nueva'))
+    expect(create).toContain("app_metadata: { provider: 'email', providers: ['email'], [ADMIN_PROVISIONING_FLAG]: true }")
+    const reusable = edgeFunction.slice(edgeFunction.indexOf('async function findReusableInstitutionAdmin('), edgeFunction.indexOf('async function createInstitutionAdminUser({'))
+    expect(reusable.indexOf('assertNotInAdminProvisioning(existingUser)')).toBeLessThan(reusable.indexOf('await readReusableAdminProfile('))
+    const discard = edgeFunction.slice(edgeFunction.indexOf('async function discardProvisionalInstitutionAdmin('), edgeFunction.indexOf('async function upsertProfile({'))
+    expect(discard.indexOf('[ADMIN_PROVISIONING_FLAG] !== true) return false')).toBeGreaterThan(0)
+    expect(discard.indexOf('[ADMIN_PROVISIONING_FLAG] !== true) return false')).toBeLessThan(discard.indexOf('deleteUser(userId)'))
+    // Toda reutilizacion de cuentas (admin, docente, alumno y la reparacion de accesos) respeta el alta en curso.
+    expect(edgeFunction.match(/assertNotInAdminProvisioning\((existingUser|user)\)/g)).toHaveLength(4)
+    for (const handlerName of ['handleCreateTenantWithAdmin', 'handleCreateOrAssignInstitutionUser']) {
+      const handler = edgeFunction.slice(edgeFunction.indexOf(`async function ${handlerName}(`))
+      const body = handler.slice(0, handler.indexOf('\n}\n'))
+      expect(body.indexOf('await finishInstitutionAdminProvisioning(adminClient, createdUser)')).toBeGreaterThan(body.indexOf('await assignMemberships({'))
+    }
+  })
+
+  it('I2f/I2g: un admin existente se reutiliza sin tocar contrasena, rol global ni bloqueo', () => {
+    const reusable = edgeFunction.slice(edgeFunction.indexOf('async function findReusableInstitutionAdmin('), edgeFunction.indexOf('async function createInstitutionAdminUser({'))
+    const profileCheck = edgeFunction.slice(edgeFunction.indexOf('async function readReusableAdminProfile('), edgeFunction.indexOf('async function findReusableInstitutionAdmin('))
+    // AUD.I2f P2: sin perfil no se reutiliza; el rol tiene que ser exactamente admin_instituto.
+    expect(profileCheck).toContain('if (!existingProfile) {')
+    expect(profileCheck).toContain("existingProfile.is_global_admin || String(existingProfile.account_role ?? '').toLowerCase() !== 'admin_instituto'")
+    expect(profileCheck).toContain('if (existingProfile.is_blocked)')
+    expect(profileCheck).not.toMatch(/\.(upsert|update|insert)\(/)
+    expect(reusable).not.toMatch(/password|\.(upsert|update|insert)\(/)
+    // AUD.I2f P2: el reutilizado no se reescribe y se revalida despues de recibir la membresia.
+    expect(edgeFunction).not.toContain('markReusedInstitutionAdmin')
+    for (const handlerName of ['handleCreateTenantWithAdmin', 'handleCreateOrAssignInstitutionUser']) {
+      const handler = edgeFunction.slice(edgeFunction.indexOf(`async function ${handlerName}(`))
+      const body = handler.slice(0, handler.indexOf('\n}\n'))
+      expect(body.indexOf('if (existingUser) await readReusableAdminProfile(adminClient,')).toBeGreaterThan(body.indexOf('await assignMemberships({'))
+    }
+    expect(edgeFunction).not.toContain('createOrReuseAuthUser(')
+  })
+
+  it('D2: la provision masiva reintenta solo SOURCE_FILE_WORKSPACE_BUSY y solo sobre escrituras idempotentes', () => {
+    const helper = edgeFunction.slice(edgeFunction.indexOf('function isWorkspaceBusyError('), edgeFunction.indexOf('function assertNotInAdminProvisioning('))
+    expect(helper).toContain("record?.code === '55P03'")
+    expect(helper).toContain("if (attempt >= attempts || !isWorkspaceBusyError(error)) throw error")
+    const students = edgeFunction.slice(edgeFunction.indexOf('async function handleBulkCreateStudents('), edgeFunction.indexOf('async function handleBulkCreateTeachers('))
+    const retried = students.slice(students.indexOf('await retryOnWorkspaceBusy(async () => {'))
+    // La cuenta Auth se crea antes y fuera del reintento: nunca se crea dos veces.
+    expect(students.indexOf('await createOrReuseStudentAuthUser({')).toBeLessThan(students.indexOf('await retryOnWorkspaceBusy(async () => {'))
+    for (const write of ['persistStudentRecord({', 'persistStudentCareerPlan({', 'linkStudentRecordsToProfile({']) expect(retried).toContain(write)
+    expect(retried).not.toContain('createUser(')
+    const teachers = edgeFunction.slice(edgeFunction.indexOf('async function handleBulkCreateTeachers('), edgeFunction.indexOf('function getPayloadRecord('))
+    expect(teachers.indexOf('await createOrReuseTeacherAuthUser({')).toBeLessThan(teachers.indexOf('await retryOnWorkspaceBusy(async () => {'))
+    expect(teachers.slice(teachers.indexOf('await retryOnWorkspaceBusy(async () => {'))).toContain('persistAndLinkTeacherRecord({')
+  })
+
+  it('reparar accesos incompletos: accion aparte, solo admin institucional y solo cuentas nunca usadas y sin otra identidad', () => {
+    const repair = edgeFunction.slice(edgeFunction.indexOf('async function handleRepairStudentAccess('), edgeFunction.indexOf('async function handleBulkCreateTeachers('))
+    expect(edgeFunction).toContain("repair_student_access: handleRepairStudentAccess")
+    expect(edgeFunction).toContain("|| action === 'repair_student_access'\n        ? await requireInstitutionAdmin(")
+    for (const guard of [
+      'assertNotInAdminProvisioning(user)',
+      'user.app_metadata?.[MUST_CHANGE_PASSWORD_FLAG] !== true',
+      "!['alumno', 'student'].includes(String(profile.account_role).toLowerCase())",
+      "memberships.length !== 1 || memberships[0].institution_id !== institutionId || memberships[0].role !== 'viewer'",
+      'if (records.some((record) => record.profile_id)) {',
+      ".is('profile_id', null)",
+    ]) expect(repair).toContain(guard)
+    // No crea, borra ni cambia cuentas o contrasenas: solo vincula legajos sin duenio.
+    expect(repair).not.toMatch(/createUser|deleteUser|updateUserById|password/)
+    // El alta masiva sigue fallando cerrada ante legajos sin vincular (regla auditada).
+    expect(edgeFunction).toContain('!records.length || records.some((record) => record.profile_id !== user.id)) {')
+  })
+
+  it('PB.4: el snapshot del portal alumno se escribe despues de la escritura relacional', () => {
+    const handler = edgeFunction.slice(edgeFunction.indexOf('async function handleStudentPortalMutation('), edgeFunction.indexOf('async function fetchTeacherRosterTeacherRecords({'))
+    const relationalAt = handler.indexOf('relationalResult = await writeStudentPortalRelational({')
+    const snapshotAt = handler.indexOf(".from('workspace_snapshots')\n      .upsert({")
+    expect(relationalAt).toBeGreaterThan(0)
+    expect(snapshotAt).toBeGreaterThan(relationalAt)
+    expect(handler.match(/\.from\('workspace_snapshots'\)\n\s+\.upsert\(/g)).toHaveLength(1)
+    expect(handler).toContain('throw new HttpError(`No se guardo el cambio: ${relationalErrorMessage}`, 409)')
+    expect(handler).not.toContain('El snapshot se actualizo, pero fallo')
   })
 
   it('protege el reset academico total con permisos admin y contrasena actual', () => {
@@ -151,5 +276,51 @@ describe('admin-users edge function security posture', () => {
     expect(persistStudentRecordBody).toContain(".eq('career', career)")
     expect(persistStudentRecordBody).toContain("onConflict: 'institution_id,workspace_key,email,career'")
     expect(persistStudentRecordBody).not.toContain("onConflict: 'institution_id,external_code'")
+  })
+
+  it('corta en la Edge a miembros de una institucion suspendida (06.3)', () => {
+    const helper = extractSqlBlock(edgeFunction, /async function assertInstitutionActive\(/, /\nasync function requireStudentPortalMember\(/)
+    expect(helper).toContain(".from('institutions')")
+    expect(helper).toContain("institution?.status !== 'active'")
+    for (const name of ['requireStudentPortalMember', 'requireTeacherPortalMember', 'requireInstitutionAdmin']) {
+      const body = extractSqlBlock(edgeFunction, new RegExp(`async function ${name}\\(`), /\n}\n/)
+      expect(body, name).toContain('await assertInstitutionActive(context.adminClient, institutionId)')
+    }
+    const superAdminBody = extractSqlBlock(edgeFunction, /async function requireSuperAdmin\(/, /\n}\n/)
+    expect(superAdminBody).not.toContain('assertInstitutionActive')
+  })
+
+  it('exige institucion activa en el helper RLS y en las RPC de autogestion del alumno (06.3)', () => {
+    const helperBody = extractSqlBlock(foundationSchema, /create or replace function public\.is_member_of_institution\(/i, /\$\$;/)
+    expect(helperBody).toContain('join public.institutions institution on institution.id = membership.institution_id')
+    expect(helperBody).toContain("and institution.status = 'active'")
+    const superAdminBody = extractSqlBlock(foundationSchema, /create or replace function public\.is_super_admin\(/i, /\$\$;/)
+    expect(superAdminBody).not.toContain('institutions')
+    const subjectRpc = extractSqlBlock(academicOperationsSchema, /create or replace function public\.upsert_subject_enrollment_from_portal\(/i, /\$\$;/)
+    const examRpc = extractSqlBlock(readFileSync(join(process.cwd(), 'supabase/schema/08_exam_tables.sql'), 'utf8'), /create or replace function public\.upsert_exam_enrollment_from_portal\(/i, /\$\$;/)
+    for (const body of [subjectRpc, examRpc]) {
+      expect(body).toMatch(/join public\.institutions institution\s+on institution\.id = membership\.institution_id\s+and institution\.status = 'active'/)
+    }
+  })
+
+  it('cancela mesas con id relacional y con su propio client_mutation_id (PB.1)', () => {
+    const cancelBranch = extractSqlBlock(edgeFunction, /\} else if \(mutationType === 'cancel_exam'\) \{/, /\} else if \(mutationType === 'update_profile'\)/)
+    expect(cancelBranch).toContain(".from('exam_enrollments')")
+    expect(cancelBranch).toContain(".eq('student_id', callerId)")
+    expect(cancelBranch).toContain('legacy_snapshot_id')
+    const relationalWriter = extractSqlBlock(edgeFunction, /async function writeExamEnrollmentRelational\(/, /\nasync function writeStudentPortalRelational\(/)
+    expect(relationalWriter).toMatch(/mutationType === 'cancel_exam'\s*\?\s*`\$\{legacySnapshotId \|\| examTableId\}:cancel_exam:\$\{now\}`/)
+    const registerBranch = extractSqlBlock(edgeFunction, /\} else if \(mutationType === 'register_exam'\) \{/, /\} else if \(mutationType === 'cancel_exam'\)/)
+    expect(registerBranch).toContain('result = asRecordArray(snapshot.examEnrollments).find(isSameExamEnrollment) ?? nextExamEnrollment')
+  })
+
+  it('da de baja cursadas con id relacional, solo propias, y devuelve la fila guardada al inscribir (PB.3)', () => {
+    const withdrawBranch = extractSqlBlock(edgeFunction, /\} else if \(mutationType === 'withdraw_subject'\) \{/, /\} else if \(mutationType === 'register_exam'\)/)
+    expect(withdrawBranch).toContain(".from('subject_enrollments')")
+    expect(withdrawBranch).toContain(".eq('student_id', callerId)")
+    expect(withdrawBranch).toContain(".eq('institution_id', institutionId)")
+    expect(withdrawBranch).toContain('legacy_snapshot_id')
+    const enrollBranch = extractSqlBlock(edgeFunction, /if \(mutationType === 'enroll_subject'\) \{/, /\} else if \(mutationType === 'withdraw_subject'\)/)
+    expect(enrollBranch).toContain('result = asRecordArray(snapshot.enrollments).find(isSameSubjectEnrollment) ?? nextEnrollment')
   })
 })

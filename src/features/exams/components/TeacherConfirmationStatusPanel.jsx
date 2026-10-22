@@ -42,7 +42,7 @@ function RoleStatus({ canConfirmAsAdmin = false, disabled = false, entry, onConf
       ) : null}
       {entry.reassignmentStatus === 'accepted' && entry.automaticSwap ? (
         <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-900">
-          Reubicacion automatica aplicada: {entry.automaticSwapSourceDate || entry.automaticSwap.source_exam_table_id} → {entry.automaticSwapTargetDate || entry.automaticSwap.target_exam_table_id}.
+          Reubicacion automática aplicada: {entry.automaticSwapSourceDate || entry.automaticSwap.source_exam_table_id} → {entry.automaticSwapTargetDate || entry.automaticSwap.target_exam_table_id}.
         </p>
       ) : null}
       {entry.reassignmentStatus === 'requested' ? (

@@ -73,15 +73,15 @@ function StudentFinancialStatusSection({ institutionId, workspaceKey, useRemoteW
           Adeuda cuota
         </h3>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          Marcado manual, sin integracion de pagos real. Un alumno marcado aca no puede inscribirse a mesas de examen
+          Marcado manual, sin integración de pagos real. Un alumno marcado aca no puede inscribirse a mesas de examen
           hasta que se destilde.
         </p>
       </div>
 
       {isLoading ? (
-        <p className="mt-4 text-sm text-slate-500">Cargando padron...</p>
+        <p className="mt-4 text-sm text-slate-500">Cargando padrón...</p>
       ) : students.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500">No hay alumnos sincronizados todavia.</p>
+        <p className="mt-4 text-sm text-slate-500">No hay alumnos sincronizados todavía.</p>
       ) : (
         <div className="mt-4 max-h-96 overflow-y-auto rounded-md border border-slate-200">
           <table className="w-full text-sm">

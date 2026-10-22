@@ -85,7 +85,7 @@ function agruparMesasPorCarrera(cronograma, careerOptions = []) {
 function EmptyCareerNotice() {
   return (
     <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm font-semibold text-slate-600">
-      Esta carrera esta cargada, pero no tiene mesas generadas. Revisa que sus materias figuren en Horarios docentes y que los codigos coincidan con el plan de estudios.
+      Esta carrera esta cargada, pero no tiene mesas generadas. Revisa que sus materias figuren en Horarios docentes y que los códigos coincidan con el plan de estudios.
     </div>
   )
 }
@@ -138,7 +138,7 @@ function MesaActions({
 function EmptyCronograma() {
   return (
     <div className="table-wrap rise-in p-8 text-center text-sm text-slate-500">
-      Carga los archivos, define las fechas y genera el cronograma para verlo aqui.
+      Carga los archivos, define las fechas y genera el cronograma para verlo aquí.
     </div>
   )
 }

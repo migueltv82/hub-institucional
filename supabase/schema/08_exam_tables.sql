@@ -581,6 +581,194 @@ begin
 end;
 $$;
 
+-- Reglas de elegibilidad de un alumno para rendir (regularidad, deuda, sancion por ausencia, correlativas).
+-- Unica fuente: la usan la inscripcion del portal (con plazo) y la inscripcion especial del admin (sin plazo).
+-- Interna: no se expone a ningun rol de la API.
+create or replace function public.exam_enrollment_assert_eligible(
+  p_institution_id uuid,
+  p_workspace_key text,
+  p_student_id uuid,
+  p_student_record_id uuid,
+  p_subject_id text,
+  p_program_id text,
+  p_exam_table_subject_id uuid,
+  p_study_plan_subject_id uuid,
+  p_exam_period_key text,
+  p_exam_call_key text,
+  p_scheduled_starts_at timestamptz
+)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  latest_academic_status text;
+  last_absence_at timestamptz;
+  next_period_key text;
+  next_call_key text;
+begin
+  select grade.academic_status
+  into latest_academic_status
+  from public.student_grades grade
+  where grade.institution_id = p_institution_id
+    and grade.workspace_key = p_workspace_key
+    and grade.deleted_at is null
+    and grade.student_record_id = p_student_record_id
+    and grade.student_id = p_student_id
+    and grade.subject_id = p_subject_id
+    and grade.program_id = p_program_id
+    and grade.academic_status <> 'pending'
+  order by grade.updated_at desc nulls last, grade.created_at desc nulls last
+  limit 1;
+
+  if latest_academic_status is distinct from 'regular' then
+    raise exception 'EXAM_REGULARITY_REQUIRED';
+  end if;
+
+  if exists (
+    select 1
+    from public.student_financial_status financial_status
+    where financial_status.institution_id = p_institution_id
+      and financial_status.workspace_key = p_workspace_key
+      and financial_status.student_record_id = p_student_record_id
+      and financial_status.adeuda_cuota = true
+  ) then
+    raise exception 'EXAM_FINANCIAL_DEBT_BLOCK';
+  end if;
+
+  if exists (
+    select 1
+    from public.exam_absence_penalties penalty
+    where penalty.institution_id = p_institution_id
+      and penalty.workspace_key = p_workspace_key
+      and penalty.student_record_id = p_student_record_id
+      and penalty.subject_id = p_subject_id
+      and penalty.program_id = p_program_id
+      and penalty.status in ('active', 'pending_review')
+      and penalty.absent_at <= p_scheduled_starts_at
+      and (
+        penalty.status = 'pending_review'
+        or (
+          penalty.scope_type = 'next_exam_call_for_subject'
+          and penalty.blocked_exam_period_key = p_exam_period_key
+          and penalty.blocked_exam_call_key = p_exam_call_key
+          and p_scheduled_starts_at >= penalty.penalty_from
+          and (penalty.penalty_until is null or p_scheduled_starts_at <= penalty.penalty_until)
+        )
+        or (
+          penalty.scope_type = 'specific_exam_table_subject'
+          and penalty.blocked_exam_table_subject_id = p_exam_table_subject_id
+          and p_scheduled_starts_at >= penalty.penalty_from
+          and (penalty.penalty_until is null or p_scheduled_starts_at <= penalty.penalty_until)
+        )
+        or (
+          penalty.status = 'active'
+          and (
+            penalty.blocked_exam_table_id is null
+            or penalty.blocked_exam_table_subject_id is null
+            or penalty.blocked_exam_period_key is null
+            or penalty.blocked_exam_call_key is null
+          )
+        )
+      )
+  ) then
+    raise exception 'BLOCKED_BY_ABSENCE_PENALTY';
+  end if;
+
+  -- F1b (decision de Miguel, 18/10): ausente en el acta de una materia -> pierde el proximo llamado de esa
+  -- materia y carrera. El proximo llamado es el (periodo, llamado) de la primera mesa publicada de la materia
+  -- posterior al examen en que falto. Espejo: getAbsencePenaltyForExam en src/modules/alumnos/lib/examEligibility.js.
+  select max(absent_table.scheduled_starts_at)
+  into last_absence_at
+  from public.exam_results exam_result
+  join public.exam_tables absent_table
+    on absent_table.institution_id = exam_result.institution_id
+   and absent_table.id = exam_result.exam_table_id
+  where exam_result.institution_id = p_institution_id
+    and exam_result.workspace_key = p_workspace_key
+    and exam_result.student_record_id = p_student_record_id
+    and exam_result.subject_id = p_subject_id
+    and exam_result.program_id = p_program_id
+    and exam_result.result = 'absent'
+    and absent_table.scheduled_starts_at < p_scheduled_starts_at;
+
+  if last_absence_at is not null then
+    select next_table.exam_period_key, next_table.exam_call_key
+    into next_period_key, next_call_key
+    from public.exam_tables next_table
+    join public.exam_table_subjects next_subject
+      on next_subject.institution_id = next_table.institution_id
+     and next_subject.exam_table_id = next_table.id
+    join public.subjects subject
+      on subject.institution_id = next_subject.institution_id
+     and subject.id = next_subject.subject_id
+    join public.careers career
+      on career.institution_id = next_subject.institution_id
+     and career.id = next_subject.career_id
+    where next_table.institution_id = p_institution_id
+      and next_table.workspace_key = p_workspace_key
+      and next_table.status in ('confirmed', 'open', 'closed', 'completed')
+      and next_table.scheduled_starts_at > last_absence_at
+      and subject.code = p_subject_id
+      and (career.name = p_program_id or career.external_code = p_program_id)
+    order by next_table.scheduled_starts_at, next_table.id
+    limit 1;
+
+    if next_period_key = p_exam_period_key and next_call_key = p_exam_call_key then
+      raise exception 'BLOCKED_BY_ABSENCE_PENALTY';
+    end if;
+  end if;
+
+  if exists (
+    select 1
+    from public.subject_prerequisites prerequisite
+    join public.study_plan_subjects prerequisite_plan_subject
+      on prerequisite_plan_subject.institution_id = prerequisite.institution_id
+     and prerequisite_plan_subject.id = prerequisite.prerequisite_plan_subject_id
+    join public.subjects prerequisite_subject
+      on prerequisite_subject.institution_id = prerequisite_plan_subject.institution_id
+     and prerequisite_subject.id = prerequisite_plan_subject.subject_id
+    join public.study_plans prerequisite_plan
+      on prerequisite_plan.institution_id = prerequisite_plan_subject.institution_id
+     and prerequisite_plan.id = prerequisite_plan_subject.plan_id
+    join public.careers prerequisite_career
+      on prerequisite_career.institution_id = prerequisite_plan.institution_id
+     and prerequisite_career.id = prerequisite_plan.career_id
+    left join lateral (
+      select grade.academic_status
+      from public.student_grades grade
+      where grade.institution_id = p_institution_id
+        and grade.workspace_key = p_workspace_key
+        and grade.deleted_at is null
+        and grade.student_record_id = p_student_record_id
+        and grade.student_id = p_student_id
+        and grade.subject_id = prerequisite_subject.code
+        and (
+          grade.program_id = prerequisite_career.name
+          or grade.program_id = prerequisite_career.external_code
+        )
+        and grade.academic_status <> 'pending'
+      order by grade.updated_at desc nulls last, grade.created_at desc nulls last
+      limit 1
+    ) latest_prerequisite_grade on true
+    where prerequisite.institution_id = p_institution_id
+      and prerequisite.target_plan_subject_id = p_study_plan_subject_id
+      and prerequisite.status = 'active'
+      and prerequisite.applies_to in ('exam', 'enrollment_and_exam')
+      and (
+        latest_prerequisite_grade.academic_status is null
+        or latest_prerequisite_grade.academic_status not in ('approved', 'promocionado')
+      )
+  ) then
+    raise exception 'EXAM_PREREQUISITES_NOT_MET';
+  end if;
+end;
+$$;
+
+revoke all on function public.exam_enrollment_assert_eligible(uuid, text, uuid, uuid, text, text, uuid, uuid, text, text, timestamptz) from public, anon, authenticated;
+
 create or replace function public.upsert_exam_enrollment_from_portal(
   target_institution_id uuid,
   target_workspace_key text,
@@ -618,7 +806,6 @@ declare
   student_plan_context record;
   existing_row public.exam_enrollments%rowtype;
   saved_row public.exam_enrollments%rowtype;
-  latest_academic_status text;
 begin
   if target_institution_id is null
     or actor_user_id is null
@@ -655,6 +842,10 @@ begin
     join public.memberships membership
       on membership.user_id = profile.user_id
      and membership.institution_id = target_institution_id
+    -- 06.3: una institucion suspendida no acepta autogestion del alumno.
+    join public.institutions institution
+      on institution.id = membership.institution_id
+     and institution.status = 'active'
     where profile.user_id = target_student_id
       and profile.account_role in ('alumno', 'student')
       and profile.is_blocked = false
@@ -801,117 +992,19 @@ begin
   end if;
 
   if clean_status = 'registered' then
-    select grade.academic_status
-    into latest_academic_status
-    from public.student_grades grade
-    where grade.institution_id = target_institution_id
-      and grade.workspace_key = clean_workspace_key
-      and grade.deleted_at is null
-      and grade.student_record_id = target_student_record_id
-      and grade.student_id = target_student_id
-      and grade.subject_id = clean_subject_id
-      and grade.program_id = clean_program_id
-      and grade.academic_status <> 'pending'
-    order by grade.updated_at desc nulls last, grade.created_at desc nulls last
-    limit 1;
-
-    if latest_academic_status is distinct from 'regular' then
-      raise exception 'EXAM_REGULARITY_REQUIRED';
-    end if;
-
-    if exists (
-      select 1
-      from public.student_financial_status financial_status
-      where financial_status.institution_id = target_institution_id
-        and financial_status.workspace_key = clean_workspace_key
-        and financial_status.student_record_id = target_student_record_id
-        and financial_status.adeuda_cuota = true
-    ) then
-      raise exception 'EXAM_FINANCIAL_DEBT_BLOCK';
-    end if;
-
-    if exists (
-      select 1
-      from public.exam_absence_penalties penalty
-      where penalty.institution_id = target_institution_id
-        and penalty.workspace_key = clean_workspace_key
-        and penalty.student_record_id = target_student_record_id
-        and penalty.subject_id = clean_subject_id
-        and penalty.program_id = clean_program_id
-        and penalty.status in ('active', 'pending_review')
-        and penalty.absent_at <= exam_context.scheduled_starts_at
-        and (
-          penalty.status = 'pending_review'
-          or (
-            penalty.scope_type = 'next_exam_call_for_subject'
-            and penalty.blocked_exam_period_key = exam_context.exam_period_key
-            and penalty.blocked_exam_call_key = exam_context.exam_call_key
-            and exam_context.scheduled_starts_at >= penalty.penalty_from
-            and (penalty.penalty_until is null or exam_context.scheduled_starts_at <= penalty.penalty_until)
-          )
-          or (
-            penalty.scope_type = 'specific_exam_table_subject'
-            and penalty.blocked_exam_table_subject_id = exam_context.exam_table_subject_id
-            and exam_context.scheduled_starts_at >= penalty.penalty_from
-            and (penalty.penalty_until is null or exam_context.scheduled_starts_at <= penalty.penalty_until)
-          )
-          or (
-            penalty.status = 'active'
-            and (
-              penalty.blocked_exam_table_id is null
-              or penalty.blocked_exam_table_subject_id is null
-              or penalty.blocked_exam_period_key is null
-              or penalty.blocked_exam_call_key is null
-            )
-          )
-        )
-    ) then
-      raise exception 'BLOCKED_BY_ABSENCE_PENALTY';
-    end if;
-
-    if exists (
-      select 1
-      from public.subject_prerequisites prerequisite
-      join public.study_plan_subjects prerequisite_plan_subject
-        on prerequisite_plan_subject.institution_id = prerequisite.institution_id
-       and prerequisite_plan_subject.id = prerequisite.prerequisite_plan_subject_id
-      join public.subjects prerequisite_subject
-        on prerequisite_subject.institution_id = prerequisite_plan_subject.institution_id
-       and prerequisite_subject.id = prerequisite_plan_subject.subject_id
-      join public.study_plans prerequisite_plan
-        on prerequisite_plan.institution_id = prerequisite_plan_subject.institution_id
-       and prerequisite_plan.id = prerequisite_plan_subject.plan_id
-      join public.careers prerequisite_career
-        on prerequisite_career.institution_id = prerequisite_plan.institution_id
-       and prerequisite_career.id = prerequisite_plan.career_id
-      left join lateral (
-        select grade.academic_status
-        from public.student_grades grade
-        where grade.institution_id = target_institution_id
-          and grade.workspace_key = clean_workspace_key
-          and grade.deleted_at is null
-          and grade.student_record_id = target_student_record_id
-          and grade.student_id = target_student_id
-          and grade.subject_id = prerequisite_subject.code
-          and (
-            grade.program_id = prerequisite_career.name
-            or grade.program_id = prerequisite_career.external_code
-          )
-          and grade.academic_status <> 'pending'
-        order by grade.updated_at desc nulls last, grade.created_at desc nulls last
-        limit 1
-      ) latest_prerequisite_grade on true
-      where prerequisite.institution_id = target_institution_id
-        and prerequisite.target_plan_subject_id = exam_context.study_plan_subject_id
-        and prerequisite.status = 'active'
-        and prerequisite.applies_to in ('exam', 'enrollment_and_exam')
-        and (
-          latest_prerequisite_grade.academic_status is null
-          or latest_prerequisite_grade.academic_status not in ('approved', 'promocionado')
-        )
-    ) then
-      raise exception 'EXAM_PREREQUISITES_NOT_MET';
-    end if;
+    perform public.exam_enrollment_assert_eligible(
+      target_institution_id,
+      clean_workspace_key,
+      target_student_id,
+      target_student_record_id,
+      clean_subject_id,
+      clean_program_id,
+      exam_context.exam_table_subject_id,
+      exam_context.study_plan_subject_id,
+      exam_context.exam_period_key,
+      exam_context.exam_call_key,
+      exam_context.scheduled_starts_at
+    );
 
     insert into public.exam_enrollments (
       institution_id,
@@ -1241,3 +1334,978 @@ USING (
   )
 );
 -- END teacher assignment SELECT policy
+
+-- ============================================================
+-- EX.1: publicar el cronograma final en exam_tables
+-- ============================================================
+-- "Publicar cronograma" guarda las mesas en workspace_snapshots.cronograma. El portal alumno
+-- (05 visible_schedule) y la inscripcion (upsert_exam_enrollment_from_portal) exigen ademas una
+-- fila en exam_tables con su exam_table_subjects. Esta RPC las crea o actualiza desde las mesas
+-- publicadas. Solo owner/admin/editor de la institucion activa, o superadmin.
+-- Clave: el id publicado ("exam-engine-v21-<mesa>-<fecha>", el que manda el alumno). Incluye la fecha:
+-- el id del motor se repite entre turnos y sin la fecha un turno nuevo se apropiaria de la mesa (y de
+-- los inscriptos) del anterior. legacy_snapshot_id = id tal cual; legacy_exam_table_id = id en minusculas
+-- (05 cruza por cualquiera de los dos). Una mesa cerrada o completada no se reabre. Una mesa que ya no
+-- esta en el cronograma se cancela, salvo que tenga inscriptos: entonces se conserva y se informa.
+create or replace function public.publish_exam_tables_from_schedule(
+  target_institution_id uuid,
+  target_workspace_key text,
+  target_mesas jsonb,
+  target_enrollment_opens_at timestamptz default null,
+  target_close_hours_before integer default 24
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+  opens_at timestamptz := coalesce(target_enrollment_opens_at, now());
+  close_hours integer := greatest(coalesce(target_close_hours_before, 24), 0);
+  mesa jsonb;
+  published_id text;
+  legacy_key text;
+  subject_code text;
+  career_text text;
+  exam_date text;
+  start_time text;
+  end_time text;
+  starts_at timestamptz;
+  ends_at timestamptz;
+  closes_at timestamptz;
+  call_key text;
+  career_row record;
+  subject_row record;
+  table_id uuid;
+  table_status text;
+  primary_plan_subject record;
+  published_ids text[] := array[]::text[];
+  created_count integer := 0;
+  updated_count integer := 0;
+  skipped jsonb := '[]'::jsonb;
+  cancelled_count integer := 0;
+  kept jsonb := '[]'::jsonb;
+  stale record;
+  tribunal_dnis jsonb;
+  titular_dni text;
+  tribunal_names jsonb;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+
+  if target_institution_id is null
+    or not (
+      public.is_super_admin()
+      or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
+    )
+    or not exists (select 1 from public.institutions where id = target_institution_id and status = 'active')
+  then
+    raise exception 'Acceso denegado: solo el personal de gestion de la institucion publica mesas.' using errcode = '42501';
+  end if;
+
+  if jsonb_typeof(coalesce(target_mesas, 'null'::jsonb)) <> 'array' then
+    raise exception 'EXAM_PUBLISH_INVALID_PAYLOAD' using errcode = '22023';
+  end if;
+
+  -- Una publicacion a la vez por workspace.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('exam_publish:' || target_institution_id::text || ':' || clean_workspace_key, 0));
+
+  for mesa in select value from jsonb_array_elements(target_mesas) loop
+    published_id := btrim(coalesce(mesa ->> 'id', ''));
+    legacy_key := lower(published_id);
+    subject_code := btrim(coalesce(mesa ->> 'materia', mesa ->> 'codigo', ''));
+    career_text := btrim(coalesce(mesa ->> 'carrera', ''));
+    exam_date := btrim(coalesce(mesa ->> 'fechaIso', mesa ->> 'fechaSugerida', ''));
+    start_time := coalesce(nullif(btrim(coalesce(mesa ->> 'inicio', '')), ''), '08:00');
+    end_time := nullif(btrim(coalesce(mesa ->> 'fin', '')), '');
+    -- DNI de titular y vocales: autorizan al tribunal a ver los inscriptos (get_exam_table_roster).
+    tribunal_dnis := coalesce((
+      select jsonb_agg(distinct dni)
+      from (
+        select regexp_replace(part, '[^0-9]', '', 'g') as dni
+        from regexp_split_to_table(coalesce(mesa ->> 'tribunal_dnis', ''), ',') as part
+      ) cleaned
+      where dni <> ''
+    ), '[]'::jsonb);
+    -- Solo el titular ve los inscriptos desde el portal docente; los vocales ven la mesa.
+    titular_dni := nullif(regexp_replace(coalesce(mesa ->> 'titular_dni', ''), '[^0-9]', '', 'g'), '');
+    tribunal_names := jsonb_strip_nulls(jsonb_build_object(
+      'titular', nullif(btrim(coalesce(mesa ->> 'profesorTitular', '')), ''),
+      'vocal1', nullif(btrim(coalesce(mesa ->> 'vocal1', '')), ''),
+      'vocal2', nullif(btrim(coalesce(mesa ->> 'vocal2', '')), '')
+    ));
+
+    if published_id = '' or subject_code = '' or career_text = '' then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'Faltan id, materia o carrera.');
+      continue;
+    end if;
+    if legacy_key = any(published_ids) then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'La mesa esta repetida en el cronograma.');
+      continue;
+    end if;
+    -- Fecha y hora invalidas (25:00, 30/02) se omiten en lugar de abortar toda la publicacion.
+    begin
+      if exam_date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' or start_time !~ '^[0-9]{1,2}:[0-9]{2}$' or (end_time is not null and end_time !~ '^[0-9]{1,2}:[0-9]{2}$') then
+        raise exception using errcode = '22007';
+      end if;
+      starts_at := (exam_date || ' ' || start_time)::timestamp at time zone 'America/Argentina/Buenos_Aires';
+      ends_at := case when end_time is null then null else (exam_date || ' ' || end_time)::timestamp at time zone 'America/Argentina/Buenos_Aires' end;
+    exception when others then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'Fecha u hora invalida.');
+      continue;
+    end;
+
+    select career.id, career.name into career_row
+    from public.careers career
+    where career.institution_id = target_institution_id
+      and career.status = 'active'
+      and (career.name = career_text or career.external_code = career_text)
+    order by (career.name = career_text) desc
+    limit 1;
+    if career_row.id is null then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', format('La carrera %s no esta en el catalogo academico.', career_text));
+      continue;
+    end if;
+
+    select subject.id, subject.code into subject_row
+    from public.subjects subject
+    where subject.institution_id = target_institution_id and subject.code = subject_code;
+    if subject_row.id is null then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', format('La materia %s no esta en el catalogo academico.', subject_code));
+      continue;
+    end if;
+
+    -- Plan principal: el activo mas reciente de la carrera que contiene la materia.
+    select plan_subject.id as plan_subject_id, plan.id as plan_id into primary_plan_subject
+    from public.study_plan_subjects plan_subject
+    join public.study_plans plan on plan.institution_id = plan_subject.institution_id and plan.id = plan_subject.plan_id
+    where plan_subject.institution_id = target_institution_id
+      and plan_subject.subject_id = subject_row.id
+      and plan.career_id = career_row.id
+    order by (plan.status = 'active') desc, plan.plan_year desc nulls last, plan.created_at desc
+    limit 1;
+    if primary_plan_subject.plan_subject_id is null then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', format('La materia %s no esta en ningun plan de %s.', subject_code, career_row.name));
+      continue;
+    end if;
+
+    if ends_at is not null and ends_at <= starts_at then
+      ends_at := null;
+    end if;
+    closes_at := starts_at - make_interval(hours => close_hours);
+    if closes_at <= opens_at then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', format('Faltan menos de %s horas para la mesa: no se abre inscripcion.', close_hours));
+      -- Sigue en el cronograma: si ya estaba publicada, no se cancela por quedar fuera de la ventana.
+      published_ids := published_ids || legacy_key;
+      continue;
+    end if;
+
+    call_key := coalesce(nullif(btrim(coalesce(mesa ->> 'exam_call', '')), ''), 'first');
+
+    select exam_table.id, exam_table.status into table_id, table_status
+    from public.exam_tables exam_table
+    where exam_table.institution_id = target_institution_id
+      and exam_table.workspace_key = clean_workspace_key
+      and exam_table.legacy_exam_table_id = legacy_key
+    for update;
+
+    if table_status in ('closed', 'completed') then
+      skipped := skipped || jsonb_build_object('id', published_id, 'motivo', 'La mesa ya fue cerrada: no se reabre.');
+      published_ids := published_ids || legacy_key;
+      continue;
+    end if;
+
+    if table_id is null then
+      insert into public.exam_tables (
+        institution_id, workspace_key, primary_career_id, primary_study_plan_id, exam_period_key, exam_call_key,
+        exam_call_label, exam_type, scheduled_starts_at, scheduled_ends_at, room, enrollment_opens_at,
+        enrollment_closes_at, status, legacy_exam_table_id, legacy_snapshot_id, source, metadata, created_by, updated_by
+      ) values (
+        target_institution_id, clean_workspace_key, career_row.id, primary_plan_subject.plan_id, left(exam_date, 7), call_key,
+        coalesce(nullif(btrim(coalesce(mesa ->> 'llamado', '')), ''), 'Primer llamado'),
+        case when mesa ->> 'exam_type' = 'special' then 'special' else 'regular' end,
+        starts_at, ends_at, nullif(btrim(coalesce(mesa ->> 'aula', '')), ''), opens_at, closes_at, 'open',
+        legacy_key, published_id, 'exam_engine_v21',
+        jsonb_build_object('inscription_mode', coalesce(nullif(mesa ->> 'inscription_mode', ''), 'student_self_service'), 'published_by', 'publish_exam_tables_from_schedule', 'tribunal_dnis', tribunal_dnis, 'titular_dni', titular_dni, 'tribunal', tribunal_names),
+        (select auth.uid()), (select auth.uid())
+      )
+      returning id into table_id;
+      created_count := created_count + 1;
+    else
+      update public.exam_tables
+      set primary_career_id = career_row.id,
+          primary_study_plan_id = primary_plan_subject.plan_id,
+          exam_period_key = left(exam_date, 7),
+          exam_call_key = call_key,
+          exam_call_label = coalesce(nullif(btrim(coalesce(mesa ->> 'llamado', '')), ''), exam_call_label),
+          scheduled_starts_at = starts_at,
+          scheduled_ends_at = ends_at,
+          room = nullif(btrim(coalesce(mesa ->> 'aula', '')), ''),
+          enrollment_opens_at = least(enrollment_opens_at, opens_at),
+          enrollment_closes_at = closes_at,
+          status = 'open',
+          closed_at = null,
+          legacy_snapshot_id = published_id,
+          metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object('tribunal_dnis', tribunal_dnis, 'titular_dni', titular_dni, 'tribunal', tribunal_names),
+          updated_by = (select auth.uid()),
+          updated_at = timezone('utc', now()),
+          lock_version = lock_version + 1
+      where id = table_id and institution_id = target_institution_id;
+      updated_count := updated_count + 1;
+    end if;
+
+    -- Una fila por plan de la carrera que contiene la materia; la del plan principal es la primaria.
+    -- Primero se baja la marca de primaria vieja: el indice admite una sola primaria por mesa.
+    update public.exam_table_subjects
+    set is_primary = false
+    where institution_id = target_institution_id and exam_table_id = table_id and is_primary
+      and study_plan_subject_id <> primary_plan_subject.plan_subject_id;
+    update public.exam_table_subjects
+    set is_primary = true
+    where institution_id = target_institution_id and exam_table_id = table_id and not is_primary
+      and study_plan_subject_id = primary_plan_subject.plan_subject_id;
+    insert into public.exam_table_subjects (institution_id, exam_table_id, career_id, study_plan_id, study_plan_subject_id, subject_id, is_primary, legacy_subject_id, legacy_program_id)
+    select target_institution_id, table_id, career_row.id, plan_subject.plan_id, plan_subject.id, subject_row.id,
+      plan_subject.id = primary_plan_subject.plan_subject_id, subject_row.code, career_row.name
+    from public.study_plan_subjects plan_subject
+    join public.study_plans plan on plan.institution_id = plan_subject.institution_id and plan.id = plan_subject.plan_id
+    where plan_subject.institution_id = target_institution_id
+      and plan_subject.subject_id = subject_row.id
+      and plan.career_id = career_row.id
+    on conflict (institution_id, exam_table_id, study_plan_subject_id) do nothing;
+
+    published_ids := published_ids || legacy_key;
+  end loop;
+
+  -- Mesas del motor que ya no estan publicadas: se cancelan si no tienen inscriptos.
+  for stale in
+    select exam_table.id, exam_table.legacy_snapshot_id
+    from public.exam_tables exam_table
+    where exam_table.institution_id = target_institution_id
+      and exam_table.workspace_key = clean_workspace_key
+      and exam_table.source = 'exam_engine_v21'
+      and exam_table.status in ('draft', 'teacher_review', 'confirmed', 'open')
+      and not (exam_table.legacy_exam_table_id = any(published_ids))
+    for update
+  loop
+    if exists (
+      select 1 from public.exam_enrollments enrollment
+      where enrollment.institution_id = target_institution_id and enrollment.exam_table_id = stale.id and enrollment.status = 'registered'
+    ) then
+      kept := kept || jsonb_build_object('id', stale.legacy_snapshot_id, 'motivo', 'Tiene alumnos inscriptos: no se cancela automaticamente.');
+    else
+      update public.exam_tables
+      set status = 'cancelled', closed_at = timezone('utc', now()), updated_by = (select auth.uid()),
+          updated_at = timezone('utc', now()), lock_version = lock_version + 1
+      where id = stale.id and institution_id = target_institution_id;
+      cancelled_count := cancelled_count + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object(
+    'publicadas', created_count + updated_count,
+    'nuevas', created_count,
+    'actualizadas', updated_count,
+    'omitidas', skipped,
+    'canceladas', cancelled_count,
+    'conservadas_con_inscriptos', kept
+  );
+end;
+$$;
+
+revoke execute on function public.publish_exam_tables_from_schedule(uuid, text, jsonb, timestamptz, integer) from public, anon;
+grant execute on function public.publish_exam_tables_from_schedule(uuid, text, jsonb, timestamptz, integer) to authenticated;
+
+-- Inscriptos de una mesa publicada, para el titular (portal docente) y el personal de gestion (actas).
+-- Datos personales de alumnos: el docente solo ve la lista si es el titular publicado de la mesa (DNI de su
+-- legajo) o el titular asignado a la materia. Los vocales ven la mesa, no la lista.
+-- exam_enrollments no tiene policies: se lee solo por aca.
+create or replace function public.get_exam_table_roster(
+  target_institution_id uuid,
+  target_workspace_key text,
+  target_exam_key text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  caller_id uuid := (select auth.uid());
+  clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+  clean_exam_key text := lower(btrim(coalesce(target_exam_key, '')));
+  table_row record;
+  is_staff boolean;
+  caller_dnis text[];
+begin
+  if caller_id is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+
+  is_staff := public.is_super_admin()
+    or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor']);
+  if target_institution_id is null or not (is_staff or public.is_member_of_institution(target_institution_id)) then
+    raise exception 'Acceso denegado: solo el titular de la mesa puede ver los inscriptos.' using errcode = '42501';
+  end if;
+
+  select exam_table.id, exam_table.legacy_snapshot_id, exam_table.status, exam_table.metadata, exam_table.scheduled_starts_at into table_row
+  from public.exam_tables exam_table
+  where exam_table.institution_id = target_institution_id
+    and exam_table.workspace_key = clean_workspace_key
+    and exam_table.legacy_exam_table_id = clean_exam_key;
+
+  if not is_staff then
+    select coalesce(array_agg(regexp_replace(teacher.dni, '[^0-9]', '', 'g')), array[]::text[]) into caller_dnis
+    from public.teacher_records teacher
+    where teacher.institution_id = target_institution_id
+      and teacher.workspace_key = clean_workspace_key
+      and teacher.profile_id = caller_id
+      and regexp_replace(coalesce(teacher.dni, ''), '[^0-9]', '', 'g') <> '';
+
+    if table_row.id is null or not (
+      coalesce(table_row.metadata ->> 'titular_dni', '') = any(caller_dnis)
+      or exists (
+        select 1
+        from public.exam_table_subjects exam_subject
+        join public.subject_teacher_assignments assignment
+          on assignment.institution_id = exam_subject.institution_id
+         and assignment.subject_id = exam_subject.legacy_subject_id
+         and assignment.program_id = exam_subject.legacy_program_id
+        where exam_subject.institution_id = target_institution_id
+          and exam_subject.exam_table_id = table_row.id
+          and assignment.workspace_key = clean_workspace_key
+          and assignment.teacher_id = caller_id
+          -- Gate Codex P1: el titular (tambien con una licencia futura o ya terminada), dentro de su vigencia.
+          and assignment.role in ('titular', 'licencia')
+          and public.academic_teacher_assignment_grants_access(assignment)
+      )
+    ) then
+      -- Mismo error si la mesa no existe: no se revela que mesas hay.
+      raise exception 'Acceso denegado: solo el titular de la mesa puede ver los inscriptos.' using errcode = '42501';
+    end if;
+  end if;
+
+  if table_row.id is null then
+    raise exception 'EXAM_TABLE_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  return jsonb_build_object(
+    'mesa_id', table_row.legacy_snapshot_id,
+    'estado', table_row.status,
+    -- F1a: estado del acta y si ya se puede cargar (desde el dia del examen, hora argentina).
+    'acta_cerrada', table_row.status = 'completed',
+    'fecha_examen', table_row.scheduled_starts_at,
+    'puede_cargar_notas', table_row.status not in ('completed', 'cancelled')
+      and (timezone('America/Argentina/Buenos_Aires', now()))::date >= (timezone('America/Argentina/Buenos_Aires', table_row.scheduled_starts_at))::date,
+    'alumnos', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'inscripcion_id', enrollment.id,
+        'resultado', exam_result.result,
+        'escrito', exam_result.written_grade,
+        'oral', exam_result.oral_grade,
+        'nota', exam_result.final_grade,
+        'nombre', coalesce(nullif(btrim(student.full_name), ''), btrim(concat_ws(' ', student.first_name, student.last_name))),
+        'apellido', nullif(btrim(coalesce(student.last_name, '')), ''),
+        'nombres', nullif(btrim(coalesce(student.first_name, '')), ''),
+        'dni', coalesce(nullif(btrim(student.dni), ''), student.national_id),
+        'legajo', student.legajo,
+        'carrera', enrollment.program_id,
+        'materia', enrollment.subject_id,
+        'inscripto_el', enrollment.enrolled_at,
+        'inscripcion_especial', coalesce((enrollment.metadata ->> 'admin_enrollment')::boolean, false)
+      ) order by lower(coalesce(nullif(btrim(student.last_name), ''), student.full_name, '')), lower(coalesce(student.first_name, '')), student.id)
+      from public.exam_enrollments enrollment
+      join public.student_records student
+        on student.institution_id = enrollment.institution_id
+       and student.id = enrollment.student_record_id
+      left join public.exam_results exam_result
+        on exam_result.institution_id = enrollment.institution_id
+       and exam_result.exam_enrollment_id = enrollment.id
+      where enrollment.institution_id = target_institution_id
+        and enrollment.exam_table_id = table_row.id
+        and enrollment.status = 'registered'
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke execute on function public.get_exam_table_roster(uuid, text, text) from public, anon;
+grant execute on function public.get_exam_table_roster(uuid, text, text) to authenticated;
+
+-- Panel admin "Mesas y actas": todas las mesas publicadas con carrera, plan, anio, tribunal y cantidad de
+-- inscriptos. Solo personal de gestion.
+create or replace function public.get_exam_tables_admin_overview(
+  target_institution_id uuid,
+  target_workspace_key text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+  if target_institution_id is null or not (
+    public.is_super_admin()
+    or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
+  ) then
+    raise exception 'Acceso denegado: solo el personal de gestion ve las mesas y actas.' using errcode = '42501';
+  end if;
+
+  return coalesce((
+    select jsonb_agg(row_data order by row_data ->> 'carrera', (row_data ->> 'anio')::int nulls last, row_data ->> 'inicio', row_data ->> 'materia')
+    from (
+      select jsonb_build_object(
+        'mesa_id', exam_table.legacy_snapshot_id,
+        'estado', exam_table.status,
+        'acta_cerrada', exam_table.status = 'completed',
+        'tipo', exam_table.exam_type,
+        'llamado', exam_table.exam_call_label,
+        'inicio', exam_table.scheduled_starts_at,
+        'fin', exam_table.scheduled_ends_at,
+        'aula', exam_table.room,
+        'cierre_inscripcion', exam_table.enrollment_closes_at,
+        'carrera', career.name,
+        'plan', coalesce(nullif(btrim(plan.name), ''), plan.external_code),
+        'plan_anio', plan.plan_year,
+        'anio', plan_subject.year_number,
+        'materia_codigo', subject.code,
+        'materia', subject.name,
+        'tribunal', coalesce(exam_table.metadata -> 'tribunal', '{}'::jsonb),
+        'inscriptos', (
+          select count(*) from public.exam_enrollments enrollment
+          where enrollment.institution_id = exam_table.institution_id
+            and enrollment.exam_table_id = exam_table.id
+            and enrollment.status = 'registered'
+        )
+      ) as row_data
+      from public.exam_tables exam_table
+      join public.exam_table_subjects exam_subject
+        on exam_subject.institution_id = exam_table.institution_id
+       and exam_subject.exam_table_id = exam_table.id
+       and exam_subject.is_primary
+      join public.careers career on career.institution_id = exam_subject.institution_id and career.id = exam_subject.career_id
+      join public.subjects subject on subject.institution_id = exam_subject.institution_id and subject.id = exam_subject.subject_id
+      left join public.study_plan_subjects plan_subject
+        on plan_subject.institution_id = exam_subject.institution_id and plan_subject.id = exam_subject.study_plan_subject_id
+      left join public.study_plans plan
+        on plan.institution_id = exam_subject.institution_id and plan.id = coalesce(exam_subject.study_plan_id, plan_subject.plan_id)
+      where exam_table.institution_id = target_institution_id
+        and exam_table.workspace_key = clean_workspace_key
+        and exam_table.status <> 'cancelled'
+    ) rows
+  ), '[]'::jsonb);
+end;
+$$;
+
+revoke execute on function public.get_exam_tables_admin_overview(uuid, text) from public, anon;
+grant execute on function public.get_exam_tables_admin_overview(uuid, text) to authenticated;
+
+-- Inscripcion especial: el personal de gestion inscribe a un alumno fuera del plazo del portal (hasta el dia
+-- de la mesa) o en mesas admin_only. El alumno tiene que cumplir las mismas reglas que en el portal
+-- (exam_enrollment_assert_eligible); solo se saltea el plazo. Queda registrado quien y por que.
+create or replace function public.admin_enroll_student_in_exam_table(
+  target_institution_id uuid,
+  target_workspace_key text,
+  target_exam_key text,
+  target_student_record_id uuid,
+  target_reason text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  caller_id uuid := (select auth.uid());
+  clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+  clean_exam_key text := lower(btrim(coalesce(target_exam_key, '')));
+  clean_reason text := btrim(coalesce(target_reason, ''));
+  table_row public.exam_tables%rowtype;
+  student_row record;
+  exam_context record;
+  saved_row public.exam_enrollments%rowtype;
+begin
+  if caller_id is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+  if target_institution_id is null or not (
+    public.is_super_admin()
+    or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
+  ) then
+    raise exception 'Acceso denegado: solo el personal de gestion hace inscripciones especiales.' using errcode = '42501';
+  end if;
+  if length(clean_reason) < 5 then
+    raise exception 'EXAM_ADMIN_ENROLLMENT_REASON_REQUIRED' using errcode = '22023';
+  end if;
+
+  select * into table_row
+  from public.exam_tables exam_table
+  where exam_table.institution_id = target_institution_id
+    and exam_table.workspace_key = clean_workspace_key
+    and exam_table.legacy_exam_table_id = clean_exam_key
+  for share;
+  if table_row.id is null or table_row.status not in ('confirmed', 'open') then
+    raise exception 'EXAM_TABLE_NOT_AVAILABLE' using errcode = 'P0002';
+  end if;
+  -- Hasta el final del dia de la mesa (hora de Argentina).
+  if pg_catalog.clock_timestamp() >= (date_trunc('day', table_row.scheduled_starts_at at time zone 'America/Argentina/Buenos_Aires') + interval '1 day') at time zone 'America/Argentina/Buenos_Aires' then
+    raise exception 'EXAM_ADMIN_ENROLLMENT_AFTER_EXAM_DAY' using errcode = '22023';
+  end if;
+
+  select student.id, student.profile_id into student_row
+  from public.student_records student
+  join public.profiles profile on profile.user_id = student.profile_id and profile.is_blocked = false
+  where student.institution_id = target_institution_id
+    and student.workspace_key = clean_workspace_key
+    and student.id = target_student_record_id;
+  if student_row.id is null then
+    raise exception 'STUDENT_ACCOUNT_REQUIRED' using errcode = 'P0002';
+  end if;
+
+  -- La materia de la mesa en el plan del alumno.
+  select exam_subject.id as exam_table_subject_id, exam_subject.study_plan_subject_id, subject.code as subject_code,
+    career.name as career_name, student_plan.id as student_career_plan_id
+  into exam_context
+  from public.exam_table_subjects exam_subject
+  join public.study_plan_subjects plan_subject
+    on plan_subject.institution_id = exam_subject.institution_id and plan_subject.id = exam_subject.study_plan_subject_id
+  join public.subjects subject on subject.institution_id = exam_subject.institution_id and subject.id = exam_subject.subject_id
+  join public.careers career on career.institution_id = exam_subject.institution_id and career.id = exam_subject.career_id
+  join public.student_career_plans student_plan
+    on student_plan.institution_id = exam_subject.institution_id
+   and student_plan.student_id = student_row.id
+   and student_plan.career_id = exam_subject.career_id
+   and student_plan.plan_id = coalesce(exam_subject.study_plan_id, plan_subject.plan_id)
+  where exam_subject.institution_id = target_institution_id
+    and exam_subject.exam_table_id = table_row.id
+  order by exam_subject.is_primary desc, student_plan.created_at desc
+  limit 1;
+  if exam_context.exam_table_subject_id is null then
+    raise exception 'STUDENT_CAREER_PLAN_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    target_institution_id::text || ':' || clean_workspace_key || ':' || exam_context.exam_table_subject_id::text || ':' || student_row.id::text, 0));
+
+  perform public.exam_enrollment_assert_eligible(
+    target_institution_id,
+    clean_workspace_key,
+    student_row.profile_id,
+    student_row.id,
+    exam_context.subject_code,
+    exam_context.career_name,
+    exam_context.exam_table_subject_id,
+    exam_context.study_plan_subject_id,
+    table_row.exam_period_key,
+    table_row.exam_call_key,
+    table_row.scheduled_starts_at
+  );
+
+  insert into public.exam_enrollments (
+    institution_id, workspace_key, exam_table_id, exam_table_subject_id, student_id, student_record_id,
+    student_career_plan_id, subject_id, program_id, status, enrolled_at, created_by, metadata
+  ) values (
+    target_institution_id, clean_workspace_key, table_row.id, exam_context.exam_table_subject_id, student_row.profile_id, student_row.id,
+    exam_context.student_career_plan_id, exam_context.subject_code, exam_context.career_name, 'registered', timezone('utc', now()), caller_id,
+    jsonb_build_object('admin_enrollment', true, 'admin_enrollment_reason', clean_reason, 'admin_enrollment_by', caller_id)
+  )
+  on conflict (institution_id, exam_table_subject_id, student_record_id) where status = 'registered'
+  do nothing
+  returning * into saved_row;
+
+  if saved_row.id is null then
+    raise exception 'EXAM_ENROLLMENT_ALREADY_REGISTERED' using errcode = '23505';
+  end if;
+
+  insert into public.exam_enrollment_events (institution_id, exam_enrollment_id, event_type, actor_user_id, reason_code, metadata)
+  values (target_institution_id, saved_row.id, 'registered', caller_id, 'admin_special_enrollment', saved_row.metadata);
+
+  return jsonb_build_object('inscripcion_id', saved_row.id, 'estado', saved_row.status, 'materia', saved_row.subject_id, 'carrera', saved_row.program_id);
+end;
+$$;
+
+revoke execute on function public.admin_enroll_student_in_exam_table(uuid, text, text, uuid, text) from public, anon;
+grant execute on function public.admin_enroll_student_in_exam_table(uuid, text, text, uuid, text) to authenticated;
+
+-- ============================================================
+-- F1a: acta de examen final. El titular carga escrito, oral, nota final o ausente de cada inscripto y
+-- cierra el acta. Decisiones de Miguel (18/10): carga solo el titular (el personal de gestion tambien, y
+-- es el unico que corrige un acta cerrada, con motivo); se aprueba con 4 o mas; desaprobar o estar
+-- ausente no quita la regularidad (el castigo por ausencia va en F1b).
+-- Solo el aprobado pasa a student_grades (grade_type 'final_exam', academic_status 'approved'): asi
+-- cuenta para correlativas y cierra la materia. Desaprobado y ausente quedan en exam_results y la
+-- ultima condicion del alumno sigue siendo 'regular', que es lo que lee la inscripcion a mesas.
+-- ============================================================
+
+create table if not exists public.exam_results (
+  id uuid primary key default gen_random_uuid(),
+  institution_id uuid not null references public.institutions(id) on delete cascade,
+  workspace_key text not null default 'main',
+  exam_table_id uuid not null,
+  exam_enrollment_id uuid not null,
+  student_id uuid not null references public.profiles(user_id) on delete cascade,
+  student_record_id uuid not null,
+  subject_id text not null,
+  program_id text not null,
+  written_grade numeric(4,2),
+  oral_grade numeric(4,2),
+  final_grade numeric(4,2),
+  result text not null,
+  student_grade_id uuid references public.student_grades(id) on delete set null,
+  recorded_by uuid references public.profiles(user_id) on delete set null,
+  corrected_by uuid references public.profiles(user_id) on delete set null,
+  correction_reason text,
+  lock_version integer not null default 1,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (institution_id, exam_enrollment_id),
+  foreign key (institution_id, exam_table_id) references public.exam_tables(institution_id, id) on delete restrict,
+  foreign key (institution_id, exam_enrollment_id) references public.exam_enrollments(institution_id, id) on delete restrict,
+  foreign key (institution_id, student_record_id) references public.student_records(institution_id, id) on delete restrict,
+  check (result in ('approved', 'failed', 'absent')),
+  check (written_grade is null or written_grade between 0 and 10),
+  check (oral_grade is null or oral_grade between 0 and 10),
+  check (final_grade is null or final_grade between 0 and 10),
+  check (result <> 'absent' or (written_grade is null and oral_grade is null and final_grade is null)),
+  check (result = 'absent' or final_grade is not null),
+  check (result <> 'approved' or final_grade >= 4),
+  check (result <> 'failed' or final_grade < 4),
+  check (lock_version >= 1)
+);
+
+create index if not exists idx_exam_results_table
+  on public.exam_results (institution_id, exam_table_id);
+
+alter table public.exam_results enable row level security;
+revoke all on public.exam_results from public, anon, authenticated;
+
+-- Titular de la mesa: el DNI del titular publicado en la mesa o una titularidad activa de la materia.
+-- Misma regla que get_exam_table_roster. Interna: sin EXECUTE para roles de la API.
+create or replace function public.exam_table_caller_is_titular(
+  p_institution_id uuid,
+  p_workspace_key text,
+  p_exam_table_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.exam_tables exam_table
+    join public.teacher_records teacher
+      on teacher.institution_id = exam_table.institution_id
+     and teacher.workspace_key = p_workspace_key
+     and teacher.profile_id = (select auth.uid())
+    where exam_table.institution_id = p_institution_id
+      and exam_table.id = p_exam_table_id
+      and regexp_replace(coalesce(teacher.dni, ''), '[^0-9]', '', 'g') <> ''
+      and regexp_replace(coalesce(teacher.dni, ''), '[^0-9]', '', 'g') = coalesce(exam_table.metadata ->> 'titular_dni', '')
+  )
+  or exists (
+    select 1
+    from public.exam_table_subjects exam_subject
+    join public.subject_teacher_assignments assignment
+      on assignment.institution_id = exam_subject.institution_id
+     and assignment.subject_id = exam_subject.legacy_subject_id
+     and assignment.program_id = exam_subject.legacy_program_id
+    where exam_subject.institution_id = p_institution_id
+      and exam_subject.exam_table_id = p_exam_table_id
+      and assignment.workspace_key = p_workspace_key
+      and assignment.teacher_id = (select auth.uid())
+      -- Gate Codex P1: el titular (tambien con una licencia futura o ya terminada), dentro de su vigencia.
+      and assignment.role in ('titular', 'licencia')
+      and public.academic_teacher_assignment_grants_access(assignment)
+  );
+$$;
+
+revoke all on function public.exam_table_caller_is_titular(uuid, text, uuid) from public, anon, authenticated;
+
+-- Guarda resultados del acta y, si target_close, la cierra. Una fila por inscripto:
+-- { inscripcion_id, ausente, escrito, oral, nota }. Sin nota final se toma el promedio de escrito y oral.
+-- Filas sin datos se ignoran (todavia no cargadas). Cerrar exige un resultado por cada inscripto.
+create or replace function public.exam_save_acta_results(
+  target_institution_id uuid,
+  target_workspace_key text,
+  target_exam_key text,
+  target_results jsonb,
+  target_close boolean default false,
+  target_reason text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_id uuid := (select auth.uid());
+  clean_workspace_key text := coalesce(nullif(btrim(target_workspace_key), ''), 'main');
+  clean_exam_key text := lower(btrim(coalesce(target_exam_key, '')));
+  clean_reason text := btrim(coalesce(target_reason, ''));
+  is_staff boolean;
+  table_row record;
+  enrollment_row record;
+  item jsonb;
+  item_index integer := 0;
+  raw_written text;
+  raw_oral text;
+  raw_final text;
+  v_written numeric;
+  v_oral numeric;
+  v_final numeric;
+  v_absent boolean;
+  v_result text;
+  existing_result public.exam_results%rowtype;
+  v_grade_id uuid;
+  v_attempt integer;
+  saved_count integer := 0;
+  pending_count integer;
+  is_closed boolean;
+begin
+  if caller_id is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+  if target_institution_id is null then
+    raise exception 'Acceso denegado: solo el titular de la mesa carga el acta.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(coalesce(target_results, '[]'::jsonb)) <> 'array' or jsonb_array_length(coalesce(target_results, '[]'::jsonb)) > 500 then
+    raise exception 'EXAM_ACTA_RESULTS_INVALID' using errcode = '22023';
+  end if;
+
+  is_staff := public.is_super_admin()
+    or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor']);
+
+  select exam_table.* into table_row
+  from public.exam_tables exam_table
+  where exam_table.institution_id = target_institution_id
+    and exam_table.workspace_key = clean_workspace_key
+    and exam_table.legacy_exam_table_id = clean_exam_key
+  for update;
+
+  -- Mismo error si la mesa no existe: no se revela que mesas hay.
+  if table_row.id is null
+    or not (is_staff or (public.is_member_of_institution(target_institution_id)
+      and public.exam_table_caller_is_titular(target_institution_id, clean_workspace_key, table_row.id))) then
+    raise exception 'Acceso denegado: solo el titular de la mesa carga el acta.' using errcode = '42501';
+  end if;
+  if table_row.status = 'cancelled' then
+    raise exception 'EXAM_TABLE_NOT_AVAILABLE' using errcode = '22023';
+  end if;
+  -- Se carga desde el dia del examen (hora argentina).
+  if (timezone('America/Argentina/Buenos_Aires', now()))::date < (timezone('America/Argentina/Buenos_Aires', table_row.scheduled_starts_at))::date then
+    raise exception 'EXAM_NOT_TAKEN_YET' using errcode = '22023';
+  end if;
+
+  is_closed := table_row.status = 'completed';
+  if is_closed and not is_staff then
+    raise exception 'EXAM_ACTA_CLOSED' using errcode = '22023';
+  end if;
+  if is_closed and length(clean_reason) < 5 then
+    raise exception 'EXAM_ACTA_CORRECTION_REASON_REQUIRED' using errcode = '22023';
+  end if;
+
+  for item in select value from jsonb_array_elements(coalesce(target_results, '[]'::jsonb)) loop
+    item_index := item_index + 1;
+    if jsonb_typeof(item) <> 'object' then
+      raise exception 'EXAM_ACTA_RESULTS_INVALID' using errcode = '22023';
+    end if;
+
+    select enrollment.* into enrollment_row
+    from public.exam_enrollments enrollment
+    where enrollment.institution_id = target_institution_id
+      and enrollment.exam_table_id = table_row.id
+      and enrollment.status = 'registered'
+      and enrollment.id::text = btrim(coalesce(item ->> 'inscripcion_id', ''))
+    for update;
+    if enrollment_row.id is null then
+      raise exception 'EXAM_ACTA_ENROLLMENT_NOT_FOUND' using errcode = '22023';
+    end if;
+
+    v_absent := coalesce((item ->> 'ausente')::boolean, false);
+    raw_written := replace(btrim(coalesce(item ->> 'escrito', '')), ',', '.');
+    raw_oral := replace(btrim(coalesce(item ->> 'oral', '')), ',', '.');
+    raw_final := replace(btrim(coalesce(item ->> 'nota', '')), ',', '.');
+    if (raw_written <> '' and raw_written !~ '^[0-9]{1,2}(\.[0-9]{1,2})?$')
+      or (raw_oral <> '' and raw_oral !~ '^[0-9]{1,2}(\.[0-9]{1,2})?$')
+      or (raw_final <> '' and raw_final !~ '^[0-9]{1,2}(\.[0-9]{1,2})?$') then
+      raise exception 'EXAM_ACTA_GRADE_INVALID' using errcode = '22023';
+    end if;
+    v_written := nullif(raw_written, '')::numeric;
+    v_oral := nullif(raw_oral, '')::numeric;
+    v_final := nullif(raw_final, '')::numeric;
+    if greatest(coalesce(v_written, 0), coalesce(v_oral, 0), coalesce(v_final, 0)) > 10 then
+      raise exception 'EXAM_ACTA_GRADE_INVALID' using errcode = '22023';
+    end if;
+    if v_absent and (v_written is not null or v_oral is not null or v_final is not null) then
+      raise exception 'EXAM_ACTA_ABSENT_WITH_GRADE' using errcode = '22023';
+    end if;
+
+    if v_absent then
+      v_result := 'absent';
+    else
+      if v_final is null and (v_written is not null or v_oral is not null) then
+        v_final := round((coalesce(v_written, 0) + coalesce(v_oral, 0)) / ((v_written is not null)::int + (v_oral is not null)::int), 2);
+      end if;
+      if v_final is null then
+        -- Fila sin datos: todavia no cargada.
+        continue;
+      end if;
+      v_result := case when v_final >= 4 then 'approved' else 'failed' end;
+    end if;
+
+    select * into existing_result
+    from public.exam_results result
+    where result.institution_id = target_institution_id
+      and result.exam_enrollment_id = enrollment_row.id
+    for update;
+
+    -- Solo el aprobado vive en student_grades: es lo que leen correlativas y el estado de la materia.
+    -- Mismo lock que el docente y la historia importada (AUD.I2a P1).
+    perform public.academic_lock_student_subject(target_institution_id, clean_workspace_key, enrollment_row.student_id, enrollment_row.subject_id, enrollment_row.program_id);
+    v_grade_id := existing_result.student_grade_id;
+    if v_result = 'approved' then
+      if v_grade_id is not null and exists (
+        select 1 from public.student_grades grade where grade.id = v_grade_id and grade.deleted_at is null
+      ) then
+        update public.student_grades grade
+        set grade_value = v_final,
+            grade_label = v_final::text,
+            academic_status = 'approved',
+            teacher_id = caller_id,
+            lock_version = grade.lock_version + 1
+        where grade.id = v_grade_id;
+      else
+        select coalesce(max(grade.attempt_number), 0) + 1 into v_attempt
+        from public.student_grades grade
+        where grade.institution_id = target_institution_id
+          and grade.workspace_key = clean_workspace_key
+          and grade.student_id = enrollment_row.student_id
+          and grade.subject_id = enrollment_row.subject_id
+          and grade.program_id = enrollment_row.program_id
+          and grade.grade_type = 'final_exam'
+          and grade.deleted_at is null;
+        insert into public.student_grades (
+          institution_id, workspace_key, student_id, student_record_id, exam_enrollment_id, subject_id, program_id,
+          teacher_id, grade_type, attempt_number, grade_value, grade_label, grade_scale, academic_status,
+          observations, grading_period
+        ) values (
+          target_institution_id, clean_workspace_key, enrollment_row.student_id, enrollment_row.student_record_id, enrollment_row.id,
+          enrollment_row.subject_id, enrollment_row.program_id, caller_id, 'final_exam', v_attempt, v_final, v_final::text,
+          'numeric_0_10', 'approved', coalesce(table_row.exam_call_label, ''),
+          to_char(timezone('America/Argentina/Buenos_Aires', table_row.scheduled_starts_at), 'YYYY-MM-DD')
+        )
+        returning id into v_grade_id;
+      end if;
+    elsif v_grade_id is not null then
+      -- Corregido de aprobado a desaprobado o ausente: la aprobacion deja de valer.
+      update public.student_grades grade
+      set deleted_at = timezone('utc', now()), lock_version = grade.lock_version + 1
+      where grade.id = v_grade_id and grade.deleted_at is null;
+      v_grade_id := null;
+    end if;
+
+    insert into public.exam_results (
+      institution_id, workspace_key, exam_table_id, exam_enrollment_id, student_id, student_record_id, subject_id, program_id,
+      written_grade, oral_grade, final_grade, result, student_grade_id, recorded_by, corrected_by, correction_reason
+    ) values (
+      target_institution_id, clean_workspace_key, table_row.id, enrollment_row.id, enrollment_row.student_id, enrollment_row.student_record_id,
+      enrollment_row.subject_id, enrollment_row.program_id, v_written, v_oral, v_final, v_result, v_grade_id, caller_id,
+      case when is_closed then caller_id end, case when is_closed then clean_reason end
+    )
+    on conflict (institution_id, exam_enrollment_id) do update set
+      written_grade = excluded.written_grade,
+      oral_grade = excluded.oral_grade,
+      final_grade = excluded.final_grade,
+      result = excluded.result,
+      student_grade_id = excluded.student_grade_id,
+      recorded_by = case when is_closed then public.exam_results.recorded_by else excluded.recorded_by end,
+      corrected_by = excluded.corrected_by,
+      correction_reason = excluded.correction_reason,
+      lock_version = public.exam_results.lock_version + 1,
+      updated_at = timezone('utc', now());
+    saved_count := saved_count + 1;
+  end loop;
+
+  if is_closed and saved_count > 0 then
+    insert into public.exam_table_events (institution_id, exam_table_id, event_type, actor_user_id, reason_code, metadata)
+    values (target_institution_id, table_row.id, 'corrected', caller_id, 'acta_correction', jsonb_build_object('reason', clean_reason, 'results', saved_count));
+  end if;
+
+  if coalesce(target_close, false) and not is_closed then
+    select count(*) into pending_count
+    from public.exam_enrollments enrollment
+    where enrollment.institution_id = target_institution_id
+      and enrollment.exam_table_id = table_row.id
+      and enrollment.status = 'registered'
+      and not exists (
+        select 1 from public.exam_results result
+        where result.institution_id = enrollment.institution_id and result.exam_enrollment_id = enrollment.id
+      );
+    if pending_count > 0 then
+      raise exception 'EXAM_ACTA_INCOMPLETE' using errcode = '22023', detail = pending_count::text;
+    end if;
+    update public.exam_tables exam_table
+    set status = 'completed',
+        metadata = exam_table.metadata || jsonb_build_object('acta_closed_at', timezone('utc', now()), 'acta_closed_by', caller_id),
+        updated_by = caller_id,
+        updated_at = timezone('utc', now()),
+        lock_version = exam_table.lock_version + 1
+    where exam_table.id = table_row.id;
+    insert into public.exam_table_events (institution_id, exam_table_id, event_type, actor_user_id, reason_code, metadata)
+    values (target_institution_id, table_row.id, 'completed', caller_id, 'acta_closed', jsonb_build_object('results', saved_count));
+    is_closed := true;
+  end if;
+
+  return jsonb_build_object('guardados', saved_count, 'acta_cerrada', is_closed);
+end;
+$$;
+
+revoke execute on function public.exam_save_acta_results(uuid, text, text, jsonb, boolean, text) from public, anon;
+grant execute on function public.exam_save_acta_results(uuid, text, text, jsonb, boolean, text) to authenticated;
+
+-- F1b: ausentes del propio alumno en actas de examen, para que el portal explique la mesa castigo antes
+-- de que intente inscribirse (espejo de exam_enrollment_assert_eligible). Solo filas del que llama.
+create or replace function public.get_student_exam_absences(
+  target_institution_id uuid,
+  target_workspace_key text
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', exam_result.id,
+    'subject_id', exam_result.subject_id,
+    'program_id', exam_result.program_id,
+    'student_record_id', exam_result.student_record_id,
+    'absent_at', absent_table.scheduled_starts_at,
+    'exam_period_key', absent_table.exam_period_key,
+    'exam_call_key', absent_table.exam_call_key
+  ) order by absent_table.scheduled_starts_at), '[]'::jsonb)
+  from public.exam_results exam_result
+  join public.exam_tables absent_table
+    on absent_table.institution_id = exam_result.institution_id
+   and absent_table.id = exam_result.exam_table_id
+  where (select auth.uid()) is not null
+    and exam_result.institution_id = target_institution_id
+    and exam_result.workspace_key = coalesce(nullif(btrim(target_workspace_key), ''), 'main')
+    and exam_result.student_id = (select auth.uid())
+    and exam_result.result = 'absent'
+    and public.is_member_of_institution(target_institution_id);
+$$;
+
+revoke execute on function public.get_student_exam_absences(uuid, text) from public, anon;
+grant execute on function public.get_student_exam_absences(uuid, text) to authenticated;

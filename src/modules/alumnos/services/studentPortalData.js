@@ -822,7 +822,8 @@ export function buildExams(cronograma, subjects, selectedCareer, institutionId, 
         subject,
         subject_name: subject.name,
         mesa: row.mesa,
-        profesorTitular: row.profesorTitular,
+        profesorTitular: clean(row.profesorTitular || row.titular),
+        vocales: [row.vocal1, row.vocal2].map(clean).filter(Boolean),
       }
     })
 }

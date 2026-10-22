@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useAuth } from '../../../auth/AuthContext.jsx'
-import { useSyncData } from '../../../hooks/useSyncData.js'
-import { STUDENT_WORKSPACE_KEY } from '../services/studentPortalData.js'
 import { useStudentStore } from '../stores/studentStore'
-import { getExamEnrollmentEligibility } from '../lib/examEligibility.js'
+import { fetchStudentExamAbsences } from '../services/studentExamAbsences.js'
+
+const EXAM_REFRESH_INTERVAL_MS = 60_000
+import { getExamEnrollmentDeadline, getExamEnrollmentEligibility } from '../lib/examEligibility.js'
 
 function normalizeStatus(status) {
   return String(status || '').toLowerCase()
@@ -32,6 +33,29 @@ function getExamSubjectId(exam) {
 function getExamProgramId(exam) {
   const subject = getExamSubject(exam)
   return exam?.canonical_program_id || exam?.program_id || subject?.canonical_program_id || subject?.program_id || ''
+}
+
+// Tribunal y cierre de inscripcion (24 h antes, igual que la base) visibles para el alumno.
+function ExamTribunalDetails({ exam }) {
+  const deadline = getExamEnrollmentDeadline(exam)
+  return (
+    <>
+      <div>
+        <dt className="text-xs text-slate-500">Titular</dt>
+        <dd className="font-semibold text-slate-900">{exam.profesorTitular || 'A confirmar'}</dd>
+      </div>
+      <div>
+        <dt className="text-xs text-slate-500">Vocales</dt>
+        <dd className="font-semibold text-slate-900">{exam.vocales?.length ? exam.vocales.join(' / ') : 'A confirmar'}</dd>
+      </div>
+      {deadline > 0 && (
+        <div className="col-span-2">
+          <dt className="text-xs text-slate-500">Inscripción hasta</dt>
+          <dd className="font-semibold text-slate-900">{formatDateTime(new Date(deadline).toISOString())}</dd>
+        </div>
+      )}
+    </>
+  )
 }
 
 function formatDateTime(dateString) {
@@ -126,6 +150,14 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
     clearSuccess: state.clearSuccess
   })))
   const adeudaCuota = Boolean(accountStatus?.adeuda_cuota)
+  // F1b: ausentes en actas de examen. Con ellos el portal explica la mesa castigo antes de inscribirse.
+  const { data: examAbsences = [] } = useQuery({
+    queryKey: ['student-exam-absences', user?.id, currentInstitution?.id],
+    queryFn: () => fetchStudentExamAbsences({ institutionId: currentInstitution?.id }),
+    enabled: Boolean(isRemoteSession && currentInstitution?.id),
+    staleTime: EXAM_REFRESH_INTERVAL_MS,
+  })
+  const eligibilityGrades = useMemo(() => grades.concat(examAbsences), [grades, examAbsences])
   const portalQueryKey = useMemo(
     () => ['student-portal', user?.id, user?.email, isRemoteSession, isSuperAdmin, currentInstitution?.id],
     [currentInstitution?.id, isRemoteSession, isSuperAdmin, user?.email, user?.id],
@@ -162,23 +194,22 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
 
   const [activeTab, setActiveTab] = useState('proximas')
 
-  const { isSubscribed: isRealtimeConnected } = useSyncData({
-    table: 'workspace_snapshots',
-    filter: currentInstitution?.id ? `institution_id=eq.${currentInstitution.id}` : undefined,
-    enabled: Boolean(isRemoteSession && currentInstitution?.id),
-    onChange: (payload) => {
-      const workspaceKey = payload.new?.workspace_key ?? payload.old?.workspace_key
-
-      if (workspaceKey !== STUDENT_WORKSPACE_KEY) return
-
-      void queryClient.invalidateQueries({ queryKey: portalQueryKey })
-    },
-  })
+  // SEC.3: el alumno no lee workspace_snapshots (RLS), asi que Realtime no le entrega eventos de esa tabla.
+  // Las mesas se refrescan releyendo el portal (RPC segura) cada minuto mientras la pestana esta visible.
+  useEffect(() => {
+    if (!isRemoteSession || !currentInstitution?.id) return undefined
+    const intervalId = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void queryClient.invalidateQueries({ queryKey: portalQueryKey })
+      }
+    }, EXAM_REFRESH_INTERVAL_MS)
+    return () => clearInterval(intervalId)
+  }, [currentInstitution?.id, isRemoteSession, portalQueryKey, queryClient])
 
   const handleRegister = async exam => {
     const examId = getExamId(exam)
     if (!examId) return
-    const eligibility = getExamEnrollmentEligibility({ exam, exams, enrollments, grades, prerequisites, subjects, adeudaCuota })
+    const eligibility = getExamEnrollmentEligibility({ exam, exams, enrollments, grades: eligibilityGrades, prerequisites, subjects, adeudaCuota })
 
     if (!eligibility.canRegister) {
       setError(eligibility.reason)
@@ -255,7 +286,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
           </p>
           {isRemoteSession && (
             <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--student-lavender-ink)]">
-              {isRealtimeConnected ? 'Sincronizacion en vivo activa' : 'Conectando sincronizacion en vivo'}
+              Actualización automática cada minuto
             </p>
           )}
         </div>
@@ -286,7 +317,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
               activeTab === 'proximas' ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 ring-1 ring-inset ring-slate-200'
             }`}
           >
-            Proximas
+            Próximas
           </button>
           <button
             type="button"
@@ -311,7 +342,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
               const subject = getExamSubject(exam)
               const registeredEnrollment = registeredByExamId.get(examId)
               const isRegistered = Boolean(registeredEnrollment)
-              const eligibility = getExamEnrollmentEligibility({ exam, exams, enrollments, grades, prerequisites, subjects, adeudaCuota })
+              const eligibility = getExamEnrollmentEligibility({ exam, exams, enrollments, grades: eligibilityGrades, prerequisites, subjects, adeudaCuota })
 
               return (
                 <article key={examId} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -345,6 +376,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
                       <dt className="text-xs text-slate-500">Lugar</dt>
                       <dd className="font-semibold text-slate-900">{exam.location || 'A confirmar'}</dd>
                     </div>
+                    <ExamTribunalDetails exam={exam} />
                   </dl>
 
                   <div className="mt-5">
@@ -354,7 +386,7 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
                         onClick={() => handleCancel(registeredEnrollment)}
                         className="inline-flex w-full items-center justify-center rounded-md border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                       >
-                        Cancelar inscripcion
+                        Cancelar inscripción
                       </button>
                     ) : (
                       <div className="space-y-2">
@@ -424,13 +456,14 @@ export default function StudentExamEnrollmentPage({ onRegisterExam, onCancelExam
                       <dt className="text-xs text-slate-500">Lugar</dt>
                       <dd className="font-semibold text-slate-900">{exam.location || 'A confirmar'}</dd>
                     </div>
+                    <ExamTribunalDetails exam={exam} />
                   </dl>
                 </article>
               )
             })
           ) : (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-600 lg:col-span-2">
-              Todavia no hay mesas pasadas para mostrar.
+              Todavía no hay mesas pasadas para mostrar.
             </div>
           )}
         </section>

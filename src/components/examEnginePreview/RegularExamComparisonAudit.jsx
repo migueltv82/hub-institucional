@@ -219,17 +219,17 @@ export function RegularExamComparisonAudit() {
   const statusLabel = state.summary?.status ?? state.phase.toUpperCase()
 
   return (
-    <section className="exam-engine-comparison-audit" aria-label="Auditoria comparativa examEngine">
+    <section className="exam-engine-comparison-audit" aria-label="Auditoría comparativa examEngine">
       <header className="exam-engine-comparison-audit__header">
         <p className="exam-engine-comparison-audit__eyebrow">Legacy fixture vs preview nuevo</p>
         <h1>Auditoría comparativa examEngine</h1>
         <p>Auditoría interna. No reemplaza el generador oficial.</p>
         <p>No guarda, no publica y no modifica cronogramas reales.</p>
-        <p aria-label="Estado de auditoria">Estado: {statusLabel}</p>
-        <p aria-label="Modo activo de auditoria">Modo activo: {displayValue(state.mode)}</p>
+        <p aria-label="Estado de auditoría">Estado: {statusLabel}</p>
+        <p aria-label="Modo activo de auditoría">Modo activo: {displayValue(state.mode)}</p>
       </header>
 
-      <div className="exam-engine-comparison-audit__actions" aria-label="Acciones de auditoria">
+      <div className="exam-engine-comparison-audit__actions" aria-label="Acciones de auditoría">
         <button type="button" onClick={() => generateAudit('normal')}>
           Generar auditoría normal
         </button>
@@ -247,7 +247,7 @@ export function RegularExamComparisonAudit() {
       {state.phase === 'idle' ? <p>Sin auditoría generada.</p> : null}
       {state.phase === 'running' ? <p>Generando auditoría interna...</p> : null}
       {state.phase === 'error' ? (
-        <section aria-label="Error de auditoria">
+        <section aria-label="Error de auditoría">
           <h2>Error</h2>
           <p>{displayValue(state.error)}</p>
         </section>
@@ -255,13 +255,13 @@ export function RegularExamComparisonAudit() {
 
       {state.summary ? (
         <>
-          <section aria-label="Resumen de auditoria">
+          <section aria-label="Resumen de auditoría">
             <h2>Resumen</h2>
             <p>{state.summary.title}</p>
             <p>{state.summary.summaryText}</p>
           </section>
 
-          <section aria-label="Metricas de auditoria">
+          <section aria-label="Metricas de auditoría">
             <h2>Métricas</h2>
             <MetricList metrics={state.summary.metrics} />
           </section>

@@ -184,3 +184,40 @@ describe('academicRelationalData', () => {
     expect(effectiveSnapshot.academicRelationalSource.enrollmentsLoaded).toBe(true)
   })
 })
+
+describe('I2a: historia academica en el portal del alumno', () => {
+  it('trata la historia importada como nota final y conserva el origen', async () => {
+    const { mapStudentPortalGrade } = await import('./academicRelationalData.js')
+    expect(mapStudentPortalGrade({ id: 'g1', grade_type: 'historia', grade_value: 8, academic_status: 'approved' }))
+      .toMatchObject({ grade_type: 'final', origin: 'historia', score: 8, academic_status: 'approved' })
+    expect(mapStudentPortalGrade({ id: 'g2', grade_type: 'partial', grade_value: 6 }))
+      .toMatchObject({ grade_type: 'partial' })
+    expect(mapStudentPortalGrade({ id: 'g2', grade_type: 'partial' }).origin).toBeUndefined()
+  })
+})
+
+describe('D1: nota del acta de examen en el portal del alumno', () => {
+  it('trata el final del acta (final_exam) como nota final aprobada, con origen acta', async () => {
+    const { mapStudentPortalGrade } = await import('./academicRelationalData.js')
+    expect(mapStudentPortalGrade({ id: 'g3', grade_type: 'final_exam', grade_value: 8, academic_status: 'approved' }))
+      .toMatchObject({ grade_type: 'final', origin: 'acta', score: 8, academic_status: 'approved' })
+  })
+})
+
+describe('D1: fechas de la historia y del acta en el portal del alumno', () => {
+  it('una regularidad importada no es un final: lleva la fecha de regularidad de la planilla', async () => {
+    const { mapStudentPortalGrade } = await import('./academicRelationalData.js')
+    const regular = mapStudentPortalGrade({ id: 'g4', grade_type: 'historia', academic_status: 'regular', grading_period: '2026-07-20', updated_at: '2026-10-19T12:00:00Z' })
+    expect(regular).toMatchObject({ grade_type: 'condicion', origin: 'historia', regularity_date: '2026-07-20' })
+    expect(regular.final_date).toBeUndefined()
+    expect(mapStudentPortalGrade({ id: 'g5', grade_type: 'historia', academic_status: 'libre' })).toMatchObject({ grade_type: 'condicion', regularity_date: null })
+  })
+
+  it('una aprobada importada y el final del acta llevan la fecha del examen', async () => {
+    const { mapStudentPortalGrade } = await import('./academicRelationalData.js')
+    expect(mapStudentPortalGrade({ id: 'g6', grade_type: 'historia', academic_status: 'approved', grade_value: 9, grading_period: '2024-12-15' }))
+      .toMatchObject({ grade_type: 'final', final_date: '2024-12-15' })
+    expect(mapStudentPortalGrade({ id: 'g7', grade_type: 'final_exam', academic_status: 'approved', grade_value: 8, grading_period: '2026-10-26' }))
+      .toMatchObject({ grade_type: 'final', origin: 'acta', final_date: '2026-10-26' })
+  })
+})

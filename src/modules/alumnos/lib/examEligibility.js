@@ -3,6 +3,7 @@ import {
   getAcademicStatusLabel,
   getLatestAcademicStatusForSubject,
   getProgramId,
+  getServerAcademicStatusForSubject,
   getSubjectId,
   matchesSubjectAndProgram,
   normalizeAcademicStatus,
@@ -43,8 +44,13 @@ function isAbsentRecord(row) {
   return ['1', 'si', 'sí', 'true', 'x'].includes(normalizeText(value))
 }
 
-function getExamCallKey(exam) {
-  return clean(exam?.exam_call || exam?.call_label || exam?.llamado || exam?.llamadoNumero || exam?.call_number)
+// F1b: espejo de exam_enrollment_assert_eligible. Un llamado es (periodo, llamado): periodo = anio-mes de la
+// fecha de la mesa (exam_period_key) y llamado = exam_call de la mesa publicada, 'first' si falta
+// (exam_call_key). Mismo criterio que publish_exam_tables_from_schedule.
+function getExamCallSlot(exam) {
+  const rawDate = clean(exam?.exam_date || exam?.exam_session?.exam_date || exam?.date)
+  const period = /^\d{4}-\d{2}/.test(rawDate) ? rawDate.slice(0, 7) : ''
+  return `${period}|${clean(exam?.exam_call) || 'first'}`
 }
 
 function getExamDateTimestamp(exam) {
@@ -75,11 +81,7 @@ export function getAbsencePenaltyForExam({ exam, exams = [], grades = [] }) {
   const nextExam = followingExams[0]
   if (!nextExam) return { blocked: false, absenceDate: '', reason: '' }
 
-  const nextCallKey = getExamCallKey(nextExam)
-  const currentCallKey = getExamCallKey(exam)
-  const blocked = nextCallKey
-    ? currentCallKey === nextCallKey
-    : getExamDateTimestamp(exam) === getExamDateTimestamp(nextExam)
+  const blocked = getExamCallSlot(exam) === getExamCallSlot(nextExam)
   const absenceDate = clean(latestAbsence.grade.fecha_ausencia || latestAbsence.grade.absence_date || latestAbsence.grade.absent_at)
 
   return {
@@ -117,6 +119,23 @@ function getMissingPrerequisitesReason(missingSubjects) {
   return `Correlativas pendientes para rendir esta mesa: ${names.join(', ')}. Deben figurar aprobadas.`
 }
 
+// Espejo de publish_exam_tables_from_schedule: la inscripcion cierra 24 h antes del inicio de la mesa.
+// Las fechas del cronograma son hora de Argentina (UTC-3, sin horario de verano), como en la base.
+export const EXAM_ENROLLMENT_CLOSE_HOURS = 24
+const ARGENTINA_OFFSET = '-03:00'
+
+export function getExamEnrollmentDeadline(exam) {
+  const raw = clean(exam?.exam_date || exam?.exam_session?.exam_date || exam?.date)
+  if (!raw) return 0
+  const withZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw) ? `${raw}${ARGENTINA_OFFSET}` : raw
+  const startsAt = Date.parse(withZone)
+  return Number.isFinite(startsAt) ? startsAt - EXAM_ENROLLMENT_CLOSE_HOURS * 3600 * 1000 : 0
+}
+
+const ENROLLMENT_CLOSED_REASON = 'La inscripcion cerro 24 horas antes del examen. Si necesitas inscribirte, consulta en administracion.'
+
+const NON_CANONICAL_CONDITION_REASON = 'La condicion cargada no esta registrada en el formato que valida el sistema para mesas. Pedi a tu docente o a la institucion que la vuelva a cargar.'
+
 const ADEUDA_CUOTA_REASON = 'No podes inscribirte a mesas: el registro indica que adeudas el pago de la cuota.'
 
 export function getExamEnrollmentEligibility({
@@ -127,6 +146,7 @@ export function getExamEnrollmentEligibility({
   prerequisites = [],
   subjects = [],
   adeudaCuota = false,
+  now = Date.now(),
 }) {
   const subjectId = getSubjectId(exam)
   const programId = getProgramId(exam)
@@ -136,16 +156,23 @@ export function getExamEnrollmentEligibility({
     enrollments,
     grades,
   })
-  const hasRegularCondition = EXAM_ELIGIBLE_ACADEMIC_STATUSES.has(academicStatus)
+  // La habilitacion sale de la misma regla literal que la RPC; academicStatus queda solo para mostrar.
+  const serverAcademicStatus = getServerAcademicStatusForSubject({ subjectId, programIds: [programId], grades })
+  const hasRegularCondition = EXAM_ELIGIBLE_ACADEMIC_STATUSES.has(serverAcademicStatus)
   const absencePenalty = getAbsencePenaltyForExam({ exam, exams, grades })
   const prerequisiteCheck = hasRegularCondition
     ? getFinalExamPrerequisiteCheck({ subjectId, prerequisites, grades, subjects })
     : null
   const missingPrerequisiteSubjects = (prerequisiteCheck?.missing ?? []).map((entry) => entry.subject)
 
+  const enrollmentDeadline = getExamEnrollmentDeadline(exam)
+  const enrollmentClosed = Boolean(enrollmentDeadline && now > enrollmentDeadline)
+
   let reason = ''
-  if (!hasRegularCondition) {
-    reason = getBlockedReason(academicStatus)
+  if (enrollmentClosed) {
+    reason = ENROLLMENT_CLOSED_REASON
+  } else if (!hasRegularCondition) {
+    reason = academicStatus === 'regular' ? NON_CANONICAL_CONDITION_REASON : getBlockedReason(academicStatus)
   } else if (missingPrerequisiteSubjects.length > 0) {
     reason = getMissingPrerequisitesReason(missingPrerequisiteSubjects)
   } else if (absencePenalty.blocked) {
@@ -155,6 +182,7 @@ export function getExamEnrollmentEligibility({
   }
 
   const canRegister = Boolean(
+    !enrollmentClosed &&
     hasRegularCondition &&
     missingPrerequisiteSubjects.length === 0 &&
     !absencePenalty.blocked &&
@@ -166,10 +194,13 @@ export function getExamEnrollmentEligibility({
     subjectId,
     programId,
     academicStatus,
+    serverAcademicStatus,
     label: getAcademicStatusLabel(academicStatus),
     absencePenalty,
     missingPrerequisites: missingPrerequisiteSubjects,
     adeudaCuota: Boolean(adeudaCuota),
+    enrollmentDeadline,
+    enrollmentClosed,
     reason,
   }
 }

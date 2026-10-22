@@ -249,6 +249,163 @@ create trigger touch_subject_teacher_assignments_updated_at
 before insert or update on public.subject_teacher_assignments
 for each row execute function public.touch_subject_teacher_assignments_updated_at();
 
+-- Punto 3 (21/10): modelo de asignacion docente. Esta tabla es la UNICA fuente de verdad de quien da cada
+-- materia: la leen el RLS, los portales, el libro docente y las mesas. teacher_subject_assignments (02) queda
+-- como legado del import relacional y no decide permisos.
+--   role             funcion en la materia: titular | suplente | licencia (licencia sigue siendo un rol por
+--                    compatibilidad con las lecturas existentes; separarla en un estado es la fase B).
+--   status           active | inactive. Una asignacion terminada queda inactive, nunca se borra.
+--   end_reason       por que termino: renuncia, baja, jubilacion, reemplazado, fin_suplencia, error_de_carga, otro.
+--   starts_on/ends_on  vigencia. Para una suplencia: el periodo de la licencia que cubre. Para una asignacion
+--                    terminada, ends_on es la fecha efectiva de fin.
+--   replaces_assignment_id  a quien reemplaza, con FK: misma institucion, workspace, materia y carrera.
+alter table public.subject_teacher_assignments
+  add column if not exists starts_on date,
+  add column if not exists ends_on date,
+  add column if not exists end_reason text,
+  add column if not exists replaces_assignment_id uuid;
+
+create unique index if not exists subject_teacher_assignments_scope_id_key
+  on public.subject_teacher_assignments (institution_id, workspace_key, subject_id, program_id, id);
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.subject_teacher_assignments'::regclass and conname = 'subject_teacher_assignments_replaces_scope_fkey') then
+    alter table public.subject_teacher_assignments
+      add constraint subject_teacher_assignments_replaces_scope_fkey
+      foreign key (institution_id, workspace_key, subject_id, program_id, replaces_assignment_id)
+      references public.subject_teacher_assignments (institution_id, workspace_key, subject_id, program_id, id)
+      on delete set null (replaces_assignment_id);
+  end if;
+end $$;
+
+-- Conversion segura para datos viejos de metadata (AUD.16 P2-1): una fecha o un uuid con buen formato pero
+-- inexistentes ('2026-02-31', '------------------------------------') hacian abortar el 06 entero en el
+-- backfill. Devuelven NULL en vez de fallar. Internas: sin EXECUTE para la API.
+create or replace function public.academic_try_iso_date(p_value text)
+returns date
+language plpgsql
+stable
+set search_path = ''
+as $$
+begin
+  if p_value is null or p_value !~ '^\d{4}-\d{2}-\d{2}$' then
+    return null;
+  end if;
+  -- AAAA-MM-DD no es ambiguo para ningun DateStyle; una fecha inexistente lanza error y cae al handler.
+  return p_value::date;
+exception when others then
+  return null;
+end;
+$$;
+
+create or replace function public.academic_try_uuid(p_value text)
+returns uuid
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+  if p_value is null or p_value !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return null;
+  end if;
+  return p_value::uuid;
+exception when others then
+  return null;
+end;
+$$;
+
+revoke all on function public.academic_try_iso_date(text) from public, anon, authenticated;
+revoke all on function public.academic_try_uuid(text) from public, anon, authenticated;
+
+-- Suplencias creadas antes de esta columna: el vinculo vivia en metadata. Solo se copia si apunta a una
+-- asignacion de la misma materia (la FK lo exige). Fechas invalidas o con fin antes del inicio quedan NULL.
+update public.subject_teacher_assignments replacement
+set replaces_assignment_id = parent.id,
+  starts_on = coalesce(replacement.starts_on, public.academic_try_iso_date(replacement.metadata ->> 'starts_on')),
+  ends_on = coalesce(replacement.ends_on, case
+    when public.academic_try_iso_date(replacement.metadata ->> 'ends_on')
+      >= coalesce(replacement.starts_on, public.academic_try_iso_date(replacement.metadata ->> 'starts_on'), '-infinity'::date)
+    then public.academic_try_iso_date(replacement.metadata ->> 'ends_on') end)
+from public.subject_teacher_assignments parent
+where replacement.replaces_assignment_id is null
+  and parent.id = public.academic_try_uuid(replacement.metadata ->> 'leave_parent_assignment_id')
+  and parent.id <> replacement.id
+  and parent.institution_id = replacement.institution_id
+  and parent.workspace_key = replacement.workspace_key
+  and parent.subject_id = replacement.subject_id
+  and parent.program_id = replacement.program_id;
+
+-- Gate Codex P1 (21/10): UNA regla temporal para todo acceso de un docente a una materia (libro docente,
+-- padron, comandos del docente, mesas). Antes se miraban rol y estado sin fechas: un suplente programado
+-- accedia antes de empezar y despues de vencer, y el titular perdia el acceso apenas se cargaba una licencia
+-- futura (y no lo recuperaba al terminar).
+--   * activa, sin baja, rol titular / suplente / licencia, y dentro de su vigencia (starts_on / ends_on);
+--   * un titular en licencia accede solo FUERA del periodo de la licencia (metadata leave_starts_on /
+--     leave_ends_on, que escribe academic_create_teacher_subject_leave). Una licencia sin fechas es indefinida.
+-- "Hoy" es current_date del servidor (UTC). Interna: sin EXECUTE para la API.
+create or replace function public.academic_teacher_assignment_grants_access(
+  p_assignment public.subject_teacher_assignments,
+  p_today date default current_date
+)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce(
+    p_assignment.status = 'active'
+    and p_assignment.deleted_at is null
+    and p_assignment.role in ('titular', 'suplente', 'licencia')
+    and (p_assignment.starts_on is null or p_assignment.starts_on <= p_today)
+    and (p_assignment.ends_on is null or p_today <= p_assignment.ends_on)
+    and (
+      p_assignment.role <> 'licencia'
+      or not (
+        coalesce(public.academic_try_iso_date(p_assignment.metadata ->> 'leave_starts_on'), '-infinity'::date) <= p_today
+        and p_today <= coalesce(public.academic_try_iso_date(p_assignment.metadata ->> 'leave_ends_on'), 'infinity'::date)
+      )
+    ),
+    false
+  );
+$$;
+
+revoke all on function public.academic_teacher_assignment_grants_access(public.subject_teacher_assignments, date) from public, anon, authenticated;
+
+-- Asignaciones ya dadas de baja antes de esta columna: el motivo no se conoce.
+update public.subject_teacher_assignments
+set end_reason = 'otro'
+where status = 'inactive' and end_reason is null;
+
+alter table public.subject_teacher_assignments
+  drop constraint if exists subject_teacher_assignments_end_reason_check;
+alter table public.subject_teacher_assignments
+  add constraint subject_teacher_assignments_end_reason_check
+  check (
+    (status = 'active' and end_reason is null)
+    -- "is not null" explicito: un CHECK que evalua a NULL pasa, y "null in (...)" es NULL.
+    or (status = 'inactive' and end_reason is not null and end_reason in ('renuncia', 'baja', 'jubilacion', 'reemplazado', 'fin_suplencia', 'error_de_carga', 'otro'))
+  );
+
+alter table public.subject_teacher_assignments
+  drop constraint if exists subject_teacher_assignments_dates_check;
+alter table public.subject_teacher_assignments
+  add constraint subject_teacher_assignments_dates_check
+  check (ends_on is null or starts_on is null or ends_on >= starts_on);
+
+alter table public.subject_teacher_assignments
+  drop constraint if exists subject_teacher_assignments_replaces_self_check;
+alter table public.subject_teacher_assignments
+  add constraint subject_teacher_assignments_replaces_self_check
+  check (replaces_assignment_id is null or replaces_assignment_id <> id);
+
+create index if not exists idx_subject_teacher_assignments_replaces
+  on public.subject_teacher_assignments (replaces_assignment_id)
+  where replaces_assignment_id is not null;
+
+comment on table public.teacher_subject_assignments is
+  'LEGADO (import relacional). La fuente de verdad de las asignaciones docentes es subject_teacher_assignments.';
+
 create or replace function public.academic_resolve_member_profile_by_email(
   target_institution_id uuid,
   target_workspace_key text,
@@ -303,9 +460,10 @@ as $$
       target_account_role is null
       or profile.account_role = target_account_role
     )
+    -- SEC.2: solo el panel admin resuelve perfiles por email; un alumno o docente (viewer) no enumera miembros.
     and (
       public.is_super_admin()
-      or public.is_member_of_institution(target_institution_id)
+      or public.is_member_of_institution(target_institution_id, array['owner', 'admin', 'editor'])
     )
   order by
     case
@@ -337,6 +495,8 @@ declare
   leave_id uuid := gen_random_uuid();
   target_assignment public.subject_teacher_assignments%rowtype;
   affected_subjects integer := 0;
+  replacement_name text;
+  on_leave_name text;
 begin
   if p_institution_id is null
     or p_assignment_ids is null
@@ -344,6 +504,10 @@ begin
     or p_replacement_teacher_id is null
     or p_starts_on is null then
     raise exception 'Faltan datos para registrar la licencia.';
+  end if;
+
+  if p_ends_on is not null and p_ends_on < p_starts_on then
+    raise exception 'La licencia no puede terminar antes de empezar.' using errcode = '22023';
   end if;
 
   if not (public.is_super_admin() or public.is_member_of_institution(p_institution_id, array['owner', 'admin', 'editor'])) then
@@ -363,6 +527,16 @@ begin
     raise exception 'El docente reemplazante no existe o no tiene acceso activo a esta institucion.';
   end if;
 
+  select coalesce(nullif(btrim(teacher.full_name), ''), nullif(btrim(profile.display_name), ''), profile.email)
+  into replacement_name
+  from public.profiles profile
+  left join public.teacher_records teacher
+    on teacher.institution_id = p_institution_id
+   and teacher.workspace_key = clean_workspace_key
+   and teacher.profile_id = profile.user_id
+  where profile.user_id = p_replacement_teacher_id
+  limit 1;
+
   for target_assignment in
     select *
     from public.subject_teacher_assignments assignment
@@ -373,6 +547,20 @@ begin
       and assignment.deleted_at is null
     for update
   loop
+    if target_assignment.teacher_id = p_replacement_teacher_id then
+      raise exception 'El docente no puede reemplazarse a si mismo.' using errcode = '22023';
+    end if;
+
+    select coalesce(nullif(btrim(teacher.full_name), ''), nullif(btrim(profile.display_name), ''), profile.email)
+    into on_leave_name
+    from public.profiles profile
+    left join public.teacher_records teacher
+      on teacher.institution_id = target_assignment.institution_id
+     and teacher.workspace_key = target_assignment.workspace_key
+     and teacher.profile_id = profile.user_id
+    where profile.user_id = target_assignment.teacher_id
+    limit 1;
+
     update public.subject_teacher_assignments
     set
       role = 'licencia',
@@ -383,7 +571,8 @@ begin
           'leave_ends_on', p_ends_on,
           'leave_notes', clean_notes,
           'replacement_teacher_id', p_replacement_teacher_id,
-          'replacement_teacher_record_id', p_replacement_teacher_record_id
+          'replacement_teacher_record_id', p_replacement_teacher_record_id,
+          'replacement_teacher_name', replacement_name
         )
     where id = target_assignment.id;
 
@@ -398,6 +587,9 @@ begin
       status,
       deleted_at,
       role,
+      replaces_assignment_id,
+      starts_on,
+      ends_on,
       metadata
     )
     values (
@@ -411,6 +603,9 @@ begin
       'active',
       null,
       'suplente',
+      target_assignment.id,
+      p_starts_on,
+      p_ends_on,
       jsonb_build_object(
         'leave_id', leave_id,
         'leave_parent_assignment_id', target_assignment.id,
@@ -418,7 +613,9 @@ begin
         'replaced_teacher_id', target_assignment.teacher_id,
         'starts_on', p_starts_on,
         'ends_on', p_ends_on,
-        'notes', clean_notes
+        'notes', clean_notes,
+        'teacher_on_leave_name', on_leave_name,
+        'leave_ends_on', p_ends_on
       )
     )
     on conflict (institution_id, workspace_key, subject_id, program_id, teacher_id)
@@ -428,6 +625,9 @@ begin
       teacher_record_id = excluded.teacher_record_id,
       source = 'leave',
       role = 'suplente',
+      replaces_assignment_id = excluded.replaces_assignment_id,
+      starts_on = excluded.starts_on,
+      ends_on = excluded.ends_on,
       metadata = coalesce(public.subject_teacher_assignments.metadata, '{}'::jsonb) || excluded.metadata,
       deleted_at = null,
       status = 'active';
@@ -482,15 +682,26 @@ begin
     raise exception 'No tenes permisos para actualizar la condicion docente.';
   end if;
 
+  -- Una asignacion terminada (renuncia, baja...) no se revive cambiandole la condicion: se asigna de nuevo.
+  if target_assignment.status <> 'active' or target_assignment.deleted_at is not null then
+    raise exception 'La asignacion ya termino. Para que vuelva a dar la materia, asignala de nuevo.' using errcode = '22023';
+  end if;
+
   update public.subject_teacher_assignments
   set
     status = 'inactive',
-    deleted_at = coalesce(deleted_at, timezone('utc', now()))
+    deleted_at = coalesce(deleted_at, timezone('utc', now())),
+    end_reason = 'fin_suplencia',
+    -- Una suplencia que todavia no habia empezado termina el dia en que iba a empezar (ends_on >= starts_on).
+    ends_on = case when starts_on > current_date then starts_on else least(coalesce(ends_on, current_date), current_date) end
   where institution_id = target_assignment.institution_id
     and workspace_key = target_assignment.workspace_key
     and status = 'active'
     and deleted_at is null
-    and (metadata ->> 'leave_parent_assignment_id') = target_assignment.id::text;
+    and (
+      replaces_assignment_id = target_assignment.id
+      or (metadata ->> 'leave_parent_assignment_id') = target_assignment.id::text
+    );
 
   get diagnostics closed_replacements = row_count;
 
@@ -499,6 +710,8 @@ begin
     role = clean_role,
     status = 'active',
     deleted_at = null,
+    end_reason = null,
+    ends_on = null,
     metadata = coalesce(metadata, '{}'::jsonb) - 'leave_id' - 'leave_starts_on' - 'leave_ends_on' - 'leave_notes' - 'replacement_teacher_id' - 'replacement_teacher_record_id'
   where id = target_assignment.id;
 
@@ -510,13 +723,102 @@ begin
 end;
 $$;
 
+-- Punto 3 (21/10): fin de una asignacion con motivo y fecha efectiva. Reemplaza la baja directa por update desde
+-- el panel, que no dejaba registro de por que termino. Nunca borra: queda inactive con end_reason y ends_on.
+-- Si el docente que se va estaba de licencia, sus suplentes siguen dando la materia; se informa cuantos quedan.
+create or replace function public.academic_end_teacher_assignment(
+  p_assignment_id uuid,
+  p_reason text,
+  p_ends_on date default null,
+  p_notes text default ''
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  clean_reason text := lower(btrim(coalesce(p_reason, '')));
+  clean_notes text := left(btrim(coalesce(p_notes, '')), 500);
+  effective_end date := coalesce(p_ends_on, current_date);
+  cancelled_before_start boolean := false;
+  target_assignment public.subject_teacher_assignments%rowtype;
+  remaining_replacements integer := 0;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Acceso denegado: se requiere una sesion autenticada.' using errcode = '28000';
+  end if;
+
+  if p_assignment_id is null or clean_reason not in ('renuncia', 'baja', 'jubilacion', 'reemplazado', 'fin_suplencia', 'error_de_carga', 'otro') then
+    raise exception 'Elegi la asignacion y el motivo del fin.' using errcode = '22023';
+  end if;
+
+  if effective_end > current_date then
+    raise exception 'La fecha de fin no puede ser futura: la baja se registra cuando ocurre.' using errcode = '22023';
+  end if;
+
+  select *
+  into target_assignment
+  from public.subject_teacher_assignments assignment
+  where assignment.id = p_assignment_id
+  for update;
+
+  if target_assignment.id is null or not (
+    public.is_super_admin()
+    or public.is_member_of_institution(target_assignment.institution_id, array['owner', 'admin', 'editor'])
+  ) then
+    raise exception 'Acceso denegado: solo el personal de gestion termina asignaciones docentes.' using errcode = '42501';
+  end if;
+
+  if target_assignment.status <> 'active' or target_assignment.deleted_at is not null then
+    raise exception 'La asignacion ya estaba terminada.' using errcode = '22023';
+  end if;
+
+  -- AUD.16 P2-2: una asignacion que todavia no empezo (por ejemplo, una suplencia programada) se cancela:
+  -- queda con fin = inicio, porque la fecha de fin no puede ser futura ni anterior al inicio.
+  if target_assignment.starts_on is not null and target_assignment.starts_on > current_date then
+    effective_end := target_assignment.starts_on;
+    cancelled_before_start := true;
+  elsif target_assignment.starts_on is not null and effective_end < target_assignment.starts_on then
+    raise exception 'La fecha de fin es anterior al inicio de la asignacion.' using errcode = '22023';
+  end if;
+
+  update public.subject_teacher_assignments
+  set
+    status = 'inactive',
+    deleted_at = timezone('utc', now()),
+    end_reason = clean_reason,
+    ends_on = effective_end,
+    metadata = coalesce(metadata, '{}'::jsonb)
+      || jsonb_build_object('ended_by', (select auth.uid()), 'end_notes', clean_notes, 'cancelled_before_start', cancelled_before_start)
+  where id = target_assignment.id;
+
+  select count(*)
+  into remaining_replacements
+  from public.subject_teacher_assignments replacement
+  where replacement.replaces_assignment_id = target_assignment.id
+    and replacement.status = 'active'
+    and replacement.deleted_at is null;
+
+  return jsonb_build_object(
+    'id', target_assignment.id,
+    'endReason', clean_reason,
+    'endsOn', effective_end,
+    'cancelledBeforeStart', cancelled_before_start,
+    'remainingReplacements', remaining_replacements
+  );
+end;
+$$;
+
 revoke execute on function public.academic_resolve_member_profile_by_email(uuid, text, text, text) from public, anon;
 revoke execute on function public.academic_create_teacher_subject_leave(uuid, text, uuid[], uuid, uuid, date, date, text) from public, anon;
 revoke execute on function public.academic_update_teacher_assignment_condition(uuid, text) from public, anon;
+revoke execute on function public.academic_end_teacher_assignment(uuid, text, date, text) from public, anon;
 
 grant execute on function public.academic_resolve_member_profile_by_email(uuid, text, text, text) to authenticated;
 grant execute on function public.academic_create_teacher_subject_leave(uuid, text, uuid[], uuid, uuid, date, date, text) to authenticated;
 grant execute on function public.academic_update_teacher_assignment_condition(uuid, text) to authenticated;
+grant execute on function public.academic_end_teacher_assignment(uuid, text, date, text) to authenticated;
 
 alter table public.subject_teacher_assignments enable row level security;
 

@@ -2,14 +2,15 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mergeAcademicWorkbookDatasets,
+  mergeStudentEnrollmentImports,
   mergeStudentRows,
   mergeTeacherWorkbookDatasets,
   useCronogramaFiles,
 } from './useCronogramaFiles.js'
 
-const mocks = vi.hoisted(() => ({ toastError: vi.fn(), toastSuccess: vi.fn() }))
+const mocks = vi.hoisted(() => ({ toast: vi.fn(), toastError: vi.fn(), toastSuccess: vi.fn() }))
 vi.mock('react-hot-toast', () => ({
-  default: { error: mocks.toastError, success: mocks.toastSuccess },
+  default: Object.assign(mocks.toast, { error: mocks.toastError, success: mocks.toastSuccess }),
 }))
 
 function props(overrides = {}) {
@@ -60,6 +61,7 @@ function props(overrides = {}) {
     setHorariosDocentes: vi.fn(),
     setPlanesEstudio: vi.fn(),
     setRequiereRegeneracion: vi.fn(),
+    setStudentEnrollmentImports: vi.fn(),
     setUploadedFiles: vi.fn(),
     snapshotPayload: { cronograma: [{ id: 'mesa-1' }], uploadedFiles: {} },
     uploadedFiles: {},
@@ -72,6 +74,37 @@ function props(overrides = {}) {
 describe('useCronogramaFiles', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('I2e: acumula inscripciones importadas por id y conserva las que no vinieron', () => {
+    const result = mergeStudentEnrollmentImports(
+      [{ id: 'dni-1::ing::ing01', estado: 'vieja' }, { id: 'dni-1::ing::ing02' }],
+      [{ id: 'dni-1::ing::ing01', estado: 'nueva' }, { id: 'dni-1::ing::ing03' }, { materia: 'sin id' }],
+    )
+    expect(result.rows).toEqual([{ id: 'dni-1::ing::ing01', estado: 'nueva' }, { id: 'dni-1::ing::ing02' }, { id: 'dni-1::ing::ing03' }])
+    expect(result.created).toBe(1)
+  })
+
+  it('I2e: la plantilla de alumnos persiste el padron y las inscripciones a materias', async () => {
+    const inscripciones = [{ id: 'dni-1::ing::ing01' }, { id: 'dni-1::ing::ing02' }, { id: 'dni-1::ing::ing03' }]
+    const settings = props({
+      fileHandlers: {
+        ...props().fileHandlers,
+        parseTemplateV2StudentsWorkbook: vi.fn().mockResolvedValue({
+          datasets: { alumnos: [{ alumno_id: 'a1', dni: '1' }], inscripcionesAlumnos: inscripciones },
+          summary: { alumnos: 1, inscripcionesAlumnos: 3 },
+        }),
+      },
+      snapshotPayload: { uploadedFiles: {}, inscripcionesAlumnos: [{ id: 'dni-9::ing::ing01' }] },
+    })
+    const event = { target: { files: [new File(['x'], 'alumnos.xlsx')], value: 'selected' } }
+    const { result } = renderHook(() => useCronogramaFiles(settings))
+
+    await act(async () => result.current.onUploadStudents(event))
+
+    const expected = [{ id: 'dni-9::ing::ing01' }, ...inscripciones]
+    expect(settings.persistWorkspaceSnapshot).toHaveBeenCalledWith(expect.objectContaining({ alumnos: [{ alumno_id: 'a1', dni: '1' }], inscripcionesAlumnos: expected }))
+    expect(settings.setStudentEnrollmentImports).toHaveBeenCalledWith(expected)
+  })
+
   it('acumula ingresantes y actualiza coincidencias sin borrar el padron anterior', () => {
     const result = mergeStudentRows(
       [{ alumno_id: '1', nombre: 'Ana' }, { alumno_id: '2', nombre: 'Luis' }],
@@ -83,6 +116,24 @@ describe('useCronogramaFiles', () => {
       { alumno_id: '2', nombre: 'Luis Alberto' },
       { alumno_id: '3', nombre: 'Marta' },
     ])
+  })
+
+  it('recalcula el nombre completo cuando la planilla corrige nombre o apellido (PB.6)', () => {
+    const result = mergeStudentRows(
+      [{ alumno_id: 'a-1', nombre: 'MATERIA DE PRUEBA', apellido: 'ALUMNO', full_name: 'MATERIA DE PRUEBA ALUMNO', dni: '1' }],
+      [{ alumno_id: 'a-1', nombre: 'Uat', apellido: 'ALUMNO', dni: '1' }],
+    )
+
+    expect(result.rows).toEqual([{ alumno_id: 'a-1', nombre: 'Uat', apellido: 'ALUMNO', full_name: 'Uat ALUMNO', dni: '1' }])
+  })
+
+  it('respeta el nombre completo si la planilla lo trae', () => {
+    const result = mergeStudentRows(
+      [{ alumno_id: 'a-1', nombre: 'Ana', apellido: 'Perez', full_name: 'Ana Perez' }],
+      [{ alumno_id: 'a-1', nombre: 'Ana Maria', full_name: 'Perez, Ana Maria' }],
+    )
+
+    expect(result.rows[0].full_name).toBe('Perez, Ana Maria')
   })
 
   it('actualiza el mismo alumno por DNI aunque la nueva planilla traiga otro id', () => {
@@ -296,6 +347,7 @@ describe('useCronogramaFiles', () => {
         parseTemplateV2MasterWorkbook: vi.fn().mockResolvedValue({
           datasets: {
             alumnos: [{ alumno_id: 'a2', nombre: 'Marta' }],
+            inscripcionesAlumnos: [{ id: 'a2::lab::lab2024-01' }],
             correlatividades: [{ id: 'c2' }],
             docenteMateria: [{ docente_id: 'd2', materia_id: 'LAB-2024-01', carrera_id: 'LAB', rol_en_materia: 'TITULAR' }],
             docentes: [{ docente_id: 'd2', apellido: 'Orozco', nombre: 'Elizabeth' }],
@@ -340,6 +392,8 @@ describe('useCronogramaFiles', () => {
       ],
     }))
     expect(settings.setAlumnos).toHaveBeenCalledWith([{ alumno_id: 'a1', nombre: 'Ana' }, { alumno_id: 'a2', nombre: 'Marta' }])
+    expect(settings.persistWorkspaceSnapshot).toHaveBeenCalledWith(expect.objectContaining({ inscripcionesAlumnos: [{ id: 'a2::lab::lab2024-01' }] }))
+    expect(settings.setStudentEnrollmentImports).toHaveBeenCalledWith([{ id: 'a2::lab::lab2024-01' }])
     expect(settings.setDocentes).toHaveBeenCalledWith([{ docente_id: 'd1', apellido: 'Diaz', nombre: 'Ana' }, { docente_id: 'd2', apellido: 'Orozco', nombre: 'Elizabeth' }])
     expect(settings.setDisponibilidadDocente).toHaveBeenCalledWith([
       { docente_id: 'd2', docente: 'Orozco Elizabeth', dia: 'LUNES', turno: 'NOCHE', hora_desde: '19:40', hora_hasta: '21:10' },
@@ -427,5 +481,69 @@ describe('useCronogramaFiles', () => {
     expect(mocks.toastError).toHaveBeenCalledWith(
       'No se pudo cargar la plantilla maestra: fallo de base',
     )
+  })
+
+  describe('Gate Codex P2: una importacion pendiente de A no se publica en B', () => {
+    function pendingParser() {
+      let resolve
+      const promise = new Promise((done) => { resolve = done })
+      return { parser: vi.fn(() => promise), resolve }
+    }
+    const teacherDatasets = {
+      datasets: {
+        docentes: [{ docente_id: 'IMPORT-A', apellido: 'De A', nombre: 'Docente' }],
+        docenteMateria: [{ docente_id: 'IMPORT-A', materia_id: 'A01', carrera_id: 'A', rol_en_materia: 'TITULAR' }],
+        disponibilidadDocente: [],
+        horariosDocentes: [],
+      },
+    }
+
+    it('reproduccion de Codex: la planilla de A termina estando en B -> se guarda en A y no toca la pantalla', async () => {
+      const { parser, resolve } = pendingParser()
+      const settingsA = props({ activeInstitutionId: 'inst-A' })
+      settingsA.fileHandlers = { ...settingsA.fileHandlers, parseTemplateV2TeachersWorkbook: parser }
+      const { result, rerender } = renderHook((hookProps) => useCronogramaFiles(hookProps), { initialProps: settingsA })
+      const event = { target: { files: [new File(['x'], 'docentes-a.xlsx')], value: 'selected' } }
+
+      let pending
+      act(() => { pending = result.current.onUploadTeachers(event) })
+      rerender({ ...settingsA, activeInstitutionId: 'inst-B', snapshotPayload: { uploadedFiles: {}, docentes: [{ docente_id: 'DE-B' }] } })
+      await act(async () => { resolve(teacherDatasets); await pending })
+
+      expect(settingsA.fileHandlers.saveSourceFile).toHaveBeenCalledWith(expect.objectContaining({ institutionId: 'inst-A', datasetKey: 'docentesWorkbook' }))
+      expect(settingsA.persistWorkspaceSnapshot).toHaveBeenCalledWith(expect.objectContaining({ docentes: [expect.objectContaining({ docente_id: 'IMPORT-A' })] }))
+      for (const setter of ['setDocentes', 'setDocenteMateria', 'setHorariosDocentes', 'setDisponibilidadDocente', 'setCargaHorariaDocente', 'setUploadedFiles', 'setRequiereRegeneracion']) {
+        expect(settingsA[setter]).not.toHaveBeenCalled()
+      }
+      expect(mocks.toastSuccess).not.toHaveBeenCalled()
+      expect(mocks.toast).toHaveBeenCalledWith(expect.stringContaining('institucion anterior'))
+    })
+
+    it('lo mismo con la planilla de alumnos', async () => {
+      const { parser, resolve } = pendingParser()
+      const settingsA = props({ activeInstitutionId: 'inst-A' })
+      settingsA.fileHandlers = { ...settingsA.fileHandlers, parseTemplateV2StudentsWorkbook: parser }
+      const { result, rerender } = renderHook((hookProps) => useCronogramaFiles(hookProps), { initialProps: settingsA })
+      let pending
+      act(() => { pending = result.current.onUploadStudents({ target: { files: [new File(['x'], 'alumnos-a.xlsx')], value: 'selected' } }) })
+      rerender({ ...settingsA, activeInstitutionId: 'inst-B' })
+      await act(async () => { resolve({ datasets: { alumnos: [{ alumno_id: 'IMPORT-A', dni: '30111222' }] } }); await pending })
+      expect(settingsA.setAlumnos).not.toHaveBeenCalled()
+      expect(settingsA.setStudentEnrollmentImports).not.toHaveBeenCalled()
+      expect(mocks.toast).toHaveBeenCalledWith(expect.stringContaining('institucion anterior'))
+    })
+
+    it('si se queda en la misma institucion, publica como siempre', async () => {
+      const { parser, resolve } = pendingParser()
+      const settingsA = props({ activeInstitutionId: 'inst-A' })
+      settingsA.fileHandlers = { ...settingsA.fileHandlers, parseTemplateV2TeachersWorkbook: parser }
+      const { result, rerender } = renderHook((hookProps) => useCronogramaFiles(hookProps), { initialProps: settingsA })
+      let pending
+      act(() => { pending = result.current.onUploadTeachers({ target: { files: [new File(['x'], 'docentes-a.xlsx')], value: 'selected' } }) })
+      rerender({ ...settingsA })
+      await act(async () => { resolve(teacherDatasets); await pending })
+      expect(settingsA.setDocentes).toHaveBeenCalled()
+      expect(mocks.toast).not.toHaveBeenCalled()
+    })
   })
 })

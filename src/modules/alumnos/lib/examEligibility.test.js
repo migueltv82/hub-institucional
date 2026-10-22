@@ -3,6 +3,7 @@ import {
   getExamEnrollmentEligibility,
   getLatestAcademicStatusForSubject,
   normalizeAcademicStatus,
+  getExamEnrollmentDeadline,
 } from './examEligibility.js'
 
 describe('examEligibility', () => {
@@ -195,6 +196,21 @@ describe('examEligibility', () => {
     expect(result).toBe('regular')
   })
 
+  it('cierra la inscripcion 24 h antes del inicio, en hora de Argentina (espejo de la base)', () => {
+    const exam = { id: 'm1', subject_id: 'UAT01', program_id: 'PROFESORADO DE PRUEBA UAT', exam_date: '2026-11-02T08:00' }
+    const grades = [{ subject_id: 'UAT01', program_id: 'PROFESORADO DE PRUEBA UAT', academic_status: 'regular', updated_at: '2026-10-01T10:00:00.000Z' }]
+    // 02/11 08:00 en Argentina = 11:00 UTC; cierra el 01/11 a las 11:00 UTC.
+    expect(getExamEnrollmentDeadline(exam)).toBe(Date.parse('2026-11-01T11:00:00.000Z'))
+
+    const open = getExamEnrollmentEligibility({ exam, grades, now: Date.parse('2026-11-01T10:59:00.000Z') })
+    const closed = getExamEnrollmentEligibility({ exam, grades, now: Date.parse('2026-11-01T11:01:00.000Z') })
+
+    expect(open.canRegister).toBe(true)
+    expect(closed.canRegister).toBe(false)
+    expect(closed.enrollmentClosed).toBe(true)
+    expect(closed.reason).toContain('24 horas antes')
+  })
+
   it('bloquea solamente el llamado inmediato siguiente por una ausencia', () => {
     const exams = [{
       id: 'exam-next',
@@ -219,8 +235,9 @@ describe('examEligibility', () => {
       updated_at: '2026-07-30T14:00:00.000Z',
     }]
 
-    const nextCall = getExamEnrollmentEligibility({ exam: exams[0], exams, grades })
-    const laterCall = getExamEnrollmentEligibility({ exam: exams[1], exams, grades })
+    const now = Date.parse('2026-07-31T12:00:00.000Z')
+    const nextCall = getExamEnrollmentEligibility({ exam: exams[0], exams, grades, now })
+    const laterCall = getExamEnrollmentEligibility({ exam: exams[1], exams, grades, now })
 
     expect(nextCall.canRegister).toBe(false)
     expect(nextCall.reason).toContain('mesa castigo')

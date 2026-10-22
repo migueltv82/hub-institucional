@@ -1,0 +1,209 @@
+{
+  "run": "2028ab2b4872756d",
+  "staging": "NONE",
+  "production": "NONE",
+  "fixture": "supabase/baseline/local_ab_rls_rpc_validation.sql",
+  "function": {
+    "secdef": true,
+    "config": [
+      "search_path=public, pg_temp"
+    ],
+    "anon": false,
+    "authenticated": true
+  },
+  "scenarios": [
+    {
+      "name": "canonico regular",
+      "steps": [
+        "saved"
+      ],
+      "enroll": "registered",
+      "rows": [
+        {
+          "status": "regular",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "Regular con mayuscula",
+      "steps": [
+        "saved"
+      ],
+      "enroll": "registered",
+      "rows": [
+        {
+          "status": "regular",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "regular con espacios",
+      "steps": [
+        "saved"
+      ],
+      "enroll": "registered",
+      "rows": [
+        {
+          "status": "regular",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "APROBADO",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "approved",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "ausente",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "absent",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "Pendiente",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "pending",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "desaprobada",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "failed",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "promoción con tilde",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "promocionado",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "null",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "pending",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "vacio",
+      "steps": [
+        "saved"
+      ],
+      "enroll": null,
+      "rows": [
+        {
+          "status": "pending",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "cursando rechazado",
+      "steps": [
+        "ACADEMIC_STATUS_INVALID|22023"
+      ],
+      "enroll": null,
+      "rows": [],
+      "failures": []
+    },
+    {
+      "name": "xyz rechazado",
+      "steps": [
+        "ACADEMIC_STATUS_INVALID|22023"
+      ],
+      "enroll": null,
+      "rows": [],
+      "failures": []
+    },
+    {
+      "name": "rechazo no pisa la fila",
+      "steps": [
+        "saved",
+        "ACADEMIC_STATUS_INVALID|22023"
+      ],
+      "enroll": "registered",
+      "rows": [
+        {
+          "status": "regular",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    },
+    {
+      "name": "libre bloquea la mesa",
+      "steps": [
+        "saved"
+      ],
+      "enroll": "EXAM_REGULARITY_REQUIRED",
+      "rows": [
+        {
+          "status": "libre",
+          "lock": 1
+        }
+      ],
+      "failures": []
+    }
+  ],
+  "failed": [],
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "errors": []
+  }
+}

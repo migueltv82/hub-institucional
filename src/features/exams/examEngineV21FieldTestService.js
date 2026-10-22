@@ -735,15 +735,35 @@ export function createConfirmedFinalReviewRowsFromTeacherStatus(tribunalRows = [
   })
 }
 
+const AULA_PLACEHOLDERS = new Set(['a definir', 'a confirmar', '-'])
+
 export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], options = {}) {
   const publishedAt = clean(options.generatedAt) || new Date().toISOString()
+  // El tribunal trae el id interno del motor (subject-<carrera>-<codigo>); la publicacion necesita el
+  // codigo de materia del catalogo, que es lo que espera publish_exam_tables_from_schedule.
+  const subjectCodeById = new Map(asArray(options.materias)
+    .map((materia) => [clean(materia?.id), clean(materia?.codigo ?? materia?.materia)])
+    .filter(([id, codigo]) => id && codigo))
+  // DNI de titular y vocales: la RPC los guarda para que el tribunal vea los inscriptos desde su portal.
+  const dniByTeacherId = new Map(asArray(options.docentes)
+    .map((docente) => [clean(docente?.id), clean(docente?.dni ?? docente?.dni_docente).replace(/\D/g, '')])
+    .filter(([id, dni]) => id && dni))
+  // D1 P3: si la mesa no trae aula, se muestra el aula donde se cursa la materia (planilla de horarios).
+  const aulaBySubject = new Map()
+  for (const horario of asArray(options.horarios)) {
+    // La plantilla de docentes trae la ubicacion en "sede"; otras fuentes, en aula o ubicacion.
+    const aula = clean(horario?.aula) || clean(horario?.ubicacion) || clean(horario?.sede)
+    const key = `${clean(horario?.carrera).toUpperCase()}::${clean(horario?.materia).toUpperCase()}`
+    if (aula && !AULA_PLACEHOLDERS.has(aula.toLowerCase()) && !aulaBySubject.has(key)) aulaBySubject.set(key, aula)
+  }
 
   return asArray(finalTribunals)
     .filter((mesa) => getPublishableFinalStatus(mesa.estadoFinal ?? mesa.estado) === 'confirmada')
     .filter((mesa) => clean(mesa.fechaSugerida ?? mesa.fechaIso ?? mesa.fecha))
     .map((mesa, index) => {
       const fechaIso = clean(mesa.fechaSugerida ?? mesa.fechaIso ?? mesa.fecha)
-      const materia = clean(mesa.materiaId ?? mesa.materia_id ?? mesa.materia ?? mesa.codigo)
+      const materiaId = clean(mesa.materiaId ?? mesa.materia_id ?? mesa.materia ?? mesa.codigo)
+      const materia = subjectCodeById.get(materiaId) || clean(mesa.codigo) || materiaId
       const nombreMateria = clean(mesa.materiaMesa ?? mesa.nombreMateria ?? mesa.materia_nombre ?? mesa.nombre ?? materia)
       const call = getCallMetadata(mesa.llamado ?? mesa.exam_call ?? mesa.callKey)
 
@@ -754,6 +774,7 @@ export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], 
         anio: clean(mesa.anio ?? mesa.anio_cursada ?? mesa.year),
         materia,
         codigo: materia,
+        materiaId,
         nombreMateria,
         fechaIso,
         fecha: formatDisplayDate(fechaIso),
@@ -767,7 +788,11 @@ export function buildPublishedCronogramaFromFinalTribunals(finalTribunals = [], 
         vocal1Id: clean(mesa.vocal1Id),
         vocal2: clean(mesa.vocal2),
         vocal2Id: clean(mesa.vocal2Id),
-        aula: clean(mesa.aula) || 'A confirmar',
+        aula: clean(mesa.aula) || aulaBySubject.get(`${clean(mesa.carrera ?? mesa.nombreCarrera ?? mesa.career).toUpperCase()}::${materia.toUpperCase()}`) || 'A confirmar',
+        titular_dni: dniByTeacherId.get(clean(mesa.titularId)) || '',
+        tribunal_dnis: [mesa.titularId, mesa.vocal1Id, mesa.vocal2Id]
+          .map((teacherId) => dniByTeacherId.get(clean(teacherId)))
+          .filter(Boolean),
         estado: 'confirmada',
         estadoFinal: clean(mesa.estadoFinal ?? mesa.estado),
         exam_type: call.exam_call === 'special' ? 'special' : 'regular',

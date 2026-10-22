@@ -43,7 +43,7 @@ export default function CreateInstitutionUserModal({
 
   const handleCopyPassword = async () => {
     await navigator.clipboard.writeText(formData.password)
-    toast.success('Contrasena copiada')
+    toast.success('Contraseña copiada')
   }
 
   const handleInstitutionToggle = (institutionId) => {
@@ -60,6 +60,7 @@ export default function CreateInstitutionUserModal({
     setIsSubmitting(true)
 
     try {
+      let reused = false
       if (isEditing) {
         await updateInstitutionUser({
           userId: initialUser.id,
@@ -70,7 +71,7 @@ export default function CreateInstitutionUserModal({
           useRemote: isRemoteSession,
         })
       } else {
-        await createOrAssignInstitutionUser({
+        const created = await createOrAssignInstitutionUser({
           email: formData.email,
           password: formData.password,
           displayName: formData.displayName,
@@ -78,9 +79,14 @@ export default function CreateInstitutionUserModal({
           role: formData.role,
           useRemote: isRemoteSession,
         })
+        reused = Boolean(created?.userReused)
       }
 
-      toast.success(isEditing ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente')
+      toast.success(isEditing
+        ? 'Usuario actualizado correctamente'
+        : reused
+          ? 'El usuario ya existía: se le asignaron las instituciones y conserva su contraseña actual.'
+          : 'Usuario creado correctamente')
       onSuccess()
       onClose()
       setFormData(buildInitialFormData())
@@ -130,7 +136,7 @@ export default function CreateInstitutionUserModal({
               />
               {isEditing && isRemoteSession && (
                 <p className="text-xs text-slate-500">
-                  En sesion remota el email no se edita desde aqui para no desalinearlo con `auth.users`.
+                  En sesión remota el email no se edita desde aquí para no desalinearlo con `auth.users`.
                 </p>
               )}
             </div>
@@ -139,7 +145,7 @@ export default function CreateInstitutionUserModal({
           <div className={`grid gap-4 ${isEditing ? 'md:grid-cols-1' : 'md:grid-cols-[0.65fr_0.35fr]'}`}>
             {!isEditing && (
               <div className="space-y-1">
-                <label className="text-sm font-bold text-slate-700">Contrasena inicial</label>
+                <label className="text-sm font-bold text-slate-700">Contraseña inicial</label>
                 <div className="flex gap-2">
                   <input
                     className="input-base bg-slate-50 font-mono text-xs"
@@ -183,7 +189,7 @@ export default function CreateInstitutionUserModal({
             </div>
             {sortedInstitutions.length === 0 ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-                Primero crea al menos una institucion para poder asignarle acceso a este usuario.
+                Primero crea al menos una institución para poder asignarle acceso a este usuario.
               </div>
             ) : (
               <div className="grid max-h-64 gap-2 overflow-y-auto pr-1 md:grid-cols-2">

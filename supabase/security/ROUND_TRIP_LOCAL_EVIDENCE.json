@@ -1,0 +1,55 @@
+{
+  "staging": "NONE",
+  "production": "NONE",
+  "validator": {
+    "ok": true,
+    "error": null,
+    "steps": [
+      {
+        "label": "Validar variables de entorno locales",
+        "status": "OK",
+        "summary": "variables presentes; service_role solo en SUPABASE_SERVICE_ROLE_KEY"
+      },
+      {
+        "label": "Validar institucion de prueba y preparar usuarios",
+        "status": "OK",
+        "summary": "institucion=8bb88c73462370d4-round-trip, workspace=main"
+      },
+      {
+        "label": "Inscribir alumno con IDs canonicos desde RPC del portal",
+        "status": "OK",
+        "summary": "ING08 / PROFESORADO DE INGLES, con student_record_id"
+      },
+      {
+        "label": "Leer roster docente por el camino de subjectRoster.js",
+        "status": "OK",
+        "summary": "roster=1, alumno canonico con nombre y DNI"
+      },
+      {
+        "label": "Cargar asistencia y nota como docente, releer como alumno",
+        "status": "OK",
+        "summary": "asistencia=present, nota=8, condicion=regular"
+      }
+    ],
+    "cleanup": "OK",
+    "stderrLines": 0
+  },
+  "run": "8bb88c73462370d4",
+  "validatorExitCode": 0,
+  "residue": {
+    "studentRecords": 0,
+    "teacherRecords": 0,
+    "enrollments": 0,
+    "grades": 0,
+    "sessions": 0,
+    "attendance": 0,
+    "memberships": 0
+  },
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

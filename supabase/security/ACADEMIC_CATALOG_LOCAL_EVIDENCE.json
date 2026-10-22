@@ -1,0 +1,131 @@
+{
+  "task": "CAT.1",
+  "run": "bfaf07cea9eee403",
+  "staging": "NONE",
+  "production": "NONE",
+  "normalizationParity": [
+    {
+      "sample": "Profesorado de Inglés",
+      "js": "profesoradodeingles",
+      "sql": "profesoradodeingles"
+    },
+    {
+      "sample": "PROFESORADO DE INGLÉS",
+      "js": "profesoradodeingles",
+      "sql": "profesoradodeingles"
+    },
+    {
+      "sample": "Francés Ç",
+      "js": "francesc",
+      "sql": "francesc"
+    },
+    {
+      "sample": "São Paulo Ñandú",
+      "js": "saopaulonandu",
+      "sql": "saopaulonandu"
+    },
+    {
+      "sample": "Técnico en Química Ü",
+      "js": "tecnicoenquimicau",
+      "sql": "tecnicoenquimicau"
+    },
+    {
+      "sample": "d'Arte 2°",
+      "js": "darte2",
+      "sql": "darte2"
+    }
+  ],
+  "before": {
+    "careers": 0,
+    "plans": 0,
+    "subjects": 0,
+    "plan_subjects": 0,
+    "prerequisites": 0,
+    "student_plans": 0,
+    "student_records": 2,
+    "teacher_records": 0
+  },
+  "portalBefore": {
+    "materias": [],
+    "carreras": [],
+    "correlatividades": 0
+  },
+  "generator": {
+    "institucion": "Instituto O'Higgins Prueba",
+    "carreras": 1,
+    "planes": 2,
+    "materias": 3,
+    "materiasEnPlanes": 3,
+    "correlativas": 1,
+    "alumnosConPlanEnPlanilla": 1,
+    "advertencias": [],
+    "errores": []
+  },
+  "wrongInstitutionRejected": true,
+  "afterWrongInstitution": {
+    "careers": 0,
+    "plans": 0,
+    "subjects": 0,
+    "plan_subjects": 0,
+    "prerequisites": 0,
+    "student_plans": 0,
+    "student_records": 2,
+    "teacher_records": 0
+  },
+  "summaryFirst": "1|2|3|1|2|1",
+  "afterFirst": {
+    "careers": 1,
+    "plans": 2,
+    "subjects": 3,
+    "plan_subjects": 3,
+    "prerequisites": 1,
+    "student_plans": 1,
+    "student_records": 2,
+    "teacher_records": 0
+  },
+  "afterSecond": {
+    "careers": 1,
+    "plans": 2,
+    "subjects": 3,
+    "plan_subjects": 3,
+    "prerequisites": 1,
+    "student_plans": 1,
+    "student_records": 2,
+    "teacher_records": 0
+  },
+  "renameRejected": true,
+  "afterRename": {
+    "careers": 1,
+    "plans": 2,
+    "subjects": 3,
+    "plan_subjects": 3,
+    "prerequisites": 1,
+    "student_plans": 1,
+    "student_records": 2,
+    "teacher_records": 0
+  },
+  "portalAfter": {
+    "materias": [
+      "ING01",
+      "ING02",
+      "OLD01"
+    ],
+    "carreras": [
+      "Profesorado de Inglés"
+    ],
+    "correlatividades": 1
+  },
+  "studentPlans": {
+    "30111222": "ING-2020"
+  },
+  "planDates": {
+    "plan_2020": "2020-03-01",
+    "ing01": "2024-03-01",
+    "prerequisite": "exam:approved"
+  },
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "errors": []
+  }
+}

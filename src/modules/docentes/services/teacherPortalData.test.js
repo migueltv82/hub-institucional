@@ -1040,6 +1040,40 @@ describe('teacherPortalData', () => {
     expect(result.stats.subjects).toBe(1)
   })
 
+  it('no duplica la materia cuando el horario trae un carrera_id generico y la asignacion el nombre (PB.8)', () => {
+    const result = mapWorkspaceSnapshotToTeacherPortal({
+      snapshot: {
+        horariosDocentes: [{
+          profesor: 'DOCENTE Uat',
+          carrera: 'PROFESORADO DE PRUEBA UAT',
+          carrera_id: 'UAT',
+          materia_codigo: 'UAT01',
+          nombreMateria: 'MATERIA DE PRUEBA UAT',
+          dia: 'LUNES',
+          inicio: '18:00',
+          fin: '20:00',
+        }],
+        cargaHorariaDocente: [{
+          assignment_id: 'assign-uat',
+          teacher_id: 'teacher-user-uat',
+          program_id: 'PROFESORADO DE PRUEBA UAT',
+          materia_codigo: 'UAT01',
+          nombreMateria: 'MATERIA DE PRUEBA UAT',
+          titularidad: 'TITULAR',
+          source: 'academic',
+        }],
+        planesEstudio: [{ carrera: 'PROFESORADO DE PRUEBA UAT', materia: 'UAT01', nombre: 'MATERIA DE PRUEBA UAT', anio: '1' }],
+      },
+      teacherRows: [],
+      studentRows: [],
+      user: { id: 'teacher-user-uat', email: '90000001@docentes.inst-1.local', nombre: 'DOCENTE Uat' },
+      activeInstitution: { id: 'inst-1', name: 'Instituto' },
+    })
+
+    expect(result.subjectStudentGroups).toHaveLength(1)
+    expect(result.stats.subjects).toBe(1)
+  })
+
   it('usa el profile_id explicito del padron docente como identidad canonica', () => {
     const result = mapWorkspaceSnapshotToTeacherPortal({
       snapshot: {
@@ -1145,5 +1179,24 @@ describe('teacherPortalData', () => {
         materia: 'ING1',
       }),
     ])
+  })
+
+  it('marca como titular solo la mesa donde el docente es titular, no donde es vocal (EX.8)', () => {
+    const mesa = (id, titular, titularDni, vocal1) => ({
+      id, profesorTitular: titular, titular_dni: titularDni, vocal1, carrera: 'Profesorado', materia: id, fechaIso: '2026-11-02', estado: 'confirmada',
+    })
+    const result = mapWorkspaceSnapshotToTeacherPortal({
+      snapshot: {
+        cronograma: [
+          mesa('M-TITULAR', 'Ana Diaz', '30.111.222', 'Luis Gomez'),
+          mesa('M-VOCAL', 'Luis Gomez', '28999888', 'Ana Diaz'),
+        ],
+      },
+      teacherRows: [{ record_id: 'teacher-record-1', email: '30111222@docentes.inst-1.local', full_name: 'Ana Diaz', dni: '30111222' }],
+      user: { id: 'user-ana', email: '30111222@docentes.inst-1.local', nombre: 'Ana Diaz' },
+      activeInstitution: { id: 'inst-1' },
+    })
+
+    expect(Object.fromEntries(result.exams.map((exam) => [exam.id, exam.esTitular]))).toEqual({ 'M-TITULAR': true, 'M-VOCAL': false })
   })
 })

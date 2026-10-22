@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StudentSubjectEnrollmentSection from './StudentSubjectEnrollmentSection.jsx'
 
@@ -52,5 +52,23 @@ describe('StudentSubjectEnrollmentSection', () => {
         workspaceKey: 'main',
       })
     })
+  })
+
+  it('D1 P3: sin cursadas cargadas, explica que la planilla trae inscripciones pendientes de aplicar', async () => {
+    renderSection({ inscripcionesAlumnos: [
+      { dni: '30111222', carrera: 'Profesorado', materia_codigo: 'MAT1' },
+      { dni: '30111223', carrera: 'Profesorado', materia_codigo: 'MAT1' },
+    ] })
+
+    expect(await screen.findByText('No hay inscripciones cargadas.')).toBeInTheDocument()
+    expect(screen.getByText(/La planilla de alumnos trae 2 inscripciones a materias\./)).toBeInTheDocument()
+    expect(screen.getByText(/«Inscribir cursadas»/)).toBeInTheDocument()
+  })
+
+  it('sin planilla no agrega la explicacion', async () => {
+    renderSection()
+
+    expect(await screen.findByText('No hay inscripciones cargadas.')).toBeInTheDocument()
+    expect(screen.queryByText(/La planilla de alumnos trae/)).not.toBeInTheDocument()
   })
 })

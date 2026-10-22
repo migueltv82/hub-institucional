@@ -151,7 +151,7 @@ describe('teacherAccess service', () => {
     expect(teachers).toEqual([])
   })
 
-  it('procesa accesos docentes en tandas concurrentes acotadas', async () => {
+  it('procesa accesos docentes en tandas, de a una (D2: el lock del workspace rechaza escrituras en paralelo)', async () => {
     mocks.invoke
       .mockResolvedValueOnce({ data: { success: true, created: 20, updated: 0, failed: 0, results: [], errors: [] }, error: null })
       .mockResolvedValueOnce({ data: { success: true, created: 20, updated: 0, failed: 0, results: [], errors: [] }, error: null })
@@ -178,5 +178,23 @@ describe('teacherAccess service', () => {
     })
     expect(mocks.invoke).toHaveBeenCalledTimes(3)
     expect(mocks.invoke.mock.calls.map(([, args]) => args.body.teachers.length)).toEqual([20, 20, 5])
+  })
+
+  it('D2: nunca hay dos tandas docentes en vuelo a la vez', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    mocks.invoke.mockImplementation(async (_name, { body }) => {
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((done) => setTimeout(done, 5))
+      inFlight -= 1
+      return { data: { success: true, created: body.teachers.length, updated: 0, failed: 0, results: [], errors: [] }, error: null }
+    })
+    const teacherProfiles = Array.from({ length: 45 }, (_, index) => ({ full_name: `Docente ${index + 1}`, dni: `30000${index + 1}` }))
+
+    const result = await provisionTeacherAccess({ institutionId: 'inst-1', teacherProfiles, schedules: [], useRemote: true })
+
+    expect(result.created).toBe(45)
+    expect(maxInFlight).toBe(1)
   })
 })

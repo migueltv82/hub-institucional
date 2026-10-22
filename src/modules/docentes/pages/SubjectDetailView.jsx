@@ -26,9 +26,9 @@ const DETAIL_TABS = [
 
 const GRADE_SLOTS = [
   { key: 'partial-1', label: 'Parcial 1', gradeType: 'partial', attemptNumber: 1 },
-  { key: 'makeup-1', label: 'Recuperacion 1', gradeType: 'makeup', attemptNumber: 1 },
+  { key: 'makeup-1', label: 'Recuperación 1', gradeType: 'makeup', attemptNumber: 1 },
   { key: 'partial-2', label: 'Parcial 2', gradeType: 'partial', attemptNumber: 2 },
-  { key: 'makeup-2', label: 'Recuperacion 2', gradeType: 'makeup', attemptNumber: 2 },
+  { key: 'makeup-2', label: 'Recuperación 2', gradeType: 'makeup', attemptNumber: 2 },
   { key: 'final', label: 'Nota final', gradeType: 'final', attemptNumber: 1 },
 ]
 
@@ -359,7 +359,7 @@ function StudentDetailModal({ student, grades, sessions = EMPTY_ARRAY, attendanc
               <table className="min-w-full divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                   <tr>
-                    <th className="px-4 py-3">Evaluacion</th>
+                    <th className="px-4 py-3">Evaluación</th>
                     <th className="px-4 py-3">Nota</th>
                     <th className="px-4 py-3">Estado</th>
                   </tr>
@@ -483,7 +483,7 @@ function ResetStudentRecordsModal({ student, onClose, onConfirm, isResetting = f
       <section className="modal-surface panel w-full max-w-lg" role="dialog" aria-modal="true" aria-labelledby="reset-student-records-title" onMouseDown={(event) => event.stopPropagation()}>
         <header className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
-            <p className="soft-title text-amber-700">Confirmacion requerida</p>
+            <p className="soft-title text-amber-700">Confirmación requerida</p>
             <h2 id="reset-student-records-title" className="mt-1 text-2xl font-extrabold text-slate-950">Reiniciar registros</h2>
           </div>
           <button className="btn-secondary h-10 w-10 p-0" type="button" aria-label="Cerrar" disabled={isResetting} onClick={onClose}><X className="h-4 w-4" /></button>
@@ -492,10 +492,10 @@ function ResetStudentRecordsModal({ student, onClose, onConfirm, isResetting = f
         <form className="mt-5 space-y-5" onSubmit={confirmReset}>
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
             <p className="font-extrabold">Vas a reiniciar los registros de {student.fullName}.</p>
-            <p className="mt-2">Se borraran las notas, la condicion final y las asistencias de esta materia. El alumno seguira inscripto.</p>
+            <p className="mt-2">Se borraran las notas, la condición final y las asistencias de esta materia. El alumno seguira inscripto.</p>
           </div>
           <label className="block text-sm font-bold text-slate-700">
-            Ingresa tu contrasena docente
+            Ingresa tu contraseña docente
             <input
               autoComplete="current-password"
               autoFocus
@@ -537,7 +537,7 @@ export function AlumnosTab({
   const [studentToReset, setStudentToReset] = useState(null)
 
   if (roster.length === 0) {
-    return <EmptyBlock>No hay alumnos inscriptos en esta materia todavia.</EmptyBlock>
+    return <EmptyBlock>No hay alumnos inscriptos en esta materia todavía.</EmptyBlock>
   }
 
   return (
@@ -643,7 +643,7 @@ function AsistenciaTab({
   if (!canPersistRecords) {
     return (
       <EmptyBlock>
-        Esta lista viene del snapshot institucional. Para tomar asistencia, primero inscribi los alumnos en la materia desde la gestion academica.
+        Esta lista viene del snapshot institucional. Para tomar asistencia, primero inscribi los alumnos en la materia desde la gestión académica.
       </EmptyBlock>
     )
   }
@@ -668,7 +668,7 @@ function AsistenciaTab({
       {!selectedDate ? (
         <EmptyBlock>Selecciona una fecha para cargar asistencia.</EmptyBlock>
       ) : roster.length === 0 ? (
-        <EmptyBlock>No hay alumnos inscriptos en esta materia todavia.</EmptyBlock>
+        <EmptyBlock>No hay alumnos inscriptos en esta materia todavía.</EmptyBlock>
       ) : (
         <div className="space-y-4">
           <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
@@ -857,13 +857,13 @@ export function NotasTab({ roster, grades, onConfirmGrades, feedback, canPersist
   }
 
   if (roster.length === 0) {
-    return <EmptyBlock>No hay alumnos inscriptos en esta materia todavia.</EmptyBlock>
+    return <EmptyBlock>No hay alumnos inscriptos en esta materia todavía.</EmptyBlock>
   }
 
   if (!canPersistRecords) {
     return (
       <EmptyBlock>
-        Esta lista viene del snapshot institucional. Para cargar notas y condicion final, primero inscribi los alumnos en la materia desde la gestion academica.
+        Esta lista viene del snapshot institucional. Para cargar notas y condición final, primero inscribi los alumnos en la materia desde la gestión académica.
       </EmptyBlock>
     )
   }
@@ -872,7 +872,7 @@ export function NotasTab({ roster, grades, onConfirmGrades, feedback, canPersist
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-extrabold text-slate-950">Carga de parciales y condicion final</p>
+          <p className="text-sm font-extrabold text-slate-950">Carga de parciales y condición final</p>
           <p className="mt-1 text-sm text-slate-600">
             {isEditing
               ? 'Editá las notas y la condición. Los cambios se publican para el alumno al confirmar.'
@@ -934,7 +934,7 @@ export function NotasTab({ roster, grades, onConfirmGrades, feedback, canPersist
                         onChange={(event) => updateDraft(student.studentId, slot, event.target.value)}
                         readOnly={slot.key === FINAL_GRADE_SLOT.key || !isEditing}
                         aria-label={`${student.fullName} - ${slot.label}`}
-                        title={slot.key === FINAL_GRADE_SLOT.key ? 'Promedio automatico de Parcial 1 y Parcial 2' : undefined}
+                        title={slot.key === FINAL_GRADE_SLOT.key ? 'Promedio automático de Parcial 1 y Parcial 2' : undefined}
                       />
                     </td>
                   ))}

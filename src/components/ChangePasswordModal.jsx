@@ -25,7 +25,7 @@ function ChangePasswordModal({ isOpen, onClose }) {
     event.preventDefault()
 
     if (formData.newPassword !== formData.confirmPassword) {
-      toast.error('La confirmacion no coincide con la nueva contrasena.')
+      toast.error('La confirmación no coincide con la nueva contraseña.')
       return
     }
 
@@ -35,7 +35,7 @@ function ChangePasswordModal({ isOpen, onClose }) {
         currentPassword: formData.currentPassword,
         newPassword: formData.newPassword,
       })
-      toast.success('Contrasena actualizada correctamente')
+      toast.success('Contraseña actualizada correctamente')
       handleClose()
     } catch (error) {
       toast.error(error.message)
@@ -50,7 +50,7 @@ function ChangePasswordModal({ isOpen, onClose }) {
         <header className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
           <h3 className="flex items-center gap-2 text-xl font-bold text-slate-950">
             <KeyRound className="text-cyan-600" />
-            Cambiar contrasena
+            Cambiar contraseña
           </h3>
           <button onClick={handleClose} className="text-slate-400 hover:text-slate-600" type="button">
             <X size={20} />
@@ -59,7 +59,7 @@ function ChangePasswordModal({ isOpen, onClose }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-bold text-slate-700">Contrasena actual</label>
+            <label className="text-sm font-bold text-slate-700">Contraseña actual</label>
             <input
               required
               className="input-base"
@@ -71,7 +71,7 @@ function ChangePasswordModal({ isOpen, onClose }) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-bold text-slate-700">Nueva contrasena</label>
+            <label className="text-sm font-bold text-slate-700">Nueva contraseña</label>
             <input
               required
               className="input-base"
@@ -85,7 +85,7 @@ function ChangePasswordModal({ isOpen, onClose }) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-bold text-slate-700">Confirmar nueva contrasena</label>
+            <label className="text-sm font-bold text-slate-700">Confirmar nueva contraseña</label>
             <input
               required
               className="input-base"
@@ -98,7 +98,7 @@ function ChangePasswordModal({ isOpen, onClose }) {
           </div>
 
           <div className="rounded-lg border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm leading-6 text-cyan-950">
-            Por seguridad, primero validamos tu contrasena actual y luego reemplazamos la credencial.
+            Por seguridad, primero validamos tu contraseña actual y luego reemplazamos la credencial.
           </div>
 
           <div className="flex gap-3 pt-2">

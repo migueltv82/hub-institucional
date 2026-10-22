@@ -1,0 +1,106 @@
+{
+  "run": "dc2524d602355068",
+  "staging": "NONE",
+  "production": "NONE",
+  "image": "public.ecr.aws/supabase/gotrue:v2.196.0",
+  "openSignupOnlyInRehearsal": true,
+  "escalationRequested": true,
+  "handleNewUserExecute": {
+    "anon": false,
+    "authenticated": false,
+    "public": false
+  },
+  "cases": [
+    {
+      "name": "signup superadmin metadata",
+      "via": "signup",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0
+    },
+    {
+      "name": "signup admin_instituto metadata",
+      "via": "signup",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0
+    },
+    {
+      "name": "admin API user_metadata only",
+      "via": "admin",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0
+    },
+    {
+      "name": "admin API app_metadata docente",
+      "via": "admin",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0,
+      "appMetadataAppliedByTrigger": false
+    },
+    {
+      "name": "admin API app_metadata superadmin",
+      "via": "admin",
+      "profile": {
+        "account_role": "alumno",
+        "is_global_admin": false,
+        "is_blocked": false
+      },
+      "memberships": 0,
+      "appMetadataAppliedByTrigger": false
+    }
+  ],
+  "lastAuthStatus": 200,
+  "displayNameFromUserMetadata": true,
+  "selfUserMetadataUpdateStatus": 200,
+  "selfAppMetadataUpdateStatus": 403,
+  "claimsAfterSelfUpdate": null,
+  "privilegedProfiles": 0,
+  "escalationLastStatus": 204,
+  "escalation": {
+    "result": "PASS",
+    "superAdminControl": {
+      "status": 204,
+      "membershipRole": "editor",
+      "auditRows": 1
+    },
+    "actors": 5,
+    "attempts": 69,
+    "deniedByError": 36,
+    "deniedWithoutRows": 33,
+    "statuses": [
+      200,
+      403
+    ],
+    "reads": {
+      "alumnoProfiles": 1,
+      "ownerProfiles": 1,
+      "alumnoMemberships": 1,
+      "ownerTenantMemberships": 4,
+      "ownerForeignMemberships": 0,
+      "foreignTenantMemberships": 0,
+      "foreignInstitutions": 0
+    },
+    "protectedRowsUnchanged": true
+  },
+  "result": "PASS",
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "errors": []
+  }
+}

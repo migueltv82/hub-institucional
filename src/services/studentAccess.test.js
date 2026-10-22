@@ -94,6 +94,24 @@ describe('studentAccess service', () => {
     expect(mocks.invoke.mock.calls.map(([, args]) => args.body.students.length)).toEqual([20, 20, 5])
   })
 
+  it('D2: manda las tandas de a una (en paralelo, el lock del workspace rechaza escrituras)', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    mocks.invoke.mockImplementation(async (_name, { body }) => {
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((done) => setTimeout(done, 5))
+      inFlight -= 1
+      return { data: { success: true, created: body.students.length, updated: 0, failed: 0, results: [], errors: [] }, error: null }
+    })
+    const students = Array.from({ length: 45 }, (_, index) => ({ email: `alumno-${index + 1}@example.com`, nombre: `Alumno ${index + 1}`, dni: `30000${index + 1}`, carrera: 'Profesorado de Ingles' }))
+
+    const result = await provisionStudentAccess({ institutionId: 'inst-1', useRemote: true, students })
+
+    expect(result.created).toBe(45)
+    expect(maxInFlight).toBe(1)
+  })
+
   it('no reprocesa alumnos que ya tienen acceso vinculado', async () => {
     mocks.invoke.mockResolvedValue({
       data: {
@@ -223,5 +241,25 @@ describe('studentAccess service', () => {
     })).rejects.toThrow('No hay una institucion activa')
 
     expect(mocks.invoke).not.toHaveBeenCalled()
+  })
+
+  it('reparar accesos manda solo los alumnos sin acceso vinculado y suma los lotes', async () => {
+    mocks.invoke.mockResolvedValue({ data: { repaired: 1, failed: 0, without_account: 1, results: [{ email: 'a@x.invalid', user_id: 'u1' }], errors: [] }, error: null })
+    const { repairStudentAccess } = await import('./studentAccess.js')
+    const result = await repairStudentAccess({
+      institutionId: 'inst-1',
+      useRemote: true,
+      students: [{ email: 'A@x.invalid', dni: '1' }, { email: 'b@x.invalid', dni: '2' }, { email: 'c@x.invalid', dni: '3', user_id: 'ya-vinculado' }],
+    })
+    expect(mocks.invoke).toHaveBeenCalledTimes(1)
+    expect(mocks.invoke.mock.calls[0][1].body).toEqual({ action: 'repair_student_access', institution_id: 'inst-1', emails: ['a@x.invalid', 'b@x.invalid'] })
+    expect(result).toMatchObject({ repaired: 1, failed: 0, withoutAccount: 1 })
+  })
+
+  it('detecta accesos incompletos en el resultado de "Crear accesos"', async () => {
+    const { hasIncompleteStudentAccess } = await import('./studentAccess.js')
+    expect(hasIncompleteStudentAccess({ errors: [{ error: 'Identidad de alumno sin vinculo inequivoco con esta institucion.' }] })).toBe(true)
+    expect(hasIncompleteStudentAccess({ needsRepair: true })).toBe(true)
+    expect(hasIncompleteStudentAccess({ errors: [{ error: 'DNI invalido' }] })).toBe(false)
   })
 })

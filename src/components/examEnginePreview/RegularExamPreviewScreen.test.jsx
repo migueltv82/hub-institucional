@@ -214,7 +214,7 @@ describe('RegularExamPreviewScreen', () => {
     expect(screen.getByText('Warning visible 20')).toBeInTheDocument()
     expect(screen.queryByText('Warning visible 21')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ver mas advertencias' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ver más advertencias' }))
 
     expect(screen.getByText('Warning visible 21')).toBeInTheDocument()
   })

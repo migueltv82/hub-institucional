@@ -210,7 +210,7 @@ function CombineMesaControls({
           No hay mesas para combinar con esta en este momento. Esto suele ocurrir
           cuando no hay otra mesa de la misma carrera, o una pedagogica/TIC compatible
           en el mismo llamado, cuando los titulares no dictan clase en la fecha
-          de la mesa activa, o cuando las reglas academicas impiden agruparlas.
+          de la mesa activa, o cuando las reglas académicas impiden agruparlas.
         </p>
       )}
 
@@ -324,11 +324,11 @@ function InteractiveVocalSelectionPanel({
           <div className="min-w-0">
             <p className="soft-title">Tribunales</p>
             <h3 className="mt-2 text-2xl font-extrabold text-slate-950">
-              Seleccion de vocales
+              Selección de vocales
             </h3>
             <p className="mt-2 text-sm font-bold text-slate-600">
               {progressSummary.completos} completas &middot; {progressSummary.minimos} minimas &middot; {progressSummary.incompletos} incompletas
-              {progressSummary.necesitanRevision ? ` · ${progressSummary.necesitanRevision} con revision institucional` : ''}
+              {progressSummary.necesitanRevision ? ` · ${progressSummary.necesitanRevision} con revisión institucional` : ''}
               {' '}de {progressSummary.total} mesas.
             </p>
           </div>
@@ -471,7 +471,7 @@ function InteractiveVocalSelectionPanel({
 
           {teacherLoadSummary.length > 0 && (
             <section className="soft-card">
-              <p className="soft-title">Carga docente (mitad mas uno)</p>
+              <p className="soft-title">Carga docente (mitad más uno)</p>
               <div className="mt-3 overflow-hidden rounded-md border border-slate-200">
                 <div className="max-h-64 overflow-auto">
                   <table className="min-w-full divide-y divide-slate-200 bg-white">

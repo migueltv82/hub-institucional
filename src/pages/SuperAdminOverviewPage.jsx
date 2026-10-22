@@ -67,7 +67,7 @@ function AccessCard({ to, title, description, icon: Icon }) {
     <NavLink className="soft-card flex h-full flex-col bg-white transition hover:-translate-y-0.5" to={to}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <span className="soft-title">Modulo</span>
+          <span className="soft-title">Módulo</span>
           <h4 className="mt-2 text-xl font-bold text-slate-950">{title}</h4>
         </div>
         <span className="rounded-full border border-slate-200 bg-slate-50 p-2 text-slate-700">
@@ -76,7 +76,7 @@ function AccessCard({ to, title, description, icon: Icon }) {
       </div>
       <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
       <span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-teal-700">
-        Abrir modulo
+        Abrir módulo
         <ArrowRight className="h-4 w-4" />
       </span>
     </NavLink>
@@ -145,7 +145,7 @@ function SuperAdminOverviewPage() {
         <SectionHeader
           eyebrow="Vision general"
           title="Dashboard ejecutivo"
-          description="Esta portada muestra solo el estado global del sistema. El detalle institucional, los usuarios por rol y la auditoria viven en sus modulos."
+          description="Esta portada muestra solo el estado global del sistema. El detalle institucional, los usuarios por rol y la auditoría viven en sus módulos."
         />
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -171,7 +171,7 @@ function SuperAdminOverviewPage() {
               Salud operativa del ecosistema
             </h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Usa esta pantalla solo para entender el panorama general y entrar rapido al modulo correcto.
+              Usa esta pantalla solo para entender el panorama general y entrar rápido al módulo correcto.
             </p>
           </div>
 
@@ -197,7 +197,7 @@ function SuperAdminOverviewPage() {
             <SummaryTile
               label="Fuente"
               value={sourceLabel}
-              helper={isRemoteSession ? 'Sesion remota' : 'Sesion local'}
+              helper={isRemoteSession ? 'Sesión remota' : 'Sesión local'}
               tone="teal"
             />
           </div>
@@ -210,7 +210,7 @@ function SuperAdminOverviewPage() {
               Cada dato en su lugar
             </h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Dashboard para resumen, instituciones para operacion institucional, usuarios para roles y auditoria para control tecnico.
+              Dashboard para resumen, instituciones para operación institucional, usuarios para roles y auditoría para control técnico.
             </p>
           </div>
 
@@ -228,9 +228,9 @@ function SuperAdminOverviewPage() {
               tone="blue"
             />
             <SummaryTile
-              label="Auditoria"
+              label="Auditoría"
               value="Por institucion"
-              helper="Metricas, drift y sincronizacion"
+              helper="Metricas, drift y sincronización"
               tone="amber"
             />
           </div>
@@ -240,8 +240,8 @@ function SuperAdminOverviewPage() {
       <section className="space-y-4">
         <SectionHeader
           eyebrow="Accesos"
-          title="Entrar al modulo correcto"
-          description="Cada boton abre una vista enfocada. Asi evitamos repetir bloques y mantener todo amontonado en una sola pantalla."
+          title="Entrar al módulo correcto"
+          description="Cada botón abre una vista enfocada. Asi evitamos repetir bloques y mantener todo amontonado en una sola pantalla."
         />
 
         <div className="grid gap-4 xl:grid-cols-3">
@@ -254,12 +254,12 @@ function SuperAdminOverviewPage() {
           <AccessCard
             to="/super-admin/usuarios"
             title="Usuarios y accesos"
-            description="Directorio de usuarios dividido por rol, con busqueda y gestion de accesos."
+            description="Directorio de usuarios dividido por rol, con búsqueda y gestión de accesos."
             icon={Users}
           />
           <AccessCard
             to="/super-admin/auditoria"
-            title="Auditoria"
+            title="Auditoría"
             description="Selector institucional, estado de padrones, drift y acciones de control."
             icon={Database}
           />

@@ -98,7 +98,7 @@ function PrimariaPortalLayout() {
               onClick={signOutRemote}
             >
               <LogOut className="h-4 w-4" />
-              Cerrar sesion
+              Cerrar sesión
             </button>
           )}
         </nav>

@@ -197,7 +197,7 @@ export function buildRegularExamComparisonAuditSummary(report = {}) {
 
   return {
     status,
-    title: `Resumen de auditoria comparativa - ${status}`,
+    title: `Resumen de auditoría comparativa - ${status}`,
     summaryText: buildSummaryText({
       status,
       metrics,

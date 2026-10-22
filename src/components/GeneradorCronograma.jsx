@@ -22,9 +22,10 @@ import {
   validateStudentDraft,
   validateTeacherDraft,
 } from '../services/rosterDrafts.js'
-import { applyStudentAccessResultsToRows, provisionStudentAccess } from '../services/studentAccess.js'
+import { applyStudentAccessResultsToRows, INCOMPLETE_ACCESS_PATTERN, provisionStudentAccess, repairStudentAccess } from '../services/studentAccess.js'
 import { fetchInstitutionAcademicCanonicalData } from '../services/academicCanonicalData.js'
 import { showImportantNotice } from '../services/importantNotice.js'
+import { describeExamPublication, publishExamTables } from '../services/examTablePublication.js'
 import {
   resetStudentAcademicRecords,
   resetStudentAcademicSnapshotData,
@@ -39,12 +40,16 @@ import AssetsSection from './generadorCronograma/AssetsSection.jsx'
 import DeletedPersonRecordsSection from './generadorCronograma/DeletedPersonRecordsSection.jsx'
 import { isDevAuditSnapshotRoleAuthorized } from './generadorCronograma/devAuditSnapshotAccess.js'
 import StudentAccessSection from './generadorCronograma/StudentAccessSection.jsx'
+import StudentHistoryImportSection from './generadorCronograma/StudentHistoryImportSection.jsx'
+import BulkRosterSection from './generadorCronograma/BulkRosterSection.jsx'
+import AcademicCatalogPublishSection from './generadorCronograma/AcademicCatalogPublishSection.jsx'
 import StudentCareerDashboard from './generadorCronograma/StudentCareerDashboard.jsx'
 import StudentSubjectEnrollmentSection from './generadorCronograma/StudentSubjectEnrollmentSection.jsx'
 import TribunalMatrixDiagnosis from './generadorCronograma/TribunalMatrixDiagnosis.jsx'
 import WorkspaceDangerZone from './generadorCronograma/WorkspaceDangerZone.jsx'
 import WorkspaceNotice from './generadorCronograma/WorkspaceNotice.jsx'
 import WorkspaceSidebar from './generadorCronograma/WorkspaceSidebar.jsx'
+import WorkspaceConflictBanner from './generadorCronograma/WorkspaceConflictBanner.jsx'
 import {
   createInitialRegularCallRanges,
   initialFiles,
@@ -67,18 +72,20 @@ const academicSnapshotKeys = [
   'estadoAcademico',
   'academicStatusRows',
   'enrollments',
+  'inscripcionesAlumnos',
   'grades',
   'examEnrollments',
   'academicStatus',
 ]
 const ACTIVE_WORKSPACE_VIEW_KEY = 'mesaflow.active-workspace-view'
-const VALID_WORKSPACE_VIEWS = new Set(['dashboard', 'students', 'teachers', 'exam-engine-v21'])
+const VALID_WORKSPACE_VIEWS = new Set(['dashboard', 'students', 'teachers', 'exam-engine-v21', 'exam-actas'])
 
 const InstitutionAdminOverview = lazy(() => import('./generadorCronograma/InstitutionAdminOverview.jsx'))
 const StudentRosterSection = lazy(() => import('./generadorCronograma/StudentRosterSection.jsx'))
 const TeacherRosterSection = lazy(() => import('./generadorCronograma/TeacherRosterSection.jsx'))
 const UploadsSection = lazy(() => import('./generadorCronograma/UploadsSection.jsx'))
 const ExamEngineV21FieldTestPage = lazy(() => import('../features/exams/ExamEngineV21FieldTestPage.jsx'))
+const ExamActasPage = lazy(() => import('../features/examActas/ExamActasPage.jsx'))
 
 const DevAuditSnapshotExport = import.meta.env.DEV
   ? lazy(() => import('./generadorCronograma/DevAuditSnapshotExport.jsx'))
@@ -147,6 +154,7 @@ function GeneradorCronograma() {
   const [cronograma, setCronograma] = useState([])
   const [requiereRegeneracion, setRequiereRegeneracion] = useState(false)
   const [isProvisioningStudents, setIsProvisioningStudents] = useState(false)
+  const [isRepairingStudents, setIsRepairingStudents] = useState(false)
   const [studentAccessResult, setStudentAccessResult] = useState(null)
   const [selectedStudentCareer, setSelectedStudentCareer] = useState('')
   const [isProvisioningTeachers, setIsProvisioningTeachers] = useState(false)
@@ -166,6 +174,8 @@ function GeneradorCronograma() {
   const [adminReviewSecondApprovals, setAdminReviewSecondApprovals] = useState([])
   const [examEngineV21State, setExamEngineV21State] = useState(null)
   const [activeWorkspaceView, setActiveWorkspaceView] = useState(readStoredWorkspaceView)
+  // El logo guardado desde Mesas y actas se ve al instante, sin esperar a recargar la institucion.
+  const [logoOverride, setLogoOverride] = useState({ institutionId: '', logo: '' })
   const [hasOpenedExamEngineV21, setHasOpenedExamEngineV21] = useState(false)
   const [activeDashboardSection, setActiveDashboardSection] = useState('overview')
   const [isClearingWorkspace, setIsClearingWorkspace] = useState(false)
@@ -309,6 +319,7 @@ function GeneradorCronograma() {
     activeInstitutionId,
     institutions,
     isHydrating,
+    hydratedInstitutionId,
     isLoadingInstitutions,
     lastSyncedAt,
     clearWorkspaceNow,
@@ -319,6 +330,8 @@ function GeneradorCronograma() {
     workspaceKey,
     workspaceSource,
     isRelationalWorkspaceSource,
+    workspaceConflict,
+    resolveWorkspaceConflict,
   } = useWorkspacePersistence({
     isRemoteSession,
     isSuperAdmin,
@@ -418,6 +431,7 @@ function GeneradorCronograma() {
     setDocentes,
     setPlanesEstudio,
     setRequiereRegeneracion,
+    setStudentEnrollmentImports: (rows) => setAcademicSnapshotData((current) => ({ ...current, inscripcionesAlumnos: rows })),
     setUploadedFiles,
     uploadedFiles,
     canEditWorkspace,
@@ -460,7 +474,7 @@ function GeneradorCronograma() {
       setStudentAccessResult(null)
       setTeacherAccessResult(null)
       setActiveDashboardSection('data')
-      toast.success('Carga eliminada. Ya podes volver a subir las planillas limpias.')
+      toast.success('Carga eliminada. Ya podés volver a subir las planillas limpias.')
     } catch (error) {
       toast.error(`No se pudo eliminar la carga: ${error.message}`)
     } finally {
@@ -497,12 +511,29 @@ function GeneradorCronograma() {
 
     try {
       await saveSnapshotNow(nextSnapshot)
-      return true
     } catch (error) {
       toast.error(`No se pudo guardar el cronograma final: ${error.message}`)
       return false
     }
-  }, [canEditWorkspace, saveSnapshotNow, snapshotPayload])
+
+    if (!useRemoteWorkspace) return true
+
+    // EX.1: el cronograma ya quedo guardado; ahora se abren las mesas para la inscripcion de alumnos.
+    try {
+      const publication = await publishExamTables({ institutionId: activeInstitutionId, workspaceKey, cronograma: publishedCronograma })
+      showImportantNotice({
+        tone: publication.omitidas.length ? 'amber' : 'success',
+        title: 'Mesas publicadas para los alumnos',
+        message: 'Los alumnos regulares ya pueden ver estas mesas e inscribirse desde su portal.',
+        details: describeExamPublication(publication),
+      })
+    } catch (error) {
+      // El cronograma ya quedo guardado: volver a publicar reintenta solo la apertura (la RPC es idempotente).
+      toast.error(`El cronograma quedo guardado, pero no se abrio la inscripción de alumnos. Volve a publicar para reintentar. ${error.message}`)
+      return false
+    }
+    return true
+  }, [activeInstitutionId, canEditWorkspace, saveSnapshotNow, snapshotPayload, useRemoteWorkspace, workspaceKey])
 
   const persistirEstadoMotorMesas = useCallback(async (nextState) => {
     setExamEngineV21State(nextState)
@@ -556,7 +587,7 @@ function GeneradorCronograma() {
       }
 
       if (result.failed > 0) {
-        toast.error(`Accesos procesados con ${result.failed} errores. Revisa DNI/email en el padron.`)
+        toast.error(`Accesos procesados con ${result.failed} errores. Revisa DNI/email en el padrón.`)
         return
       }
 
@@ -564,19 +595,50 @@ function GeneradorCronograma() {
       showImportantNotice({
         tone: 'success',
         title: 'Accesos de alumnos listos',
-        message: 'Los usuarios del portal alumno fueron procesados desde el padrÃ³n.',
+        message: 'Los usuarios del portal alumno fueron procesados desde el padrón.',
         details: [
           `${result.created} accesos creados.`,
           `${result.updated} accesos actualizados.`,
-          result.skippedExisting ? `${result.skippedExisting} alumnos omitidos porque ya tenÃ­an acceso vinculado.` : '',
-          result.batches > 1 ? `Procesado en ${result.batches} tandas para evitar lÃ­mites de Supabase.` : '',
-          'Si agregaste alumnos nuevos, ya podÃ©s entregarles email y DNI como credenciales iniciales.',
+          result.skippedExisting ? `${result.skippedExisting} alumnos omitidos porque ya tenían acceso vinculado.` : '',
+          result.batches > 1 ? `Procesado en ${result.batches} tandas para evitar límites de Supabase.` : '',
+          'Si agregaste alumnos nuevos, ya podés entregarles email y DNI como credenciales iniciales.',
+        ],
+      })
+    } catch (error) {
+      // Todo el lote rechazado por accesos incompletos: se muestra el aviso con "Reparar accesos incompletos".
+      if (INCOMPLETE_ACCESS_PATTERN.test(error.message)) {
+        setStudentAccessResult({ created: 0, updated: 0, failed: 0, errors: [], needsRepair: true })
+      }
+      toast.error(error.message)
+    } finally {
+      setIsProvisioningStudents(false)
+    }
+  }
+
+  async function repararAccesosAlumnos() {
+    try {
+      setIsRepairingStudents(true)
+      const result = await repairStudentAccess({ institutionId: activeInstitutionId, students: alumnos, useRemote: useRemoteWorkspace })
+      if (result.results.length) {
+        const nextAlumnos = applyStudentAccessResultsToRows(alumnos, result.results)
+        setAlumnos(nextAlumnos)
+        await saveSnapshotNow({ ...snapshotPayload, alumnos: nextAlumnos })
+      }
+      setStudentAccessResult({ created: 0, updated: result.repaired, failed: result.failed, errors: result.errors })
+      showImportantNotice({
+        tone: result.failed ? 'warning' : 'success',
+        title: 'Reparación de accesos',
+        message: 'Se revisaron los alumnos del padrón sin acceso vinculado.',
+        details: [
+          `${result.repaired} accesos reparados.`,
+          result.failed ? `${result.failed} sin reparar: el motivo de cada uno figura en la sección de accesos.` : '',
+          result.withoutAccount ? `${result.withoutAccount} alumnos todavía no tienen cuenta: usá "Crear accesos".` : '',
         ],
       })
     } catch (error) {
       toast.error(error.message)
     } finally {
-      setIsProvisioningStudents(false)
+      setIsRepairingStudents(false)
     }
   }
 
@@ -600,7 +662,7 @@ function GeneradorCronograma() {
       showImportantNotice({
         tone: 'success',
         title: 'Accesos docentes listos',
-        message: 'Los usuarios del portal docente fueron procesados desde el padrÃ³n.',
+        message: 'Los usuarios del portal docente fueron procesados desde el padrón.',
         details: [
           `${result.created} accesos creados.`,
           `${result.updated} accesos actualizados.`,
@@ -668,7 +730,7 @@ function GeneradorCronograma() {
       return false
     }
 
-    toast.success('Alumno agregado al padron.')
+    toast.success('Alumno agregado al padrón.')
     return true
   }
 
@@ -762,12 +824,12 @@ function GeneradorCronograma() {
     try {
       await saveSnapshotNow({ ...snapshotPayload, alumnos: nextAlumnos })
     } catch (error) {
-      toast.error(`La baja fue auditada, pero no se pudo guardar el padron actualizado: ${error.message}`)
+      toast.error(`La baja fue auditada, pero no se pudo guardar el padrón actualizado: ${error.message}`)
       return false
     }
 
     setAlumnos(nextAlumnos)
-    toast.success('Alumno eliminado del padron.')
+    toast.success('Alumno eliminado del padrón.')
     return true
   }
 
@@ -805,7 +867,7 @@ function GeneradorCronograma() {
       })
       setAlumnos(nextAlumnos)
       setDeletedPersonRecords((current) => current.filter((entry) => entry.id !== record.id))
-      toast.success('Alumno restaurado en el padron.')
+      toast.success('Alumno restaurado en el padrón.')
       return true
     } catch (error) {
       toast.error(`No se pudo restaurar el alumno: ${error.message}`)
@@ -836,7 +898,7 @@ function GeneradorCronograma() {
       return false
     }
 
-    toast.success('Docente agregado al padron.')
+    toast.success('Docente agregado al padrón.')
     return true
   }
 
@@ -967,7 +1029,7 @@ function GeneradorCronograma() {
         cargaHorariaDocente: nextCargaHorariaDocente,
       })
     } catch (error) {
-      toast.error(`La baja fue auditada, pero no se pudo guardar el padron actualizado: ${error.message}`)
+      toast.error(`La baja fue auditada, pero no se pudo guardar el padrón actualizado: ${error.message}`)
       return false
     }
 
@@ -976,7 +1038,7 @@ function GeneradorCronograma() {
     setDisponibilidadDocente(nextDisponibilidadDocente)
     setCargaHorariaDocente(nextCargaHorariaDocente)
     setRequiereRegeneracion(true)
-    toast.success('Docente eliminado del padron y sus horarios.')
+    toast.success('Docente eliminado del padrón y sus horarios.')
     return true
   }
 
@@ -1015,7 +1077,7 @@ function GeneradorCronograma() {
       setDocentes(nextDocentes)
       setDeletedPersonRecords((current) => current.filter((entry) => entry.id !== record.id))
       setRequiereRegeneracion(true)
-      toast.success('Docente restaurado en el padron.')
+      toast.success('Docente restaurado en el padrón.')
       return true
     } catch (error) {
       toast.error(`No se pudo restaurar el docente: ${error.message}`)
@@ -1029,7 +1091,7 @@ function GeneradorCronograma() {
     if (record?.person_type === 'student') return restaurarAlumnoDesdeBaja(record)
     if (record?.person_type === 'teacher') return restaurarDocenteDesdeBaja(record)
 
-    toast.error('La restauracion de administrativos requiere recuperar el usuario de Auth desde el panel superadmin.')
+    toast.error('La restauración de administrativos requiere recuperar el usuario de Auth desde el panel superadmin.')
     return false
   }
 
@@ -1239,11 +1301,11 @@ function GeneradorCronograma() {
       setInstitutionAcademicData({
         institutionId: activeInstitutionId, loaded: true, grades, studentRecords,
       })
-      if (notify) toast.success('Datos academicos actualizados.')
+      if (notify) toast.success('Datos académicos actualizados.')
       return { grades, studentRecords }
     } catch (error) {
       console.warn('No se pudo sincronizar la fuente academica canonica con el panel administrador.', error)
-      if (notify) toast.error(`No se pudieron actualizar los datos academicos: ${error.message}`)
+      if (notify) toast.error(`No se pudieron actualizar los datos académicos: ${error.message}`)
       return null
     } finally {
       setIsRefreshingInstitutionAcademicData(false)
@@ -1287,7 +1349,7 @@ function GeneradorCronograma() {
 
   const descargarArchivosOriginales = useCallback(async () => {
     if (!useRemoteWorkspace) {
-      toast.error('Los archivos originales no estan almacenados en el modo local.')
+      toast.error('Los archivos originales no están almacenados en el modo local.')
       return
     }
 
@@ -1382,13 +1444,13 @@ function GeneradorCronograma() {
       })
       return { ...current, estadoAcademico: nextRows }
     })
-    toast.success(`${records.length} cambios academicos guardados.`)
+    toast.success(`${records.length} cambios académicos guardados.`)
     return true
   }
 
   async function resetearEstadoAcademicoAlumno(student, { currentPassword } = {}) {
     if (!canEditWorkspace) {
-      toast.error('Tu rol actual no permite resetear el estado academico.')
+      toast.error('Tu rol actual no permite resetear el estado académico.')
       return false
     }
 
@@ -1402,7 +1464,7 @@ function GeneradorCronograma() {
       })
 
       setAcademicSnapshotData((current) => resetStudentAcademicSnapshotData(current, student))
-      toast.success('Estado academico reseteado por completo.')
+      toast.success('Estado académico reseteado por completo.')
       return true
     } catch (error) {
       toast.error(error.message)
@@ -1446,7 +1508,7 @@ function GeneradorCronograma() {
     {
       key: 'overview',
       label: 'Inicio',
-      helper: 'Institucion',
+      helper: 'Institución',
       icon: Home,
     },
     {
@@ -1458,7 +1520,7 @@ function GeneradorCronograma() {
     ...(showAdvancedSection ? [{
       key: 'advanced',
       label: 'Avanzado',
-      helper: devAuditRoleAuthorized ? 'Auditoria tecnica' : 'Diagnostico DEV',
+      helper: devAuditRoleAuthorized ? 'Auditoría técnica' : 'Diagnóstico DEV',
       icon: Wrench,
     }] : []),
   ]
@@ -1478,7 +1540,8 @@ function GeneradorCronograma() {
         />
 
         <div className="admin-workspace-main min-w-0 space-y-5 p-3 sm:p-4 md:space-y-6 md:p-6 xl:p-8">
-          <Suspense fallback={<WorkspaceNotice tone="sky">Cargando modulo...</WorkspaceNotice>}>
+          <WorkspaceConflictBanner conflict={workspaceConflict} onResolve={resolveWorkspaceConflict} />
+          <Suspense fallback={<WorkspaceNotice tone="sky">Cargando módulo...</WorkspaceNotice>}>
             {activeWorkspaceView === 'dashboard' ? (
               <>
               <div className="space-y-2">
@@ -1488,15 +1551,15 @@ function GeneradorCronograma() {
 
                 {isRemoteSession && !isLoadingInstitutions && institutions.length === 0 && (
                   <WorkspaceNotice>
-                    La sesion remota esta activa, pero este usuario todavia no tiene memberships.
-                    Crea una institucion desde el panel Super Admin o ejecuta `00_base_schema.sql`
+                    La sesión remota esta activa, pero este usuario todavía no tiene memberships.
+                    Crea una institución desde el panel Super Admin o ejecuta `00_base_schema.sql`
                     y luego las migraciones 01-12 listadas en `supabase/setup_multi_tenant/00_README.md`.
                   </WorkspaceNotice>
                 )}
 
                 {isHydrating && (
                   <WorkspaceNotice tone="sky">
-                    Estamos recuperando el ultimo snapshot del workspace antes de que sigas trabajando.
+                    Estamos recuperando el último snapshot del workspace antes de que sigas trabajando.
                   </WorkspaceNotice>
                 )}
 
@@ -1504,7 +1567,7 @@ function GeneradorCronograma() {
                   <WorkspaceNotice tone="sky">
                     {isRelationalWorkspaceSource
                       ? 'Estas viendo datos reales del schema relacional nuevo en modo solo lectura. La edicion directa de padrones queda deshabilitada hasta conectar escrituras contra student_records y teacher_records.'
-                      : 'Estas viendo este workspace en modo solo lectura. Tu rol actual permite consultar la informacion, pero no cargar archivos, editar, confirmar, regenerar ni borrar datos.'}
+                      : 'Estas viendo este workspace en modo solo lectura. Tu rol actual permite consultar la información, pero no cargar archivos, editar, confirmar, regenerar ni borrar datos.'}
                   </WorkspaceNotice>
                 )}
               </div>
@@ -1520,12 +1583,12 @@ function GeneradorCronograma() {
                         {completedDashboardItems}/{dashboardProgressItems.length} etapas
                       </span>
                     </div>
-                    <p className="soft-title mt-5">Administrador de institucion</p>
+                    <p className="soft-title mt-5">Administrador de institución</p>
                     <h3 className="operational-dashboard-hero__title mt-2 text-3xl font-extrabold leading-tight md:text-4xl">
                       Panel principal
                     </h3>
                     <p className="operational-dashboard-hero__description mt-3 max-w-3xl text-sm leading-6 md:text-base">
-                      Vista central de la institucion, carreras, alumnos y docentes antes de entrar al armado de mesas.
+                      Vista central de la institución, carreras, alumnos y docentes antes de entrar al armado de mesas.
                     </p>
 
                     <div className="mt-5 max-w-2xl">
@@ -1540,7 +1603,7 @@ function GeneradorCronograma() {
                   </div>
 
                   <aside className="dashboard-next-action">
-                    <p className="operational-dashboard-hero__label text-xs font-extrabold uppercase tracking-[0.14em]">Siguiente accion</p>
+                    <p className="operational-dashboard-hero__label text-xs font-extrabold uppercase tracking-[0.14em]">Siguiente acción</p>
                     <h4 className="operational-dashboard-hero__title mt-2 text-2xl font-extrabold">{nextDashboardAction.label}</h4>
                     <p className="operational-dashboard-hero__description mt-1 text-sm font-semibold">{nextDashboardAction.helper}</p>
                     <button
@@ -1587,7 +1650,7 @@ function GeneradorCronograma() {
                     canEditWorkspace={canEditWorkspace}
                     canManageDataSource={isSuperAdmin}
                     isRelationalWorkspaceSource={isRelationalWorkspaceSource}
-                    description="Subi la plantilla academica institucional con carreras, planes, materias y correlatividades."
+                    description="Subí la plantilla académica institucional con carreras, planes, materias y correlatividades."
                     onUploadMaster={onUploadMaster}
                     scope="institution"
                     title="Carga institucional"
@@ -1709,19 +1772,30 @@ function GeneradorCronograma() {
                 </Suspense>
               )}
               </>
+            ) : activeWorkspaceView === 'exam-actas' ? (
+              <ExamActasPage
+                canManage={canEditWorkspace}
+                institutionId={activeInstitutionId}
+                canChangeLogo={isSuperAdmin || ['owner', 'admin'].includes(activeInstitution?.role)}
+                institutionLogoUrl={logoOverride.institutionId === activeInstitutionId ? logoOverride.logo : (activeInstitution?.logo_url ?? '')}
+                onLogoChange={(logo) => setLogoOverride({ institutionId: activeInstitutionId, logo })}
+                institutionName={activeInstitutionName}
+                students={alumnos}
+                workspaceKey={workspaceKey}
+              />
             ) : activeWorkspaceView === 'exam-engine-v21' ? null : (
               <>
               <section className="rise-in admin-module-heading">
-                <span className="soft-title">Modulo</span>
+                <span className="soft-title">Módulo</span>
                 <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <h3 className="text-3xl font-bold text-slate-950">
-                      {activeWorkspaceView === 'students' ? 'Padron de alumnos' : 'Padron de docentes'}
+                      {activeWorkspaceView === 'students' ? 'Padrón de alumnos' : 'Padrón de docentes'}
                     </h3>
                     <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
                       {activeWorkspaceView === 'students'
-                        ? 'Consulta, filtra y administra alumnos por nombre, apellido, DNI, carrera y anio. Desde este modulo tambien se crean sus accesos al portal.'
-                        : 'Consulta, filtra y administra docentes por nombre, apellido, DNI, telefono y materias asociadas. Desde este modulo tambien se crean sus accesos al portal.'}
+                        ? 'Consulta, filtra y administra alumnos por nombre, apellido, DNI, carrera y año. Desde este módulo también se crean sus accesos al portal.'
+                        : 'Consulta, filtra y administra docentes por nombre, apellido, DNI, teléfono y materias asociadas. Desde este módulo también se crean sus accesos al portal.'}
                     </p>
                   </div>
                   <div className={`soft-card w-full min-w-0 border-l-4 sm:w-auto sm:min-w-[240px] ${
@@ -1750,7 +1824,7 @@ function GeneradorCronograma() {
                     canEditWorkspace={canEditWorkspace}
                     canManageDataSource={isSuperAdmin}
                     isRelationalWorkspaceSource={isRelationalWorkspaceSource}
-                    description="SubÃ­ la plantilla general de alumnos. La carga agrega registros nuevos y actualiza los existentes."
+                    description="Subí la plantilla general de alumnos. La carga agrega registros nuevos y actualiza los existentes."
                     onUploadStudents={onUploadStudents}
                     scope="students"
                     title="Carga de alumnos"
@@ -1796,6 +1870,14 @@ function GeneradorCronograma() {
                     </>
                   ) : (
                     <>
+                      {/* D1 P3: mismo orden que el Dia D (docs/DIA_D_CHECKLIST.md): catalogo (C5), accesos (C6),
+                          titularidades y cursadas (C7), historia (C8). */}
+                      <AcademicCatalogPublishSection
+                        canPublish={Boolean(isSuperAdmin || ['owner', 'admin'].includes(activeInstitution?.role))}
+                        inscripcionesAlumnos={academicSnapshotData.inscripcionesAlumnos}
+                        institutionId={activeInstitutionId}
+                        useRemoteWorkspace={useRemoteWorkspace}
+                      />
                       <StudentAccessSection
                         alumnos={alumnos}
                         extraActions={(
@@ -1809,9 +1891,26 @@ function GeneradorCronograma() {
                           />
                         )}
                         isLoading={isProvisioningStudents}
+                        isRepairing={isRepairingStudents}
                         lastResult={studentAccessResult}
                         onProvisionStudents={crearAccesosAlumnos}
+                        onRepairStudents={repararAccesosAlumnos}
                         useRemoteWorkspace={useRemoteWorkspace}
+                      />
+                      <BulkRosterSection
+                        canEditWorkspace={canEditWorkspace}
+                        dataInstitutionId={hydratedInstitutionId}
+                        docenteMateria={docenteMateria}
+                        inscripcionesAlumnos={academicSnapshotData.inscripcionesAlumnos}
+                        institutionId={activeInstitutionId}
+                        useRemoteWorkspace={useRemoteWorkspace}
+                        workspaceKey={workspaceKey}
+                      />
+                      <StudentHistoryImportSection
+                        canEditWorkspace={canEditWorkspace}
+                        institutionId={activeInstitutionId}
+                        useRemoteWorkspace={useRemoteWorkspace}
+                        workspaceKey={workspaceKey}
                       />
                       <StudentCareerDashboard
                         alumnos={alumnos}
@@ -1825,13 +1924,14 @@ function GeneradorCronograma() {
                         onRestore={restaurarPersonaDesdeBaja}
                         restoringId={restoringDeletedPersonId}
                         title="Alumnos eliminados"
-                        description="Alumnos dados de baja del padron activo. Restaurar recupera los datos guardados antes de la eliminacion."
+                        description="Alumnos dados de baja del padrón activo. Restaurar recupera los datos guardados antes de la eliminación."
                       />
                       {!isRelationalWorkspaceSource && (
                         <StudentSubjectEnrollmentSection
                           activeInstitution={activeInstitution}
                           alumnos={alumnos}
                           canEditWorkspace={canEditWorkspace}
+                          inscripcionesAlumnos={academicSnapshotData.inscripcionesAlumnos}
                           planesEstudio={planesEstudio}
                         />
                       )}
@@ -1844,7 +1944,7 @@ function GeneradorCronograma() {
                     canEditWorkspace={canEditWorkspace}
                     canManageDataSource={isSuperAdmin}
                     isRelationalWorkspaceSource={isRelationalWorkspaceSource}
-                    description="Subi o reemplaza la plantilla de docentes, titularidades, horarios y disponibilidad desde este modulo."
+                    description="Subí o reemplaza la plantilla de docentes, titularidades, horarios y disponibilidad desde este módulo."
                     onUploadTeachers={onUploadTeachers}
                     scope="teachers"
                     title="Carga docente"
@@ -1887,7 +1987,7 @@ function GeneradorCronograma() {
                     onRestore={restaurarPersonaDesdeBaja}
                     restoringId={restoringDeletedPersonId}
                     title="Docentes eliminados"
-                    description="Docentes dados de baja del padron activo. Restaurar recupera el perfil docente guardado antes de la eliminacion."
+                    description="Docentes dados de baja del padrón activo. Restaurar recupera el perfil docente guardado antes de la eliminación."
                   />
                 </>
               )}

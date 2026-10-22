@@ -21,10 +21,10 @@ function TeacherAccessSection({
             Accesos docentes
           </p>
           <h3 className="mt-2 text-xl font-extrabold text-slate-950">
-            Crear cuentas docentes desde padron
+            Crear cuentas docentes desde padrón
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Se toma la ficha desde la planilla de docentes. Materias y horas se cruzan automaticamente con horarios docentes.
+            Se toma la ficha desde la planilla de docentes. Materias y horas se cruzan automáticamente con horarios docentes.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="status-chip border-slate-200 bg-slate-50 text-slate-800">
@@ -50,7 +50,7 @@ function TeacherAccessSection({
 
       {!useRemoteWorkspace && (
         <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Necesitas una sesion remota con Supabase para crear cuentas docentes.
+          Necesitas una sesión remota con Supabase para crear cuentas docentes.
         </div>
       )}
 

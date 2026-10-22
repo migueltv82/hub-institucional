@@ -25,7 +25,7 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
   const handleCopyPass = () => {
     navigator.clipboard.writeText(formData.adminPassword)
     setCopied(true)
-    toast.success('Contrasena copiada')
+    toast.success('Contraseña copiada')
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -34,7 +34,7 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
     setIsSubmitting(true)
 
     try {
-      await createInstitutionWithAdmin({
+      const created = await createInstitutionWithAdmin({
         institutionName: formData.name,
         adminEmail: formData.adminEmail,
         adminPassword: formData.adminPassword,
@@ -42,7 +42,9 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
         logoUrl: '',
         useRemote: isRemoteSession,
       })
-      toast.success('Institucion creada y administrador asignado')
+      toast.success(created?.adminReused
+        ? 'Institución creada. El administrador ya existía: conserva su contraseña actual.'
+        : 'Institución creada y administrador asignado')
       onSuccess()
       onClose()
     } catch (error) {
@@ -58,17 +60,18 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
         <header className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
           <h3 className="flex items-center gap-2 text-xl font-bold text-slate-950">
             <ShieldCheck className="text-cyan-600" />
-            Nueva Institucion
+            Nueva institución
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" type="button">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600" type="button" aria-label="Cerrar">
             <X size={20} />
           </button>
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-bold text-slate-700">Nombre del Instituto</label>
+            <label htmlFor="new-institution-name" className="text-sm font-bold text-slate-700">Nombre del instituto</label>
             <input
+              id="new-institution-name"
               required
               className="input-base"
               placeholder="Ej: Instituto San Miguel"
@@ -79,8 +82,9 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-sm font-bold text-slate-700">Plan Inicial</label>
+              <label htmlFor="new-institution-plan" className="text-sm font-bold text-slate-700">Plan inicial</label>
               <select
+                id="new-institution-plan"
                 className="input-base"
                 value={formData.planType}
                 onChange={(event) => setFormData((prev) => ({ ...prev, planType: event.target.value }))}
@@ -97,8 +101,9 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
 
             <div className="space-y-4">
               <div className="space-y-1">
-                <label className="text-sm font-bold text-slate-700">Email Admin</label>
+                <label htmlFor="new-institution-admin-email" className="text-sm font-bold text-slate-700">Email del administrador</label>
                 <input
+                  id="new-institution-admin-email"
                   required
                   type="email"
                   className="input-base"
@@ -109,9 +114,10 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-bold text-slate-700">Contrasena de acceso</label>
+                <label htmlFor="new-institution-admin-password" className="text-sm font-bold text-slate-700">Contraseña de acceso</label>
                 <div className="flex gap-2">
                   <input
+                    id="new-institution-admin-password"
                     required
                     readOnly
                     className="input-base bg-slate-50 font-mono text-xs"
@@ -122,15 +128,16 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
                     onClick={handleGeneratePass}
                     className="btn-secondary p-2"
                     title="Generar otra"
+                    aria-label="Generar otra contraseña"
                   >
                     <RefreshCw size={16} />
                   </button>
-                  <button type="button" onClick={handleCopyPass} className="btn-secondary p-2">
+                  <button type="button" onClick={handleCopyPass} className="btn-secondary p-2" title="Copiar" aria-label="Copiar contraseña">
                     {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
                   </button>
                 </div>
                 <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Copia esta clave ahora. No se volvera a mostrar por seguridad.
+                  Copiá esta clave ahora. Por seguridad, no se vuelve a mostrar.
                 </p>
               </div>
             </div>
@@ -141,7 +148,7 @@ export default function CreateInstitutionModal({ isOpen, onClose, onSuccess }) {
               Cancelar
             </button>
             <button type="submit" disabled={isSubmitting} className="btn-primary flex-1">
-              {isSubmitting ? 'Creando...' : 'Dar de alta Tenant'}
+              {isSubmitting ? 'Creando…' : 'Dar de alta la institución'}
             </button>
           </div>
         </form>

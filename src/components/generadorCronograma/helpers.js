@@ -62,6 +62,10 @@ export function getPersistenceMessage({
     return `Ultima sincronizacion: ${formatLastSyncedAt(lastSyncedAt)}.`
   }
 
+  if (syncStatus === 'conflict') {
+    return 'Hay cambios de otra sesión sin resolver: el guardado automático está en pausa hasta que elijas en el aviso.'
+  }
+
   if (syncStatus === 'error') {
     return useRemoteWorkspace
       ? 'La sincronizacion remota fallo. El trabajo actual sigue visible, pero conviene revisar la sesion.'

@@ -80,4 +80,4 @@ For non-trivial changes, run an independent read-only review before calling the 
 
 | ID | Rule | Scope | Reason | Owner | Expires |
 |---|---|---|---|---|---|
-| EX-001 | Dependency audit currently fails | Current dependency tree | Initial strict audit found pre-existing high/moderate advisories. Requires separate dependency triage task. | Project owner | 2026-10-17 |
+| EX-001 | ~~Dependency audit currently fails~~ **CERRADA 2026-10-17** (decisión de Miguel). `quality:deps` (`npm audit --audit-level=high`) pasa: 0 high/critical. Quedan 7 moderate sin excepción formal, inventariados en `docs/DEPENDENCY_TRIAGE_2026-10-16.md` | Current dependency tree | Triage 2026-10-16 + DEP.1 | Project owner | Cerrada |

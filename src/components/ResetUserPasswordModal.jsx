@@ -21,7 +21,7 @@ function ResetUserPasswordModal({ user, isOpen, onClose, onSuccess }) {
 
   async function handleCopyTemporaryPassword() {
     await navigator.clipboard.writeText(temporaryPassword)
-    toast.success('Contrasena temporal copiada')
+    toast.success('Contraseña temporal copiada')
   }
 
   async function handleResetPassword() {
@@ -38,7 +38,7 @@ function ResetUserPasswordModal({ user, isOpen, onClose, onSuccess }) {
         newPassword: temporaryPassword,
         useRemote: isRemoteSession,
       })
-      toast.success('Contrasena actualizada')
+      toast.success('Contraseña actualizada')
       await onSuccess?.()
       handleClose()
     } catch (error) {
@@ -54,7 +54,7 @@ function ResetUserPasswordModal({ user, isOpen, onClose, onSuccess }) {
         <header className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
           <h3 className="flex items-center gap-2 text-xl font-bold text-slate-950">
             <KeyRound className="text-cyan-600" />
-            Resetear contrasena
+            Resetear contraseña
           </h3>
           <button onClick={handleClose} className="text-slate-400 hover:text-slate-600" type="button">
             <X size={20} />
@@ -68,11 +68,11 @@ function ResetUserPasswordModal({ user, isOpen, onClose, onSuccess }) {
           </div>
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
-            No es posible ver la contrasena actual. Solo podes reemplazarla por una nueva contrasena temporal.
+            No es posible ver la contraseña actual. Solo podés reemplazarla por una nueva contraseña temporal.
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700">Nueva contrasena temporal</label>
+            <label className="text-sm font-bold text-slate-700">Nueva contraseña temporal</label>
             <div className="flex gap-2">
               <input
                 className="input-base bg-slate-50 font-mono text-xs"
@@ -83,7 +83,7 @@ function ResetUserPasswordModal({ user, isOpen, onClose, onSuccess }) {
                 type="button"
                 onClick={() => setTemporaryPassword(generateSecurePassword())}
                 className="btn-secondary p-2"
-                title="Generar otra contrasena"
+                title="Generar otra contraseña"
               >
                 <RefreshCw size={16} />
               </button>
@@ -91,7 +91,7 @@ function ResetUserPasswordModal({ user, isOpen, onClose, onSuccess }) {
                 type="button"
                 onClick={handleCopyTemporaryPassword}
                 className="btn-secondary p-2"
-                title="Copiar contrasena"
+                title="Copiar contraseña"
               >
                 <Copy size={16} />
               </button>
@@ -108,7 +108,7 @@ function ResetUserPasswordModal({ user, isOpen, onClose, onSuccess }) {
               disabled={isSubmitting || temporaryPassword.trim().length < 8}
               className="btn-primary flex-1"
             >
-              {isSubmitting ? 'Guardando...' : 'Guardar contrasena'}
+              {isSubmitting ? 'Guardando...' : 'Guardar contraseña'}
             </button>
           </div>
         </div>

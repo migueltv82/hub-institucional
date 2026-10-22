@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
+import { PASSING_SCORE } from '../lib/academicStatus.js'
 import { getAcademicStatusLabel, normalizeAcademicStatus } from '../lib/examEligibility.js'
 import { getEnrollmentGrades } from '../lib/gradeMatching.js'
 import { useStudentStore } from '../stores/studentStore'
@@ -226,7 +227,7 @@ function subjectStatus(enrollment, grades) {
     }
   }
 
-  if (['completed', 'approved', 'passed'].includes(status) || (finalScore !== null && finalScore >= 6)) {
+  if (['completed', 'approved', 'passed'].includes(status) || (finalScore !== null && finalScore >= PASSING_SCORE)) {
     return {
       label: 'Aprobada',
       className: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
@@ -403,7 +404,7 @@ export default function StudentAcademicStatusPage() {
             Portal de alumno
           </p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
-            Estado academico
+            Estado académico
           </h1>
           <p className="mt-2 text-sm text-slate-600">
             {programName || 'Carrera actual'} organizada por ano de cursada.
@@ -422,7 +423,7 @@ export default function StudentAcademicStatusPage() {
         <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Progreso" value={`${summary.progress}%`} helper={`${summary.approved} de ${summary.total} aprobadas`} tone="emerald" />
           <StatCard label="Regulares" value={summary.regular} helper="Con regularidad cargada" tone="sky" />
-          <StatCard label="Pendientes" value={summary.pending} helper="Todavia no aprobadas" tone="amber" />
+          <StatCard label="Pendientes" value={summary.pending} helper="Todavía no aprobadas" tone="amber" />
           <StatCard label="Creditos" value={`${summary.approvedCredits}/${summary.totalCredits}`} helper="Aprobados sobre el plan" />
         </section>
 
@@ -499,7 +500,7 @@ export default function StudentAcademicStatusPage() {
                         <tr key={getSubjectId(subject)}>
                           <td className="px-5 py-4">
                             <div className="font-medium text-slate-950">{subject.name}</div>
-                            <div className="mt-1 text-xs text-slate-500">{subject.code || 'Sin codigo'}</div>
+                            <div className="mt-1 text-xs text-slate-500">{subject.code || 'Sin código'}</div>
                           </td>
                           <td className="px-5 py-4 text-slate-700">
                             {subject.is_mandatory ? 'Obligatoria' : 'Optativa'}
@@ -530,7 +531,7 @@ export default function StudentAcademicStatusPage() {
             <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
               <h2 className="text-base font-semibold text-slate-950">
                 {activeFilter === 'approved'
-                  ? 'Todavia no hay materias aprobadas'
+                  ? 'Todavía no hay materias aprobadas'
                   : activeFilter === 'pending'
                     ? 'No quedan materias pendientes'
                     : 'No hay materias cargadas'}
@@ -538,7 +539,7 @@ export default function StudentAcademicStatusPage() {
               <p className="mt-1 text-sm text-slate-600">
                 {activeFilter
                   ? 'Puedes usar los filtros para consultar el resto del plan de estudio.'
-                  : 'Carga el plan de estudio de la carrera para ver el estado academico por ano.'}
+                  : 'Carga el plan de estudio de la carrera para ver el estado académico por ano.'}
               </p>
             </div>
           )}

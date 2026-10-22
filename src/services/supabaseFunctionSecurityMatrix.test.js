@@ -110,6 +110,12 @@ function extractInvokedRpcContracts() {
 
 const invokedRpcContracts = new Set([
   'academic_admin_confirm_exam_assignment',
+  'academic_admin_bulk_assign_teachers',
+  'academic_admin_bulk_enroll_students',
+  'academic_admin_import_student_history',
+  'academic_admin_publish_catalog',
+  'exam_save_acta_results',
+  'get_student_exam_absences',
   'academic_admin_create_student_career_enrollment',
   'academic_admin_correct_student_career_enrollment',
   'academic_admin_get_student_career_enrollment_history',
@@ -118,6 +124,7 @@ const invokedRpcContracts = new Set([
   'academic_admin_link_teacher_record_profile',
   'academic_admin_reset_exam_process',
   'academic_create_teacher_subject_leave',
+  'academic_end_teacher_assignment',
   'academic_enroll_first_year_student',
   'academic_enroll_student_in_course_offering',
   'academic_get_student_course_enrollment_preview',
@@ -133,12 +140,17 @@ const invokedRpcContracts = new Set([
   'academic_teacher_upsert_attendance_records',
   'academic_teacher_upsert_student_grade',
   'academic_update_teacher_assignment_condition',
+  'admin_enroll_student_in_exam_table',
   'delete_institution_user',
   'get_academic_transition_config',
+  'get_exam_table_roster',
+  'get_exam_tables_admin_overview',
   'get_public_app_status',
   'get_student_portal_workspace_snapshot',
   'list_active_login_institutions',
+  'publish_exam_tables_from_schedule',
   'remove_user_membership',
+  'set_institution_logo',
   'set_user_access_status',
   'teacher_remove_student_subject_records',
   'teacher_reset_student_subject_academic_records',
@@ -186,6 +198,30 @@ const academicTransitionConfigJsFields = [
 ]
 
 describe('Supabase function security matrix', () => {
+  it('mantiene la copia de is_member_of_institution del SQL de bajo riesgo igual al baseline (06.3)', () => {
+    const extract = (filePath) => {
+      const sql = readText(join(SUPABASE_DIR, filePath))
+      const start = sql.indexOf('create or replace function public.is_member_of_institution(')
+      expect(start, filePath).toBeGreaterThanOrEqual(0)
+      return sql.slice(start, sql.indexOf('$$;', start) + 3)
+    }
+    expect(extract('security/2026-09-05_low_risk_indexes_search_path_auth_uid.sql')).toBe(extract('schema/01_foundation.sql'))
+  })
+
+  it('fija search_path en toda funcion del baseline y del gateway (advisor 0011)', () => {
+    const files = [
+      ...walkFiles(join(SUPABASE_DIR, 'schema'), (filePath) => filePath.endsWith('.sql')),
+      join(SUPABASE_DIR, 'security/source_file_storage_gateway.sql'),
+    ]
+    const missing = files.flatMap((filePath) => {
+      const sql = readText(filePath)
+      return [...sql.matchAll(/create or replace function\s+([\w.]+)\s*\(/gi)]
+        .filter((match) => !/\bset\s+search_path\b/i.test(sql.slice(match.index, sql.indexOf('$$', match.index))))
+        .map((match) => match[1])
+    })
+    expect(missing).toEqual([])
+  })
+
   it('mantiene inventariadas todas las RPC invocadas por codigo local', () => {
     expect([...extractInvokedRpcContracts()].sort()).toEqual([...invokedRpcContracts].sort())
   }, 15000)

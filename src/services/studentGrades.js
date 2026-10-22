@@ -36,6 +36,10 @@ function mapGradeMutationError(error) {
     return 'Las notas deben estar entre 0 y 10.'
   }
 
+  if (message.includes('ACADEMIC_STATUS_INVALID')) {
+    return 'Condicion academica no valida. Usa pendiente, regular, libre, promocionado, aprobado, desaprobado o ausente.'
+  }
+
   return error?.message || 'No se pudo guardar la nota.'
 }
 

@@ -95,7 +95,7 @@ describe('ExamEngineV21FieldTestPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/tribunales combinando mesas compatibles/)).toBeInTheDocument()
     })
-    expect(screen.getByText('Seleccion de vocales')).toBeInTheDocument()
+    expect(screen.getByText('Selección de vocales')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Guardar cambios y preparar envio' })).toBeEnabled()
 
     // El precronograma detallado vive colapsado dentro del mismo paso (el
@@ -108,7 +108,7 @@ describe('ExamEngineV21FieldTestPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Configurar llamado/ }))
     expect(screen.getByRole('button', { name: 'Volver al paso actual' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Volver al paso actual' }))
-    expect(screen.getByText('Seleccion de vocales')).toBeInTheDocument()
+    expect(screen.getByText('Selección de vocales')).toBeInTheDocument()
   })
 
   it('restaura el precronograma generado desde el snapshot despues de refrescar', async () => {
@@ -147,10 +147,10 @@ describe('ExamEngineV21FieldTestPage', () => {
       />,
     )
 
-    expect(screen.getByText('Seleccion de vocales')).toBeInTheDocument()
+    expect(screen.getByText('Selección de vocales')).toBeInTheDocument()
     expect(screen.getByText('Ver precronograma detallado')).toBeInTheDocument()
   })
-  it('especial: arma mesas a mano y llegan a "EnvÃƒÆ’Ã‚Â­o a docentes" sin pasar por el generador automÃƒÆ’Ã‚Â¡tico', () => {
+  it('especial: arma mesas a mano y llegan a "Envío a docentes" sin pasar por el generador automático', () => {
     render(
       <ExamEngineV21FieldTestPage
         dataReady
@@ -190,7 +190,7 @@ describe('ExamEngineV21FieldTestPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generar precronograma' }))
 
     await waitFor(() => {
-      expect(screen.getByText('Seleccion de vocales')).toBeInTheDocument()
+      expect(screen.getByText('Selección de vocales')).toBeInTheDocument()
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Reiniciar proceso' }))
@@ -203,7 +203,7 @@ describe('ExamEngineV21FieldTestPage', () => {
     })
     expect(onResetExamProcess).toHaveBeenCalledWith({ summary: {} })
     expect(screen.getByRole('button', { name: 'Generar precronograma' })).toBeInTheDocument()
-    expect(screen.queryByText('Seleccion de vocales')).not.toBeInTheDocument()
+    expect(screen.queryByText('Selección de vocales')).not.toBeInTheDocument()
 
     confirmSpy.mockRestore()
   })

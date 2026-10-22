@@ -84,7 +84,7 @@ describe('AlumnosTab', () => {
 
     expect(screen.getByText(/El alumno seguira inscripto/i)).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText(/Ingresa tu contrasena docente/i), {
+    fireEvent.change(screen.getByLabelText(/Ingresa tu contraseña docente/i), {
       target: { value: 'clave-segura' },
     })
     fireEvent.click(screen.getByRole('button', { name: /Reiniciar registros/i }))

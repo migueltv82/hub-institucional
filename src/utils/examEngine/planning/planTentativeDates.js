@@ -403,17 +403,24 @@ function getDirectCorrelativityOrder(left = {}, right = {}, links = []) {
   return leftBeforeRight ? -1 : 1
 }
 
+// Cada llamado es una ventana de examen independiente: la correlativa previa se compara
+// solo contra la fecha que tiene en el mismo llamado, nunca contra la de otro llamado.
+function plannedSubjectKey(llamado, alias) {
+  return `${normalizeLlamado(llamado)}::${alias}`
+}
+
 export function checkCorrelativityForSlot({ mesa, slot, plannedBySubject, links }) {
   const errors = []
   const warnings = []
   const mesaAliases = getMesaSubjects(mesa).flatMap(getSubjectAliases)
+  const plannedInCall = (alias) => plannedBySubject.get(plannedSubjectKey(mesa.llamado, alias))
 
   links.forEach((link) => {
     const isPosterior = aliasesIntersect(mesaAliases, link.posteriorAliases)
     const isPrevia = aliasesIntersect(mesaAliases, link.previaAliases)
 
     if (isPosterior) {
-      const plannedPrevia = link.previaAliases.map((alias) => plannedBySubject.get(alias)).find(Boolean)
+      const plannedPrevia = link.previaAliases.map(plannedInCall).find(Boolean)
       if (!plannedPrevia) {
         errors.push({
           code: 'CORRELATIVIDAD_CONFLICTIVA',
@@ -452,7 +459,7 @@ export function checkCorrelativityForSlot({ mesa, slot, plannedBySubject, links 
     }
 
     if (isPrevia) {
-      const plannedPosterior = link.posteriorAliases.map((alias) => plannedBySubject.get(alias)).find(Boolean)
+      const plannedPosterior = link.posteriorAliases.map(plannedInCall).find(Boolean)
       if (!plannedPosterior) return
 
       const order = compareIsoDates(slot.fecha, plannedPosterior.fecha)
@@ -725,7 +732,7 @@ export function markTeacherSchedule(teacherSchedule, teacherDaySchedule, mesa = 
 export function markPlannedSubjects(plannedBySubject, mesa = {}) {
   getMesaSubjects(mesa).forEach((subject) => {
     getSubjectAliases(subject).forEach((alias) => {
-      plannedBySubject.set(alias, {
+      plannedBySubject.set(plannedSubjectKey(mesa.llamado, alias), {
         mesaId: mesa.id,
         fecha: mesa.fecha,
         llamado: mesa.llamado,

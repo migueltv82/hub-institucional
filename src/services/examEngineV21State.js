@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
+import { retryWhenWorkspaceBusy, serializeWorkspaceWrite } from './workspaceWriteGuard.js'
 
 const TABLE_NAME = 'exam_engine_v21_states'
 const LOCAL_STATE_PREFIX = 'mesaflow.examEngineV21State'
@@ -158,14 +159,14 @@ export async function saveExamEngineV21State({
   }
 
   try {
-    const { error } = await supabase.from(TABLE_NAME).upsert({
+    const { error } = await serializeWorkspaceWrite({ institutionId, workspaceKey: normalizeWorkspaceKey(workspaceKey) }, () => retryWhenWorkspaceBusy(() => supabase.from(TABLE_NAME).upsert({
       institution_id: institutionId,
       workspace_key: normalizeWorkspaceKey(workspaceKey),
       owner_user_id: ownerUserId ?? null,
       owner_email: ownerEmail ?? null,
       state: normalizeState(state),
       updated_at: localResult.updatedAt,
-    }, { onConflict: 'institution_id,workspace_key' })
+    }, { onConflict: 'institution_id,workspace_key' })))
 
     if (error) {
       if (isMissingStateTableError(error)) {

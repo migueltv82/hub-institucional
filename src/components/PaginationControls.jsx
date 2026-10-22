@@ -34,7 +34,7 @@ function PaginationControls({
           Anterior
         </button>
         <span className="text-sm font-semibold text-slate-700">
-          Pagina {totalPages === 0 ? 0 : page} de {totalPages}
+          Página {totalPages === 0 ? 0 : page} de {totalPages}
         </span>
         <button
           className="btn-secondary w-full sm:w-auto"

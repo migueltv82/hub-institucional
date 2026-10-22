@@ -1,4 +1,5 @@
-import { KeyRound, UserPlus, UsersRound } from 'lucide-react'
+import { KeyRound, UserPlus, UsersRound, Wrench } from 'lucide-react'
+import { hasIncompleteStudentAccess } from '../../services/studentAccess.js'
 
 function StudentAccessSection({
   extraActions = null,
@@ -6,11 +7,14 @@ function StudentAccessSection({
   isLoading,
   lastResult,
   onProvisionStudents,
+  onRepairStudents = null,
+  isRepairing = false,
   useRemoteWorkspace,
 }) {
   const total = Array.isArray(alumnos) ? alumnos.length : 0
   const resultErrors = Array.isArray(lastResult?.errors) ? lastResult.errors : []
   const canProvision = total > 0 && useRemoteWorkspace && !isLoading
+  const needsRepair = Boolean(onRepairStudents) && hasIncompleteStudentAccess(lastResult)
 
   return (
     <section className="rise-in soft-card soft-card--tint-amber border-l-4 border-l-lime-500">
@@ -21,11 +25,11 @@ function StudentAccessSection({
             Accesos de alumnos
           </p>
           <h3 className="mt-2 text-xl font-extrabold text-slate-950">
-            Crear usuarios desde el padron cargado
+            Crear usuarios desde el padrón cargado
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Se creara una cuenta por alumno usando el email como usuario y el DNI como contrasena inicial.
-            Los alumnos quedan con rol de portal y acceso lector a esta institucion.
+            Se creara una cuenta por alumno usando el email como usuario y el DNI como contraseña inicial.
+            Los alumnos quedan con rol de portal y acceso lector a esta institución.
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-600">
             <span className="status-chip border-lime-200 bg-lime-50 text-lime-800">
@@ -33,7 +37,7 @@ function StudentAccessSection({
             </span>
             <span className="status-chip border-slate-200 bg-white text-slate-700">
               <KeyRound className="h-4 w-4" />
-              Contrasena inicial: DNI
+              Contraseña inicial: DNI
             </span>
           </div>
         </div>
@@ -54,7 +58,7 @@ function StudentAccessSection({
 
       {!useRemoteWorkspace && (
         <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Para crear usuarios reales necesitas iniciar sesion remota en Supabase y tener una institucion activa.
+          Para crear usuarios reales necesitas iniciar sesión remota en Supabase y tener una institución activa.
         </div>
       )}
 
@@ -72,6 +76,21 @@ function StudentAccessSection({
         </div>
       )}
 
+      {needsRepair && (
+        <div role="alert" className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+          <p className="font-extrabold">Hay accesos incompletos</p>
+          <p className="mt-1">
+            Algunos alumnos tienen la cuenta creada pero sin vincular a su legajo: una carga anterior se cortó a mitad de
+            camino. «Crear accesos» no los toca para no mezclar identidades. Repararlos los vincula, solo si la cuenta
+            nunca se usó.
+          </p>
+          <button className="btn-secondary mt-3" disabled={isRepairing || isLoading} onClick={onRepairStudents} type="button">
+            <Wrench className="h-4 w-4" />
+            {isRepairing ? 'Reparando…' : 'Reparar accesos incompletos'}
+          </button>
+        </div>
+      )}
+
       {resultErrors.length > 0 && (
         <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-950">
           <p className="font-extrabold">Filas con error</p>
@@ -84,7 +103,7 @@ function StudentAccessSection({
           </ul>
           {resultErrors.length > 6 && (
             <p className="mt-2 font-semibold">
-              Hay {resultErrors.length - 6} errores mas en el resultado del proceso.
+              Hay {resultErrors.length - 6} errores más en el resultado del proceso.
             </p>
           )}
         </div>

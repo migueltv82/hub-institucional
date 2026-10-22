@@ -12,6 +12,7 @@ import { useAppTheme } from './hooks/useAppTheme.js'
 
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'))
+const ForcePasswordChangePage = lazy(() => import('./pages/ForcePasswordChangePage.jsx'))
 const StudentPortalModule = lazy(() => import('./modules/alumnos/StudentPortalModule.jsx'))
 const TeacherPortalModule = lazy(() => import('./modules/docentes/TeacherPortalModule.jsx'))
 const PrimariaPortalModule = lazy(() => import('./modules/primaria/PrimariaPortalModule.jsx'))
@@ -48,7 +49,7 @@ function AppStatusPanel({ title, message }) {
 
 // La app corre en modo local persistido; toda la navegacion relevante entra al workspace.
 function App() {
-  const { isLoading, isAuthenticated, isSuperAdmin } = useAuth()
+  const { isLoading, isAuthenticated, isSuperAdmin, mustChangePassword } = useAuth()
   const { theme, toggleTheme } = useAppTheme()
   const {
     data: appStatus,
@@ -100,8 +101,10 @@ function App() {
   return (
     <div className="min-h-dvh w-full text-slate-900">
       <ThemeToggle onToggle={toggleTheme} theme={theme} />
+      {/* D1 P3: arriba al centro, para no tapar los botones de las cabeceras (por ejemplo "Volver al workspace"). */}
       <Toaster
-        position="top-right"
+        position="top-center"
+        containerStyle={{ top: 12 }}
         toastOptions={{
           style: theme === 'dark'
             ? { background: '#172320', color: '#f1f5f9', border: '1px solid #33413d' }
@@ -123,6 +126,7 @@ function App() {
         </main>
       )}
       >
+        {mustChangePassword ? <ForcePasswordChangePage /> : (
         <Routes>
           <Route path="/login" element={isAuthenticated ? <Navigate to={isSuperAdmin ? "/super-admin" : "/app"} /> : <LoginPage />} />
           <Route path="/app/*" element={isAuthenticated ? <AppWorkspaceRouter /> : <Navigate to="/login" />} />
@@ -139,6 +143,7 @@ function App() {
           </Route>
           <Route path="*" element={<Navigate replace to="/" />} />
         </Routes>
+        )}
       </Suspense>
     </div>
   )

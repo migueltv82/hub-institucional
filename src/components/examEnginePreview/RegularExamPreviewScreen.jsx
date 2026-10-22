@@ -55,7 +55,7 @@ function LimitNotice({ shown, total, onShowMore, label }) {
     <p>
       Mostrando {shown} de {total}.{' '}
       <button type="button" onClick={onShowMore}>
-        Ver mas {label}
+        Ver más {label}
       </button>
     </p>
   )
@@ -89,7 +89,7 @@ export function RegularExamPreviewScreen({ input = null, initialFilters = {} } =
   const expandSection = (section) => setExpandedSections((current) => ({ ...current, [section]: true }))
 
   return (
-    <section className="exam-engine-preview" aria-label="Preview del motor nuevo de examenes">
+    <section className="exam-engine-preview" aria-label="Preview del motor nuevo de exámenes">
       <header className="exam-engine-preview__header">
         <p className="exam-engine-preview__eyebrow">Motor nuevo en modo vista previa</p>
         <h1>Preview de Mesas de Exámenes</h1>

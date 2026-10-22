@@ -66,10 +66,10 @@ export function YearCompletionGateAlert({ check, compact = false, className = ''
 
   return (
     <div className={`rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900 ${className}`}>
-      <div className="font-semibold">Anios previos pendientes</div>
+      <div className="font-semibold">Años previos pendientes</div>
       {!compact && (
         <p className="mt-1 text-amber-800">
-          Para cursar esta materia primero deben figurar aprobadas las materias requeridas de anios anteriores.
+          Para cursar esta materia primero deben figurar aprobadas las materias requeridas de años anteriores.
         </p>
       )}
       {missingNames.length > 0 && (
@@ -299,7 +299,7 @@ export default function SubjectEnrollmentForm({
 
       {!programId && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          No hay carrera seleccionada para esta inscripcion.
+          No hay carrera seleccionada para esta inscripción.
         </div>
       )}
 

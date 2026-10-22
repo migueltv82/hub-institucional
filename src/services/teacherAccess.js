@@ -2,7 +2,8 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase.js'
 import { getCareerValues } from './careerCatalog.js'
 
 const TEACHER_ACCESS_BATCH_SIZE = 20
-const TEACHER_ACCESS_CONCURRENCY = 2
+// D2: de a un lote. Dos lotes en paralelo escriben el mismo workspace y el lock del gateway de Storage rechaza a uno.
+const TEACHER_ACCESS_CONCURRENCY = 1
 
 function clean(value) {
   return String(value ?? '').trim()

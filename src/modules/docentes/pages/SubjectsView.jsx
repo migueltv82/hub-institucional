@@ -48,8 +48,8 @@ export function SubjectCards({ subjects = EMPTY_ARRAY, limit = null }) {
                   {subject.nombre || subject.subjectId}
                 </Link>
                 <p className="mt-1 text-sm text-slate-600">
-                  {subject.subjectId ? `Codigo ${subject.subjectId}` : 'Sin codigo'}
-                  {subject.anio ? ` | Anio ${subject.anio}` : ''}
+                  {subject.subjectId ? `Código ${subject.subjectId}` : 'Sin código'}
+                  {subject.anio ? ` | Año ${subject.anio}` : ''}
                 </p>
                 {isOnLeave && (
                   <p className="teacher-assignment-notice teacher-assignment-notice--leave mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-900">
@@ -113,7 +113,7 @@ export default function SubjectsView({ subjects = EMPTY_ARRAY, isLoading = false
       ) : subjects.length > 0 ? (
         <SubjectCards subjects={subjects} />
       ) : (
-        <EmptyBlock>Todavia no tenes materias asignadas. Consulta con la institucion para que te asocien a una materia.</EmptyBlock>
+        <EmptyBlock>Todavía no tenés materias asignadas. Consulta con la institución para que te asocien a una materia.</EmptyBlock>
       )}
     </Section>
   )

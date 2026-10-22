@@ -1,0 +1,206 @@
+{
+  "run": "638e7917e69d960c",
+  "image": "public.ecr.aws/supabase/storage-api:v1.70.7",
+  "staging": "NONE",
+  "production": "NONE",
+  "backupRestore": true,
+  "rollbackRequested": false,
+  "integratedRequested": true,
+  "apiRequested": true,
+  "browserRequested": true,
+  "edgeRequested": true,
+  "sourceMigrations": 65,
+  "effectiveRole": "supabase_storage_admin",
+  "destinationMigrations": 65,
+  "newMigrations": [],
+  "schemaChangedByMigrations": false,
+  "integratedSourceLogins": 4,
+  "bytes": 8192,
+  "bytesSha256": "0259c4d63955e0b08ec12471d2e1e29a2b00793f12ce1da2bea9199aa72fd38f",
+  "integratedSnapshotSha256": "b2bd124e5b1ad7050db6dfeaafe4ee3e8d2efc31cdc488f6f96166ba08b25cba",
+  "manifest": [
+    {
+      "key": "synthetic/file.bin",
+      "bytes": 8192,
+      "sha256": "0259c4d63955e0b08ec12471d2e1e29a2b00793f12ce1da2bea9199aa72fd38f"
+    },
+    {
+      "key": "other-prefix/second.bin",
+      "bytes": 16384,
+      "sha256": "4455c2e0fb5af5705029db290ea6eba11833935ae5e537f333636c7ca2c9c2f1"
+    }
+  ],
+  "backupMs": 447,
+  "dbBackupBytes": 675328,
+  "byteBackupBytes": 32768,
+  "dbBackupSha256": "a73e7497c59ed53deb4c39a48bb1d8a3816be6b0e389c71031d33ab543d4fa5f",
+  "byteBackupSha256": "9dd5027b0e6249ad380473989695912241dc62d7c31a5b0109c8db35b5bf8fa0",
+  "metadataOnlyLeavesBytesEmpty": true,
+  "restoreMs": 8463,
+  "targetHealthSamples": 5,
+  "metadataEqual": true,
+  "structureEqual": true,
+  "restoredDownloads": 2,
+  "recoveryToDownloadMs": 13567,
+  "rpo": "0 synthetic objects lost at frozen metadata/bytes snapshot",
+  "integratedRowsEqual": true,
+  "integratedRestoredLogins": 4,
+  "integratedAuthMigrations": 77,
+  "integratedAuthHealthSamples": 5,
+  "integratedIsolation": {
+    "users": 4,
+    "ownTenantVisible": true,
+    "foreignReadRows": 0,
+    "foreignMembershipRows": 0,
+    "foreignUpdateRows": 0
+  },
+  "integratedResult": "PASS",
+  "dataApiEffectiveRole": "authenticator",
+  "dataApiTransportFailure": true,
+  "dataApiProcessExitCode": 0,
+  "dataApiReadinessStatus": 200,
+  "dataApiLastStatus": 200,
+  "dataApi": {
+    "result": "PASS",
+    "users": 4,
+    "ownReadRows": 1,
+    "foreignReadRows": 0,
+    "foreignMembershipRows": 0,
+    "foreignPatchRows": 0,
+    "invalidJwtStatus": 401,
+    "anonymousRows": 0,
+    "healthSamples": 5,
+    "rowsUnchanged": true
+  },
+  "edgeRuntimeImage": "supabase/edge-runtime:v1.77.4",
+  "edgeGatewayImage": "nginx:1.27-alpine",
+  "browserCases": [
+    {
+      "role": "docente",
+      "tenant": 0,
+      "foreignInstitutionRejected": true,
+      "ownInstitution": true,
+      "logout": true,
+      "protectedRouteAfterLogout": true
+    },
+    {
+      "role": "alumno",
+      "tenant": 0,
+      "foreignInstitutionRejected": true,
+      "ownInstitution": true,
+      "logout": true,
+      "protectedRouteAfterLogout": true
+    },
+    {
+      "role": "docente",
+      "tenant": 1,
+      "foreignInstitutionRejected": true,
+      "ownInstitution": true,
+      "logout": true,
+      "protectedRouteAfterLogout": true
+    },
+    {
+      "role": "alumno",
+      "tenant": 1,
+      "foreignInstitutionRejected": true,
+      "ownInstitution": true,
+      "logout": true,
+      "protectedRouteAfterLogout": true
+    }
+  ],
+  "browserHttpFailures": [],
+  "browserEdgeOutOfScope": [],
+  "browserProgress": "account 3 logout",
+  "browserFlow": {
+    "result": "PASS",
+    "accounts": [
+      {
+        "role": "docente",
+        "tenant": 0,
+        "foreignInstitutionRejected": true,
+        "ownInstitution": true,
+        "logout": true,
+        "protectedRouteAfterLogout": true
+      },
+      {
+        "role": "alumno",
+        "tenant": 0,
+        "foreignInstitutionRejected": true,
+        "ownInstitution": true,
+        "logout": true,
+        "protectedRouteAfterLogout": true
+      },
+      {
+        "role": "docente",
+        "tenant": 1,
+        "foreignInstitutionRejected": true,
+        "ownInstitution": true,
+        "logout": true,
+        "protectedRouteAfterLogout": true
+      },
+      {
+        "role": "alumno",
+        "tenant": 1,
+        "foreignInstitutionRejected": true,
+        "ownInstitution": true,
+        "logout": true,
+        "protectedRouteAfterLogout": true
+      }
+    ],
+    "externalRequests": 0,
+    "pageErrors": 0,
+    "serverErrors": 0,
+    "authDisabled": false,
+    "preloadedSessions": false,
+    "edgeOutOfScope": [],
+    "edgeCertified": true,
+    "edgeRosterLoads": 2
+  },
+  "browserOwnedResourcesClosed": true,
+  "browserCleanupErrors": [],
+  "edgeBrowserAudit": {
+    "teacher_subject_rosters": 2
+  },
+  "edgeRevokedSessionStatus": 401,
+  "edgeCheck": "teacher_profile_update",
+  "edgeLastStatus": 200,
+  "edge": {
+    "ownRosters": 2,
+    "foreignRostersDenied": 2,
+    "studentRostersDenied": 2,
+    "foreignProfileUpdateDenied": 2,
+    "invalidJwtStatus": 401,
+    "missingAuthorizationStatus": 401,
+    "foreignOriginStatus": 403,
+    "changedTables": [
+      "auth.audit_log_entries",
+      "auth.identities",
+      "auth.users",
+      "public.admin_audit_logs",
+      "public.profiles",
+      "public.teacher_records"
+    ],
+    "allowedMutation": "teacher_profile_update own phone",
+    "result": "PASS"
+  },
+  "edgeAudit": {
+    "teacher_subject_rosters": 4,
+    "teacher_profile_update": 1
+  },
+  "integratedRecoveryMs": 90343,
+  "migrationHistoryStable": true,
+  "existingAclUnchanged": true,
+  "healthy": true,
+  "healthSamples": 5,
+  "uploadDownloadDelete": true,
+  "crudAclUnchanged": true,
+  "result": "PASS",
+  "archiveBuffersCleared": true,
+  "cleanup": {
+    "databases": 0,
+    "containers": 0,
+    "volumes": 0,
+    "temporaryFiles": 0,
+    "errors": []
+  }
+}

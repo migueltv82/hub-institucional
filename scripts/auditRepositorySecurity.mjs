@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { extname } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
+import { auditNoVerifyJwtFunction } from './edgeFunctionAuthAudit.mjs'
 
 const failures = []
 
@@ -266,24 +267,9 @@ for (const filePath of listTrackedFiles()) {
 }
 
 for (const functionName of collectNoVerifyJwtFunctions()) {
-  const functionPath = `supabase/functions/${functionName}/index.ts`
-
-  if (!existsSync(functionPath)) {
-    addFailure(functionPath, 'verify_jwt=false configured but function source is missing')
-    continue
-  }
-
-  const content = readFileSync(functionPath, 'utf8')
-  if (!/assertBearerAuthorization\s*\(/.test(content)) {
-    addFailure(functionPath, 'verify_jwt=false requires explicit Bearer authorization validation')
-  }
-
-  if (!/auth\.getUser\s*\(/.test(content)) {
-    addFailure(functionPath, 'verify_jwt=false requires server-side user token validation')
-  }
-
-  if (!/\b(?:is_global_admin|account_role|memberships)\b/.test(content)) {
-    addFailure(functionPath, 'verify_jwt=false requires explicit role or membership authorization')
+  const readSource = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : null)
+  for (const failure of auditNoVerifyJwtFunction(functionName, readSource)) {
+    addFailure(failure.path, failure.reason)
   }
 }
 

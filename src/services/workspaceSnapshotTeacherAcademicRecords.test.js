@@ -37,9 +37,20 @@ function createWorkspaceQuery() {
     },
     upsert(payload) {
       mocks.upsert(payload)
-      return { error: null }
+      return this
+    },
+    // Guardado condicionado por version (aviso de conflicto): mismo registro que el upsert.
+    update(payload) {
+      mocks.upsert(payload)
+      return this
+    },
+    then(resolve) {
+      resolve({ data: [{ updated_at: '2026-10-20T00:00:00.000Z' }], error: null })
     },
     delete() {
+      return this
+    },
+    in() {
       return this
     },
   }

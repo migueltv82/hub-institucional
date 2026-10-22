@@ -403,7 +403,7 @@ function compareExamEngineBehavior(subjects = [], universeComparison = {}) {
   if (keys.some((key) => key.startsWith('weak::'))) {
     return {
       code: 'INCLUDES_WITH_WEAK_KEYS',
-      label: 'El nuevo motor lo incluye, pero con claves debiles.',
+      label: 'El nuevo motor lo incluye, pero con claves débiles.',
       details: matches,
     }
   }
