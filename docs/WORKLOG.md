@@ -1,5 +1,9 @@
 # Worklog
 
+## 2026-10-22 — GATE.C2a: permisos del padrón docente
+
+Codex corrige N1/N2 en release/v1 desde 294a260: snapshot no restituye permisos relacionales, identidad teacher_id autoritativa, fechas estrictas y nativas en Edge/portal. Regresiones negativas antes del fix y revisión CHIEF CODE AUDITOR; dos hallazgos del revisor corregidos. 362 archivos/2784 tests, lint, build y auditorías del repo/bundle PASS; HTTP local 13 grupos + control negativo real + navegador integral PASS, cleanup0. Tres selectores de QA.1 actualizados a tildes reales. Evidencia: supabase/security/GATE_C2_ROSTER_ACCESS_RESULT.md. quality:deps detecta Vite high (1 high/7 moderate): bloqueo separado, sin debilitar gates. No SQL remoto/deploy. N3/N4/N5 siguen pendientes.
+
 ## 2026-10-04 — Mitigación focal Storage path traversal
 
 Keys tenant/actor/workspace/dataset/UUID y guard de prefijo en servicio/cleanup; policy restrictiva mínima aplicada solo en staging. 71 focales PASS, suite 2298 PASS, lint/build/diff-check PASS. Exploit original 403 y objetos ajenos/cross-tenant denegados. Auditor independiente identificó bypass por normalización HTTP hacia key canónica; confirmado escapando horarios hacia docentes. P1 sigue abierto, Security 2 no retomada. Cleanup final todos conteos 0; Production mutations NONE. Evidencia y límites en `supabase/baseline/STAGING_SECURITY_2_RESULT.md`. QUALITY GATE: FAIL.

@@ -6,8 +6,9 @@ function clean(value) {
 }
 
 function isoDate(value) {
-  const match = /^(\d{4}-\d{2}-\d{2})/.exec(clean(value))
-  return match ? match[1] : ''
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-')) return ''
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value ? '' : value
 }
 
 function inWindow(startsOn, endsOn, today) {
@@ -29,13 +30,13 @@ export function isLeaveReplacement(assignment = {}) {
 }
 
 // { visible, onLeave, effectiveRole }
-// - Fuera de su propia vigencia (starts_on / ends_on de la fila o de su metadata) no se muestra.
+// - Fuera de su propia vigencia (columnas starts_on / ends_on, igual que SQL) no se muestra.
 // - Un titular en licencia se muestra "en licencia" solo durante el periodo; antes y despues, como titular.
 export function teacherAssignmentAccessState(assignment = {}, today = utcToday()) {
   const metadata = assignment.metadata ?? {}
   const role = clean(assignment.role)
-  const ownStartsOn = isoDate(assignment.starts_on ?? metadata.starts_on)
-  const ownEndsOn = isoDate(assignment.ends_on ?? metadata.ends_on)
+  const ownStartsOn = isoDate(assignment.starts_on)
+  const ownEndsOn = isoDate(assignment.ends_on)
   if (!inWindow(ownStartsOn, ownEndsOn, today)) return { visible: false, onLeave: false, effectiveRole: role }
 
   if (role === 'licencia') {

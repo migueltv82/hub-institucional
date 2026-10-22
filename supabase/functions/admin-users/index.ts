@@ -2117,12 +2117,11 @@ function teacherRosterProgramMatches(left: unknown, right: unknown) {
 }
 
 function getTeacherRosterIsoDate(value: unknown) {
-  const raw = getOptionalString(value)
-  if (!raw) return ''
-
-  const parsed = Date.parse(raw)
-  if (Number.isNaN(parsed)) return raw.slice(0, 10)
-  return new Date(parsed).toISOString().slice(0, 10)
+  // academic_try_iso_date accepts only an exact, real ISO calendar date. Date.parse alone
+  // normalizes impossible dates and accepts timestamps that SQL deliberately rejects.
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-')) return ''
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value ? '' : value
 }
 
 // Gate Codex P1: misma regla que public.academic_teacher_assignment_grants_access (06).
@@ -2132,10 +2131,12 @@ function getTeacherRosterIsoDate(value: unknown) {
 function isTeacherRosterAssignmentInActiveWindow(row: Record<string, unknown>, today: string) {
   const metadata = isRecord(row.metadata) ? row.metadata : {}
   const role = getOptionalString(row.role).toLowerCase()
+  if (row.status !== 'active' || row.deleted_at != null || !['titular', 'suplente', 'licencia'].includes(role)) return false
   const inWindow = (startsOn: string, endsOn: string) => (!startsOn || startsOn <= today) && (!endsOn || today <= endsOn)
 
-  const ownStartsOn = getTeacherRosterIsoDate(row.starts_on ?? metadata.starts_on)
-  const ownEndsOn = getTeacherRosterIsoDate(row.ends_on ?? metadata.ends_on)
+  // Native columns, including NULL, are authoritative just as in the SQL rule.
+  const ownStartsOn = getTeacherRosterIsoDate(row.starts_on)
+  const ownEndsOn = getTeacherRosterIsoDate(row.ends_on)
   if (!inWindow(ownStartsOn, ownEndsOn)) return false
 
   if (role === 'licencia') {
@@ -3410,19 +3411,24 @@ async function fetchTeacherRosterAssignments({
   institutionId: string
   workspaceKey: string
 }) {
-  const { data, error } = await adminClient
-    .from('subject_teacher_assignments')
-    .select('id, teacher_id, teacher_record_id, subject_id, program_id, status, role, source, metadata')
-    .eq('institution_id', institutionId)
-    .eq('workspace_key', workspaceKey)
-    .eq('status', 'active')
+  const assignments: Array<Record<string, unknown>> = []
+  const pageSize = 500
+  // Include revocations and other teachers: an old snapshot must not restore a subject
+  // that has already moved to the relational model. Page so API row limits cannot hide it.
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await adminClient
+      .from('subject_teacher_assignments')
+      .select('id, teacher_id, teacher_record_id, subject_id, program_id, status, role, source, metadata, starts_on, ends_on, deleted_at')
+      .eq('institution_id', institutionId)
+      .eq('workspace_key', workspaceKey)
+      .order('id')
+      .range(offset, offset + pageSize - 1)
 
-  if (error) {
-    if (isMissingRelationError(error, 'subject_teacher_assignments')) return []
-    throw error
+    if (error) throw error
+    const page = asRecordArray(data)
+    assignments.push(...page)
+    if (page.length < pageSize) return assignments
   }
-
-  return asRecordArray(data)
 }
 
 function collectAccessibleTeacherRosterSubjects({
@@ -3441,14 +3447,11 @@ function collectAccessibleTeacherRosterSubjects({
   const accessibleSubjects: Array<{ subjectId: string; programId: string; source: string }> = []
   const today = new Date().toISOString().slice(0, 10)
   const callerId = getOptionalString(context.caller.id)
-  const teacherRecordIds = new Set(teacherRecords.map((record) => getOptionalString(record.id)).filter(Boolean))
 
   assignments
     .filter((assignment) => (
-      (
-        getOptionalString(assignment.teacher_id) === callerId ||
-        teacherRecordIds.has(getOptionalString(assignment.teacher_record_id))
-      ) &&
+      // SQL authorizes the account, never a stale or homonymous record link.
+      getOptionalString(assignment.teacher_id) === callerId &&
       isTeacherRosterAssignmentInActiveWindow(assignment, today)
     ))
     .forEach((assignment) => addAccessibleTeacherRosterSubject(
@@ -3466,6 +3469,15 @@ function collectAccessibleTeacherRosterSubjects({
   ]
 
   snapshotRows
+    // Snapshot-only subjects remain supported. Once there is a relational assignment
+    // for this subject/career, only that model may authorize it, including after a revoke.
+    .filter((row) => !assignments.some((assignment) => (
+      teacherRosterSubjectMatches(assignment.subject_id, getTeacherRosterSubjectId(row)) &&
+      (
+        teacherRosterProgramMatches(assignment.program_id, getTeacherRosterProgramId(row)) ||
+        !getTeacherRosterProgramId(row)
+      )
+    )))
     .filter((row) => snapshotTeacherRosterRowMatchesCaller({
       row,
       context,

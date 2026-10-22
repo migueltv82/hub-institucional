@@ -148,7 +148,7 @@ export async function main() {
         await login(page, actor, tenant(actor.key));
         await page.waitForURL(url => url.pathname.startsWith('/app'), { timeout: 30000 });
         // El panel admin rotula el logout "Cambiar sesion"; los portales, "Cerrar sesion".
-        const logout = page.getByRole('button', { name: /^(Cerrar sesion|Cambiar sesion)$/ }).first();
+        const logout = page.getByRole('button', { name: /^(Cerrar sesión|Cambiar sesión)$/ }).first();
         await logout.waitFor({ timeout: 30000 });
         assert.equal(await page.evaluate(() => localStorage.getItem('mesaflow.activeInstitutionId')), tenant(actor.key));
         if (actor.role === 'docente') await page.getByText('Portal docente', { exact: true }).first().waitFor();
@@ -181,12 +181,12 @@ export async function main() {
       result.writeMode = registeredData.transition?.write_mode ?? 'unclassified';
       result.readMode = registeredData.transition?.read_mode ?? 'unclassified';
       const replayBody = registered.request().postDataJSON();
-      await page.getByRole('button', { name: 'Cancelar inscripcion', exact: true }).first().waitFor();
+      await page.getByRole('button', { name: 'Cancelar inscripción', exact: true }).first().waitFor();
       result.afterRegister = examCounts();
       // PB.4: la mesa es estricta en todos los modos (como las cursadas): la RPC siempre escribe la fila.
       assert.deepEqual(result.afterRegister, { relational: 1, snapshot: 1 }, `Registration persistence (${mode})`);
       phase = `student exam ${mode}: cancel through UI`;
-      const [cancelled] = await Promise.all([page.waitForResponse(isEdgePost), page.getByRole('button', { name: 'Cancelar inscripcion', exact: true }).first().click()]);
+      const [cancelled] = await Promise.all([page.waitForResponse(isEdgePost), page.getByRole('button', { name: 'Cancelar inscripción', exact: true }).first().click()]);
       assert.equal(cancelled.status(), 200, 'Exam cancel failed');
       const cancelledData = await cancelled.json();
       result.cancelSources = { snapshot: cancelledData.sources?.snapshot === true, relational: cancelledData.sources?.relational === true, relationalError: typeof cancelledData.sources?.relational_error === 'string' ? cancelledData.sources.relational_error.slice(0, 200) : null };

@@ -58,7 +58,7 @@ export async function fetchTeacherSubjects({ institutionId, workspaceKey = 'main
   function buildQuery({ withDeletedAtFilter = true } = {}) {
     let query = supabase
       .from('subject_teacher_assignments')
-      .select('id, institution_id, workspace_key, subject_id, program_id, teacher_id, status, role, source, metadata, created_at, updated_at')
+      .select('id, institution_id, workspace_key, subject_id, program_id, teacher_id, status, role, source, metadata, starts_on, ends_on, created_at, updated_at')
       .eq('institution_id', institutionId)
       .eq('workspace_key', workspaceKey)
       .eq('teacher_id', teacherUserId)
