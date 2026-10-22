@@ -1,5 +1,9 @@
 # Worklog
 
+## 2026-10-22 — DEP.2: parche de Vite y validación integrada
+
+Vite8.0.16→8.3.5 exacto, solo directa Vite y su cierre transitivo. Compatible con Node22.13 de CI; sin --force, sin nuevos overrides y sin actualizar otras directas. npm11.4.2 falló internamente sin mutaciones; se usó npm11.21.1 temporal sin modificar instalación global. Auditoría antes1high/7moderate, después0high/critical y7moderate (inventario en docs/DEPENDENCY_TRIAGE_2026-10-22.md). Repetición de quality:full exit0: 362 archivos/2784tests, lint, build, auditorías repo/bundle PASS; navegador integral con versión nueva PASS y cleanup0. CHIEF CODE AUDITOR revisó el diff de dependencia y lock: PASS, sin nuevos P0/P1/P2. QUALITY GATE: PASS WITH WARNINGS del alcance local. GATE.C2a validado; GATE.C2 N3/N4/N5 y release global siguen pendientes. Sin SQL remoto/deploy.
+
 ## 2026-10-22 — GATE.C2a: permisos del padrón docente
 
 Codex corrige N1/N2 en release/v1 desde 294a260: snapshot no restituye permisos relacionales, identidad teacher_id autoritativa, fechas estrictas y nativas en Edge/portal. Regresiones negativas antes del fix y revisión CHIEF CODE AUDITOR; dos hallazgos del revisor corregidos. 362 archivos/2784 tests, lint, build y auditorías del repo/bundle PASS; HTTP local 13 grupos + control negativo real + navegador integral PASS, cleanup0. Tres selectores de QA.1 actualizados a tildes reales. Evidencia: supabase/security/GATE_C2_ROSTER_ACCESS_RESULT.md. quality:deps detecta Vite high (1 high/7 moderate): bloqueo separado, sin debilitar gates. No SQL remoto/deploy. N3/N4/N5 siguen pendientes.

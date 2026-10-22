@@ -23,4 +23,12 @@ La auditoría npm actual detectó 1 high (Vite) y 7 moderate preexistentes al ca
 
 N3/N4 (cambio de institución), N5 (avisos SQL), revisión restante del control maestro y aplicación remota siguen pendientes. Ningún SQL remoto, despliegue ni cambio de datos de Producción. Este informe no autoriza desplegar admin-users ni cierra Fase 1.
 
-**QUALITY GATE: FAIL** por dependencia high abierta al registrar esta unidad; el correctivo funcional N1/N2 y su revisión local están aprobados. Consultar el triage posterior de dependencias para el estado de la rama integrada.
+Estado al registrar 09281ea: QUALITY GATE FAIL por dependencia high abierta; el correctivo funcional N1/N2 y su revisión local estaban aprobados.
+
+## Validación integrada después de DEP.2
+
+Vite actualizado a8.3.5 en unidad separada; ver docs/DEPENDENCY_TRIAGE_2026-10-22.md. Se repitió quality:full completo: exit0, 362 archivos/2784 tests PASS, lint/audit:repo/build/audit:prod PASS (114 archivos), dependencias0 high/critical y7 moderate. Misma configuración de4workers; sin cambios de assertions ni timeouts. El navegador integral se repitió con esta versión: PASS, cleanup0 y sin errores inesperados. Revisión independiente de dependencia y lock: PASS, única directa Vite y transitivas correspondientes; requisitos de Node compatibles con CI22.13.
+
+El fallo inicial de dependencias queda resuelto en la rama integrada. Quedan advertencias por7 moderate inventariadas, tamaño de bundle y límites de verificación local. CI/CodeQL remoto se comprueba después del push. N3/N4/N5, aplicación remota y cierre de Fase1 siguen fuera de esta unidad.
+
+**QUALITY GATE: PASS WITH WARNINGS** para N1/N2+DEP.2 en local; no es autorización de despliegue ni aprobación global de Fase1.
